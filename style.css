@@ -1,0 +1,878 @@
+/* ============================================================
+   GLOBAL STYLES & RESET
+   ============================================================ */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Quicksand', sans-serif;
+    background-color: #f4f7fe;
+    color: #2d3748;
+    line-height: 1.6;
+    overflow-x: hidden;
+    padding-bottom: 60px;
+}
+
+h1, h2, h3, h4 {
+    font-family: 'Fredoka One', cursive;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   LOGIN OVERLAY & FORM STYLES
+   ============================================================ */
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #1e3a8a, #35a7ff, #9b5de5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.login-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.login-card {
+    background: #ffffff;
+    padding: 36px 30px;
+    border-radius: 28px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.login-header .login-icon {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.login-header h2 {
+    color: #2d3748;
+    font-size: 1.8rem;
+    margin-bottom: 6px;
+}
+
+.login-header p {
+    color: #718096;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+}
+
+.input-group {
+    text-align: left;
+    margin-bottom: 18px;
+}
+
+.input-group label {
+    display: block;
+    font-family: 'Fredoka One', cursive;
+    font-size: 0.9rem;
+    color: #4a5568;
+    margin-bottom: 6px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.input-group input:focus {
+    border-color: #35a7ff;
+}
+
+.login-error-msg {
+    color: #e53e3e;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: none;
+}
+
+.login-submit-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #ff5964, #ff7675);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 20px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255, 89, 100, 0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 89, 100, 0.5);
+}
+
+.logout-btn {
+    background: #fed7d7;
+    color: #c53030;
+    border: 2px solid #feb2b2;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.logout-btn:hover {
+    transform: scale(1.05);
+}
+
+/* ============================================================
+   NAVIGATION BAR & STATS HEADER
+   ============================================================ */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    padding: 12px 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.logo-text {
+    color: #35a7ff;
+}
+
+.badge-pro {
+    background: #ffd166;
+    color: #2d3748;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    vertical-align: middle;
+}
+
+.nav-links {
+    display: flex;
+    gap: 10px;
+}
+
+.nav-btn {
+    background: transparent;
+    border: 2px solid transparent;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 0.95rem;
+    color: #718096;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    color: #35a7ff;
+    background: #f0f8ff;
+}
+
+.nav-btn.active {
+    background: #35a7ff;
+    color: #ffffff;
+}
+
+.player-stats {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stats-btn, .star-display, .level-display {
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stats-btn {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.stats-btn:hover {
+    transform: scale(1.05);
+}
+
+/* XP Progress Bar */
+.xp-bar-track {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+}
+
+.xp-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #35a7ff, #06d6a0);
+    transition: width 0.4s ease;
+}
+
+/* ============================================================
+   CONTAINER & TAB SYSTEM
+   ============================================================ */
+.container {
+    max-width: 1100px;
+    margin: 20px auto;
+    padding: 0 16px;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero Banners */
+.hero-banner {
+    border-radius: 20px;
+    padding: 24px;
+    color: white;
+    margin-bottom: 24px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.ency-hero { background: linear-gradient(135deg, #35a7ff, #38b6ff); }
+.games-hero { background: linear-gradient(135deg, #ff5964, #ff7675); }
+.books-hero { background: linear-gradient(135deg, #06d6a0, #1dd1a1); }
+.lab-hero   { background: linear-gradient(135deg, #9b5de5, #a55eea); }
+
+/* ============================================================
+   SECTION 1: ENCYCLOPEDIA
+   ============================================================ */
+.controls-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.controls-bar input {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    outline: none;
+    font-size: 0.95rem;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.filter-btn, .surprise-btn {
+    border: none;
+    padding: 8px 14px;
+    border-radius: 16px;
+    background: #edf2f7;
+    color: #4a5568;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.filter-btn.active, .filter-btn:hover {
+    background: #35a7ff;
+    color: white;
+}
+
+.surprise-btn {
+    background: #ffd166;
+    color: #2d3748;
+}
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 20px;
+}
+
+.card {
+    background: white;
+    border-radius: 18px;
+    padding: 20px;
+    position: relative;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+.card-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: #f0f4f8;
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+
+.card-icon {
+    font-size: 2.8rem;
+    margin-bottom: 8px;
+}
+
+.card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 6px;
+}
+
+.card p {
+    font-size: 0.85rem;
+    color: #718096;
+    margin-bottom: 14px;
+}
+
+.card-btn {
+    background: transparent;
+    border: none;
+    color: #35a7ff;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+/* ============================================================
+   SECTION 2: GAMES ZONE
+   ============================================================ */
+.game-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.game-tab-btn {
+    background: white;
+    border: 2px solid #e2e8f0;
+    padding: 10px 18px;
+    border-radius: 18px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.game-tab-btn.active {
+    border-color: #ff5964;
+    background: #ff5964;
+    color: white;
+}
+
+.game-wrapper {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.game-stats {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 1.1rem;
+}
+
+.restart-btn {
+    background: #e2e8f0;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.pause-btn {
+    background: #35A7FF;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.pause-btn:hover {
+    transform: translateY(-2px);
+}
+
+.canvas-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+canvas {
+    background: #0f172a;
+    border-radius: 16px;
+    max-width: 100%;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.dpad-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: 16px 0;
+}
+
+.dpad-middle {
+    display: flex;
+    gap: 36px;
+}
+
+.dpad-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: #edf2f7;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.dpad-btn:active {
+    background: #cbd5e0;
+}
+
+.memory-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.memory-card {
+    height: 80px;
+    background: #35a7ff;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    color: transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.memory-card.flipped {
+    background: #ffffff;
+    border: 3px solid #35a7ff;
+    color: initial;
+    transform: rotateY(180deg);
+}
+
+.memory-card.matched {
+    background: #e6fffa;
+    border: 3px solid #06d6a0;
+    color: initial;
+    cursor: default;
+}
+
+.quiz-container {
+    max-width: 500px;
+    margin: 0 auto;
+    text-align: left;
+}
+
+.quiz-question-icon {
+    font-size: 3rem;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.quiz-option {
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    text-align: left;
+    font-size: 1rem;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.quiz-option:hover { background: #f7fafc; }
+.quiz-option.correct { background: #c6f6d5; border-color: #38a169; }
+.quiz-option.incorrect { background: #fed7d7; border-color: #e53e3e; }
+
+/* ============================================================
+   SECTION 3: STORYBOOKS
+   ============================================================ */
+.story-selector {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.story-btn {
+    background: white;
+    border: 2px solid #e2e8f0;
+    padding: 8px 16px;
+    border-radius: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.story-btn.active {
+    background: #06d6a0;
+    color: white;
+    border-color: #06d6a0;
+}
+
+.book-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.book-card {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.page-number {
+    font-size: 0.8rem;
+    color: #a0aec0;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.book-illustration {
+    font-size: 4.5rem;
+    margin: 16px 0;
+}
+
+.book-text {
+    font-size: 1.15rem;
+    margin-bottom: 24px;
+    min-height: 80px;
+}
+
+.story-choices {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.choice-btn {
+    background: linear-gradient(135deg, #FF5964, #FF7675);
+    color: white;
+    border: none;
+    padding: 14px 22px;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255, 89, 100, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.choice-btn:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 6px 20px rgba(255, 89, 100, 0.4);
+}
+
+.book-controls {
+    display: flex;
+    justify-content: space-between;
+}
+
+.book-btn {
+    background: #f0f4f8;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.book-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.audio-btn { background: #ffd166; }
+
+/* ============================================================
+   SECTION 4: SCIENCE LAB
+   ============================================================ */
+.lab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.experiment-card {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+}
+
+.exp-header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.exp-icon { font-size: 2.5rem; }
+
+.diff-tag {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.diff-tag.easy { background: #c6f6d5; color: #22543d; }
+.diff-tag.medium { background: #feebc8; color: #744210; }
+
+.exp-body h4 {
+    margin: 12px 0 6px;
+    font-size: 0.95rem;
+}
+
+.checklist {
+    list-style: none;
+    font-size: 0.9rem;
+}
+
+.steps-interactive {
+    padding-left: 20px;
+    font-size: 0.9rem;
+}
+
+.steps-interactive li {
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.steps-interactive li.completed {
+    text-decoration: line-through;
+    color: #a0aec0;
+}
+
+/* ============================================================
+   MODALS, TOASTS, MASCOT & ANIMATIONS
+   ============================================================ */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 24px;
+    padding: 30px;
+    max-width: 450px;
+    width: 100%;
+    text-align: center;
+    position: relative;
+    animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.close-btn {
+    position: absolute;
+    top: 14px; right: 18px;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.modal-icon { font-size: 3.5rem; margin-bottom: 12px; }
+
+.badges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.badge-slot {
+    background: #f7fafc;
+    border: 2px dashed #cbd5e0;
+    border-radius: 14px;
+    padding: 10px;
+    text-align: center;
+}
+
+.badge-slot.unlocked {
+    background: #fffaf0;
+    border: 2px solid #ffd166;
+}
+
+.badge-slot .badge-icon { font-size: 2rem; }
+.badge-slot .badge-name { font-size: 0.75rem; font-weight: 700; margin-top: 4px; }
+.badge-slot .badge-desc { font-size: 0.65rem; color: #718096; }
+
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.toast {
+    background: #2d3748;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.mascot {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    font-size: 2.5rem;
+    cursor: pointer;
+    z-index: 150;
+}
+
+.mascot-bubble {
+    position: absolute;
+    bottom: 100%; right: 0;
+    background: white;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 0.85rem;
+    width: 180px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    display: none;
+    font-family: 'Quicksand', sans-serif;
+}
+
+.mascot-bubble.show { display: block; }
+
+.floating-anim {
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.confetti-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 400;
+}
+
+.confetti-piece {
+    position: absolute;
+    top: -20px;
+    animation: fall linear forwards;
+}
+
+@keyframes fall {
+    to { transform: translateY(105vh) rotate(360deg); }
+}

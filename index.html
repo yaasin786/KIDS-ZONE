@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidZone Explorer - Next Level Fun & Learning!</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- ================= KIDS LOGIN SCREEN OVERLAY ================= -->
+    <div id="loginScreen" class="login-overlay">
+        <div class="login-card floating-anim">
+            <div class="login-header">
+                <span class="login-icon">🚀</span>
+                <h2>Welcome Explorer!</h2>
+                <p>Please enter your email & password to start learning!</p>
+            </div>
+            
+            <form id="kidsLoginForm" onsubmit="handleKidLogin(event)">
+                <div class="input-group">
+                    <label for="kidEmail">✉️ Explorer Email</label>
+                    <!-- Updated: Removed visible email placeholder -->
+                    <input type="email" id="kidEmail" placeholder="Enter your email address" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="kidPassword">🔑 Secret Password</label>
+                    <input type="password" id="kidPassword" placeholder="••••••••" required>
+                </div>
+
+                <div id="loginErrorMsg" class="login-error-msg"></div>
+
+                <button type="submit" class="login-submit-btn">Blast Off! 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <header class="navbar">
+        <div class="logo">
+            <span class="logo-icon">🚀</span>
+            <span class="logo-text">KidZone <span class="badge-pro">PLUS</span></span>
+        </div>
+        <nav class="nav-links">
+            <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
+            <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
+            <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
+            <button class="nav-btn" onclick="switchTab('lab', event)">🧪 Science Lab</button>
+        </nav>
+        <div class="player-stats">
+            <button class="stats-btn" onclick="openBadgesModal()" title="My Badges">🏅 <span id="badgeCount">0</span></button>
+            <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
+            <div class="level-display" title="Explorer level">Lvl <span id="levelCount">1</span></div>
+            <button class="logout-btn" onclick="handleKidLogout()" title="Log Out">🚪 Logout</button>
+        </div>
+    </header>
+
+    <!-- XP Progress Bar -->
+    <div class="xp-bar-track">
+        <div class="xp-bar-fill" id="xpBarFill"></div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="container">
+
+        <!-- ================= ENCYCLOPEDIA TAB ================= -->
+        <section id="encyclopedia" class="tab-content active">
+            <div class="hero-banner ency-hero">
+                <h1>🔍 Kids Encyclopedia Explorer</h1>
+                <p>Discover amazing facts about space, animals, dinosaurs, and oceans!</p>
+            </div>
+
+            <div class="controls-bar">
+                <input type="text" id="encySearch" placeholder="Search topics (e.g. T-Rex, Mars)..." onkeyup="filterEncyclopedia()">
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterCategory('all', event)">All</button>
+                    <button class="filter-btn" onclick="filterCategory('space', event)">🪐 Space</button>
+                    <button class="filter-btn" onclick="filterCategory('animals', event)">🦁 Animals</button>
+                    <button class="filter-btn" onclick="filterCategory('dinosaurs', event)">🦖 Dinosaurs</button>
+                    <button class="filter-btn" onclick="filterCategory('ocean', event)">🌊 Ocean</button>
+                </div>
+                <button class="surprise-btn" onclick="surpriseMe()">🎲 Surprise Me!</button>
+            </div>
+
+            <div class="cards-grid" id="encyGrid">
+                <div class="card" data-category="space" onclick="openModal('mars')">
+                    <div class="card-badge">Space</div>
+                    <div class="card-icon">🔴</div>
+                    <h3>Mars the Red Planet</h3>
+                    <p>Why is Mars red? Is there water on Mars?</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="animals" onclick="openModal('cheetah')">
+                    <div class="card-badge">Animals</div>
+                    <div class="card-icon">🐆</div>
+                    <h3>Cheetah: Speed King</h3>
+                    <p>The fastest land animal on planet Earth!</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="dinosaurs" onclick="openModal('trex')">
+                    <div class="card-badge">Dinosaurs</div>
+                    <div class="card-icon">🦖</div>
+                    <h3>Tyrannosaurus Rex</h3>
+                    <p>Meet the king of the prehistoric world.</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="space" onclick="openModal('moon')">
+                    <div class="card-badge">Space</div>
+                    <div class="card-icon">🌕</div>
+                    <h3>Earth's Moon</h3>
+                    <p>How far away is the moon and how does it shine?</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="animals" onclick="openModal('blue-whale')">
+                    <div class="card-badge">Animals</div>
+                    <div class="card-icon">🐋</div>
+                    <h3>Blue Whale</h3>
+                    <p>The largest creature to ever live on Earth!</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="ocean" onclick="openModal('dolphin')">
+                    <div class="card-badge">Ocean</div>
+                    <div class="card-icon">🐬</div>
+                    <h3>Dolphins: Ocean Genius</h3>
+                    <p>How do dolphins "see" with sound?</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="ocean" onclick="openModal('octopus')">
+                    <div class="card-badge">Ocean</div>
+                    <div class="card-icon">🐙</div>
+                    <h3>Octopus: Eight-Armed Wonder</h3>
+                    <p>Why does an octopus have three hearts?</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+                <div class="card" data-category="ocean" onclick="openModal('reef')">
+                    <div class="card-badge">Ocean</div>
+                    <div class="card-icon">🪸</div>
+                    <h3>Coral Reefs</h3>
+                    <p>Are corals rocks, plants, or animals?</p>
+                    <button class="card-btn">Explore Fact ➔</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= GAMES TAB ================= -->
+        <section id="games" class="tab-content">
+            <div class="hero-banner games-hero">
+                <h1>🎮 Arcade & Learning Games</h1>
+                <p>Play interactive action games, math challenges, and test your 500-question trivia skills!</p>
+            </div>
+
+            <div class="game-selector">
+                <button class="game-tab-btn active" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
+                <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
+                <button class="game-tab-btn" onclick="showGame('pacman-game', event)">🟡 Pac-Man Classic</button>
+                <button class="game-tab-btn" onclick="showGame('memory-match', event)">🧩 Emoji Memory Match</button>
+            </div>
+
+            <!-- Game 1: Kids Math Game -->
+            <div id="math-game" class="game-wrapper">
+                <div class="game-stats">
+                    <span>Question: <strong id="mathProgress">1 / 5</strong></span>
+                    <span>Score: <strong id="mathScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initMathGame()">🔄 New Round</button>
+                </div>
+                <div class="quiz-container" id="mathContainer"></div>
+            </div>
+
+            <!-- Game 2: 500 Trivia Quiz -->
+            <div id="quiz-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Question: <strong id="quizProgress">1 / 5</strong></span>
+                    <span>Score: <strong id="quizScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initQuiz()">🔄 New Round</button>
+                </div>
+                <div class="quiz-container" id="quizContainer"></div>
+            </div>
+
+            <!-- Game 3: Pac-Man Mini Game -->
+            <div id="pacman-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Score: <strong id="score">0</strong></span>
+                    <span>Lives: <strong id="lives">❤️❤️❤️</strong></span>
+                    <button class="pause-btn" id="pausePacmanBtn" onclick="togglePausePacman()">⏸️ Pause</button>
+                    <button class="restart-btn" onclick="resetPacmanGame()">🔄 Restart Game</button>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="pacmanCanvas" width="440" height="440"></canvas>
+                </div>
+                
+                <div class="dpad-container">
+                    <button class="dpad-btn up" onclick="setPacmanDir(0, -1)">▲</button>
+                    <div class="dpad-middle">
+                        <button class="dpad-btn left" onclick="setPacmanDir(-1, 0)">◄</button>
+                        <button class="dpad-btn right" onclick="setPacmanDir(1, 0)">►</button>
+                    </div>
+                    <button class="dpad-btn down" onclick="setPacmanDir(0, 1)">▼</button>
+                </div>
+
+                <div class="game-controls-help">
+                    <p>🎮 <strong>Controls:</strong> Use <strong>Arrow Keys</strong> or <strong>D-Pad</strong> to guide Pac-Man! Eat dots🟡, avoid ghosts👻, and grab the big golden pellets ✨ to turn ghosts blue and gobble them up!</p>
+                </div>
+            </div>
+
+            <!-- Game 4: Memory Match -->
+            <div id="memory-match" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Moves: <strong id="memoryMoves">0</strong></span>
+                    <span>Matched: <strong id="memoryMatches">0 / 6</strong></span>
+                    <button class="restart-btn" onclick="initMemoryGame()">🔄 Reset Match</button>
+                </div>
+                <div class="memory-grid" id="memoryGrid"></div>
+            </div>
+        </section>
+
+        <!-- ================= BOOKS TAB ================= -->
+        <section id="books" class="tab-content">
+            <div class="hero-banner books-hero">
+                <h1>📖 Interactive Multi-Storybook</h1>
+                <p>Pick a story below, turn the pages, make choices, and listen to spoken narration!</p>
+            </div>
+
+            <div class="story-selector">
+                <button class="story-btn active" onclick="selectStory('snowwhite', event)">🍎 Snow White & Choices</button>
+                <button class="story-btn" onclick="selectStory('pip', event)">🚀 Pip's Nebula Dream</button>
+                <button class="story-btn" onclick="selectStory('leo', event)">🦁 Leo's Jungle Beats</button>
+                <button class="story-btn" onclick="selectStory('mira', event)">🧜 Mira's Coral Quest</button>
+            </div>
+
+            <div class="book-container">
+                <div class="book-card" id="activeBook">
+                    <div class="book-page">
+                        <div class="page-number" id="pageNumber">Page 1</div>
+                        <div class="book-illustration floating-anim" id="bookImg">👑</div>
+                        <h2 id="bookTitle">Interactive Snow White</h2>
+                        <div class="book-text" id="bookText">Loading story...</div>
+                        
+                        <div class="story-choices" id="storyChoices" style="display:none;"></div>
+                        
+                        <div class="the-end-banner" id="theEndBanner" style="display:none;">🎉 The End! 🎉</div>
+                    </div>
+                    <div class="book-controls">
+                        <button class="book-btn" id="prevPageBtn" onclick="changePage(-1)" disabled>◀ Previous</button>
+                        <button class="book-btn audio-btn" onclick="speakText()">🔊 Read Page</button>
+                        <button class="book-btn" id="nextPageBtn" onclick="changePage(1)">Next Page ▶</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= LAB TAB ================= -->
+        <section id="lab" class="tab-content">
+            <div class="hero-banner lab-hero">
+                <h1>🧪 Instructive Science & Craft Lab</h1>
+                <p>Safe, fun, step-by-step DIY experiments you can try at home!</p>
+            </div>
+
+            <div class="lab-grid">
+                <div class="experiment-card">
+                    <div class="exp-header">
+                        <span class="exp-icon">🌋</span>
+                        <div>
+                            <h3>Fizzy Baking Soda Volcano</h3>
+                            <span class="diff-tag easy">Easy • 10 mins</span>
+                        </div>
+                    </div>
+                    <div class="exp-body">
+                        <h4>Ingredients Needed:</h4>
+                        <ul class="checklist">
+                            <li><label><input type="checkbox"> 2 tbsp Baking Soda</label></li>
+                            <li><label><input type="checkbox"> 1/2 cup Vinegar</label></li>
+                            <li><label><input type="checkbox"> 2 drops Red Food Coloring</label></li>
+                            <li><label><input type="checkbox"> Small plastic bottle or cup</label></li>
+                        </ul>
+                        <h4>Step-by-Step Instructions:</h4>
+                        <ol class="steps-interactive">
+                            <li onclick="toggleStep(this)">Place your plastic cup on a tray or in the sink.</li>
+                            <li onclick="toggleStep(this)">Add 2 tablespoons of baking soda into the cup.</li>
+                            <li onclick="toggleStep(this)">Mix a few drops of red food coloring into the vinegar.</li>
+                            <li onclick="toggleStep(this)">Pour the vinegar in and watch the volcano erupt! 💥</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="experiment-card">
+                    <div class="exp-header">
+                        <span class="exp-icon">🌈</span>
+                        <div>
+                            <h3>Rainbow Walking Water</h3>
+                            <span class="diff-tag medium">Medium • 30 mins</span>
+                        </div>
+                    </div>
+                    <div class="exp-body">
+                        <h4>Ingredients Needed:</h4>
+                        <ul class="checklist">
+                            <li><label><input type="checkbox"> 3 Clear Glasses</label></li>
+                            <li><label><input type="checkbox"> Water & Food Colors (Red, Blue, Yellow)</label></li>
+                            <li><label><input type="checkbox"> Paper Towels</label></li>
+                        </ul>
+                        <h4>Step-by-Step Instructions:</h4>
+                        <ol class="steps-interactive">
+                            <li onclick="toggleStep(this)">Fill glasses with water and add primary food colors.</li>
+                            <li onclick="toggleStep(this)">Fold paper towels into strips.</li>
+                            <li onclick="toggleStep(this)">Place towel strips connecting the glasses together.</li>
+                            <li onclick="toggleStep(this)">Watch water travel up the towels to mix new secondary colors!</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Popup: Encyclopedia Fact -->
+    <div id="encyModal" class="modal" onclick="closeModalOnBg(event)">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <div class="modal-icon" id="modalIcon">🔍</div>
+            <h2 id="modalTitle">Fact Title</h2>
+            <p id="modalBody">Fact details...</p>
+        </div>
+    </div>
+
+    <!-- Modal Popup: Badges -->
+    <div id="badgesModal" class="modal" onclick="closeBadgesModalOnBg(event)">
+        <div class="modal-content badges-modal-content">
+            <span class="close-btn" onclick="closeBadgesModal()">&times;</span>
+            <div class="modal-icon">🏅</div>
+            <h2>My Badge Collection</h2>
+            <p class="badges-subtitle">Play, read, and explore to unlock them all!</p>
+            <div class="badges-grid" id="badgesGrid"></div>
+        </div>
+    </div>
+
+    <!-- Toast & Confetti layers -->
+    <div id="toastContainer" class="toast-container"></div>
+    <div id="confettiContainer" class="confetti-container"></div>
+
+    <!-- Friendly mascot buddy -->
+    <div class="mascot" id="mascot" onclick="mascotSpeak()">
+        <div class="mascot-bubble" id="mascotBubble"></div>
+        <span class="mascot-emoji">🤖</span>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
