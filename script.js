@@ -38,81 +38,244 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeModal();
         closeBadgesModal();
+        closeCreateAccountModal();
     }
 });
 
 // ============================================================
-// STRICT LOGIN & AUTHENTICATION SYSTEM
+// STRICT ADMIN & KID AUTHENTICATION SYSTEM
 // ============================================================
-const ALLOWED_EMAIL = "yaasin@gmail.com";
-const ALLOWED_PASS = "yaasin786";
+const ADMIN_EMAIL = "yaasin@gmail.com";
+const ADMIN_PASS = "yaasin786";
+
+let currentRole = null; // 'admin' or 'kid'
+let currentActiveId = null;
+
+function toggleLoginType(type) {
+    playSound(400);
+    const kidForm = document.getElementById('kidLoginForm');
+    const adminForm = document.getElementById('adminLoginForm');
+    const tabKid = document.getElementById('tabKidLogin');
+    const tabAdmin = document.getElementById('tabAdminLogin');
+
+    if (type === 'kid') {
+        kidForm.style.display = 'block';
+        adminForm.style.display = 'none';
+        tabKid.classList.add('active');
+        tabAdmin.classList.remove('active');
+        populateKidSelect();
+    } else {
+        kidForm.style.display = 'none';
+        adminForm.style.display = 'block';
+        tabKid.classList.remove('active');
+        tabAdmin.classList.add('active');
+    }
+}
 
 function checkLoginSession() {
     const isLoggedIn = sessionStorage.getItem('kidzone_logged_in');
+    const role = sessionStorage.getItem('kidzone_user_role');
+    const activeId = sessionStorage.getItem('kidzone_active_id');
     const loginOverlay = document.getElementById('loginScreen');
-    
-    if (loginOverlay) {
-        if (isLoggedIn === 'true') {
-            loginOverlay.classList.add('hidden');
-            loadProgress();
-        } else {
-            loginOverlay.classList.remove('hidden');
-        }
+
+    if (isLoggedIn === 'true' && activeId) {
+        currentRole = role;
+        currentActiveId = activeId;
+        if (loginOverlay) loginOverlay.classList.add('hidden');
+        setupUIForSession();
+        loadProgress();
+    } else {
+        if (loginOverlay) loginOverlay.classList.remove('hidden');
+        populateKidSelect();
     }
+}
+
+function populateKidSelect() {
+    const selectElem = document.getElementById('loginKidSelect');
+    if (!selectElem) return;
+    selectElem.innerHTML = '<option value="" disabled selected>Choose your profile...</option>';
+
+    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
+    profiles.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.innerText = `${p.avatar} ${p.name}`;
+        selectElem.appendChild(opt);
+    });
 }
 
 function handleKidLogin(event) {
     if (event) event.preventDefault();
-    
-    const emailElem = document.getElementById('kidEmail');
-    const passElem = document.getElementById('kidPassword');
-    const errorMsg = document.getElementById('loginErrorMsg');
+    const kidId = document.getElementById('loginKidSelect').value;
+    const pinInput = document.getElementById('loginKidPin').value.trim();
+    const errorMsg = document.getElementById('kidLoginErrorMsg');
 
-    if (!emailElem || !passElem) {
-        console.error("Login input elements not found!");
-        return;
-    }
+    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
+    const kid = profiles.find(p => p.id === kidId);
 
-    const emailInput = emailElem.value.trim().toLowerCase();
-    const passwordInput = passElem.value.trim();
-
-    if (emailInput === ALLOWED_EMAIL && passwordInput === ALLOWED_PASS) {
+    if (kid && kid.pin === pinInput) {
         sessionStorage.setItem('kidzone_logged_in', 'true');
-        localStorage.setItem('kidzone_user_email', emailInput);
+        sessionStorage.setItem('kidzone_user_role', 'kid');
+        sessionStorage.setItem('kidzone_active_id', kid.id);
+
+        currentRole = 'kid';
+        currentActiveId = kid.id;
 
         if (errorMsg) errorMsg.style.display = "none";
+        document.getElementById('loginScreen').classList.add('hidden');
         
-        const loginOverlay = document.getElementById('loginScreen');
-        if (loginOverlay) loginOverlay.classList.add('hidden');
-        
+        setupUIForSession();
         loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Welcome back, Explorer! 🚀`, '✨', 3500);
+        showToast(`Welcome back, ${kid.name}! 🚀`, '✨', 3500);
     } else {
         playSound(150, 'sawtooth', 0.3);
         if (errorMsg) {
-            errorMsg.innerText = "❌ Access Denied! Invalid email or password.";
+            errorMsg.innerText = "❌ Incorrect Explorer or 4-digit PIN!";
             errorMsg.style.display = "block";
         }
     }
 }
 
-function handleKidLogout() {
+function handleAdminLogin(event) {
+    if (event) event.preventDefault();
+    const email = document.getElementById('adminEmail').value.trim().toLowerCase();
+    const password = document.getElementById('adminPassword').value.trim();
+    const errorMsg = document.getElementById('adminLoginErrorMsg');
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
+        sessionStorage.setItem('kidzone_logged_in', 'true');
+        sessionStorage.setItem('kidzone_user_role', 'admin');
+        sessionStorage.setItem('kidzone_active_id', 'admin_yaasin');
+
+        currentRole = 'admin';
+        currentActiveId = 'admin_yaasin';
+
+        if (errorMsg) errorMsg.style.display = "none";
+        document.getElementById('loginScreen').classList.add('hidden');
+
+        setupUIForSession();
+        loadProgress();
+        playChime([523, 659, 784, 1046]);
+        showToast(`Welcome Admin Yaasin! 🛠️`, '👑', 3500);
+    } else {
+        playSound(150, 'sawtooth', 0.3);
+        if (errorMsg) {
+            errorMsg.innerText = "❌ Invalid Admin Email or Password.";
+            errorMsg.style.display = "block";
+        }
+    }
+}
+
+function setupUIForSession() {
+    const addKidBtn = document.getElementById('addKidBtn');
+    const avatarElem = document.getElementById('activeAvatar');
+    const nameElem = document.getElementById('activeName');
+
+    if (currentRole === 'admin') {
+        if (addKidBtn) addKidBtn.style.display = 'inline-block';
+        if (avatarElem) avatarElem.innerText = '🛠️';
+        if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
+    } else {
+        if (addKidBtn) addKidBtn.style.display = 'none';
+        const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
+        const kid = profiles.find(p => p.id === currentActiveId);
+        if (kid) {
+            if (avatarElem) avatarElem.innerText = kid.avatar;
+            if (nameElem) nameElem.innerText = kid.name;
+        }
+    }
+}
+
+function handleLogout() {
     playSound(300);
     sessionStorage.removeItem('kidzone_logged_in');
+    sessionStorage.removeItem('kidzone_user_role');
+    sessionStorage.removeItem('kidzone_active_id');
     
-    const passElem = document.getElementById('kidPassword');
-    if (passElem) passElem.value = '';
+    currentRole = null;
+    currentActiveId = null;
+
+    document.getElementById('loginKidPin').value = '';
+    document.getElementById('adminPassword').value = '';
     
     const loginOverlay = document.getElementById('loginScreen');
     if (loginOverlay) loginOverlay.classList.remove('hidden');
     
+    populateKidSelect();
     showToast('Logged out! Access locked. 👋', '🔒', 3000);
 }
 
 // ============================================================
-// REWARDS & SAVE SYSTEM
+// ADMIN CREATES KID PROFILES
+// ============================================================
+let selectedAvatar = '🚀';
+
+function openCreateAccountModal() {
+    if (currentRole !== 'admin') {
+        showToast('Only Admin can create new kid profiles!', '⚠️', 3000);
+        return;
+    }
+    playSound(600);
+    const modal = document.getElementById('createAccountModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCreateAccountModal() {
+    playSound(300);
+    const modal = document.getElementById('createAccountModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function closeCreateModalOnBg(e) {
+    if (e.target.id === 'createAccountModal') closeCreateAccountModal();
+}
+
+function selectAvatar(avatarEmoji, btnElem) {
+    playSound(400);
+    selectedAvatar = avatarEmoji;
+    document.querySelectorAll('.avatar-option').forEach(b => b.classList.remove('active'));
+    if (btnElem) btnElem.classList.add('active');
+}
+
+function handleCreateKidAccount(event) {
+    event.preventDefault();
+    const nameInput = document.getElementById('newKidName');
+    const pinInput = document.getElementById('newKidPin');
+
+    if (!nameInput || !pinInput) return;
+
+    const kidName = nameInput.value.trim();
+    const kidPin = pinInput.value.trim();
+
+    if (!kidName || kidPin.length !== 4) {
+        showToast('Please provide a name and 4-digit PIN!', '⚠️', 3000);
+        return;
+    }
+
+    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
+    const newProfile = {
+        id: `kid_${Date.now()}`,
+        name: kidName,
+        avatar: selectedAvatar,
+        pin: kidPin
+    };
+
+    profiles.push(newProfile);
+    localStorage.setItem('kidzone_registered_kids', JSON.stringify(profiles));
+
+    closeCreateAccountModal();
+    nameInput.value = '';
+    pinInput.value = '';
+
+    playChime([523, 659, 784, 1046]);
+    launchConfetti(40);
+    showToast(`Kid profile created for ${kidName}! 🎉`, '✨', 3500);
+}
+
+// ============================================================
+// REWARDS & SAVE SYSTEM PER PROFILE
 // ============================================================
 let stars = 0;
 let level = 1;
@@ -135,8 +298,9 @@ const BADGES = {
 };
 
 function saveProgress() {
+    if (!currentActiveId) return;
     try {
-        const userEmail = localStorage.getItem('kidzone_user_email') || 'default_explorer';
+        const saveKey = `kidzone_progress_${currentActiveId}`;
         const data = {
             stars,
             level,
@@ -145,20 +309,29 @@ function saveProgress() {
             finishedStories: [...finishedStories],
             completedExperiments: [...completedExperiments]
         };
-        localStorage.setItem(`kidzone_progress_${userEmail}`, JSON.stringify(data));
+        localStorage.setItem(saveKey, JSON.stringify(data));
     } catch (e) {
         console.error("Save error:", e);
     }
 }
 
 function loadProgress() {
+    if (!currentActiveId) return;
     try {
-        const userEmail = localStorage.getItem('kidzone_user_email') || 'default_explorer';
-        const raw = localStorage.getItem(`kidzone_progress_${userEmail}`);
+        const saveKey = `kidzone_progress_${currentActiveId}`;
+        const raw = localStorage.getItem(saveKey);
+        
         if (!raw) {
+            stars = 0;
+            level = 1;
+            unlockedBadges = new Set();
+            factsViewed = new Set();
+            finishedStories = new Set();
+            completedExperiments = new Set();
             updateStatsDisplay();
             return;
         }
+        
         const d = JSON.parse(raw);
         stars = d.stars || 0;
         level = d.level || 1;
@@ -417,27 +590,15 @@ function surpriseMe() {
 }
 
 // ============================================================
-// STORYBOOKS (EXTENDED & REWORKED COMPLETE SCRIPTS)
+// STORYBOOKS
 // ============================================================
 const stories = {
     snowwhite: {
         title: "Snow White & The Whispering Enchantment",
         pages: [
-            { 
-                page: 1, 
-                img: '👑', 
-                text: "Once upon a time, deep within a kingdom encircled by mist and emerald mountains, lived Princess Snow White. She was kind to every creature, from the smallest bluebird to the oldest forest stag. Her skin was as white as winter snow, her lips red as wild roses, and her hair dark as midnight. Yet, despite her warmth, the kingdom held a shadow in the high tower of the royal palace." 
-            },
-            { 
-                page: 2, 
-                img: '🪞', 
-                text: "High in that tower, the jealous Queen stood before her ancient, silver-framed Magic Mirror. 'Mirror, mirror on the wall, who is the fairest of them all?' she demanded. The glass shimmered with a pale, ethereal light and whispered back: 'Queen, your beauty is true, 'tis plain to see, but Snow White in the forest is a thousand times more fair than thee!' Driven by bitter envy, the Queen vowed to banish the young princess forever." 
-            },
-            { 
-                page: 3, 
-                img: '🌲', 
-                text: "Fleeing into the unknown depths of the forest under a blanket of moonlight, Snow White found herself surrounded by looming oak trees that seemed to whisper in the night wind. The path split before her into two mysterious trails hidden beneath thick fog. She had to decide which path to trust in the dark." 
-            },
+            { page: 1, img: '👑', text: "Once upon a time, deep within a kingdom encircled by mist and emerald mountains, lived Princess Snow White. She was kind to every creature, from the smallest bluebird to the oldest forest stag. Her skin was as white as winter snow, her lips red as wild roses, and her hair dark as midnight. Yet, despite her warmth, the kingdom held a shadow in the high tower of the royal palace." },
+            { page: 2, img: '🪞', text: "High in that tower, the jealous Queen stood before her ancient, silver-framed Magic Mirror. 'Mirror, mirror on the wall, who is the fairest of them all?' she demanded. The glass shimmered with a pale, ethereal light and whispered back: 'Queen, your beauty is true, 'tis plain to see, but Snow White in the forest is a thousand times more fair than thee!' Driven by bitter envy, the Queen vowed to banish the young princess forever." },
+            { page: 3, img: '🌲', text: "Fleeing into the unknown depths of the forest under a blanket of moonlight, Snow White found herself surrounded by looming oak trees that seemed to whisper in the night wind. The path split before her into two mysterious trails hidden beneath thick fog. She had to decide which path to trust in the dark." },
             { 
                 page: 4, 
                 img: '🌲', 
@@ -447,36 +608,12 @@ const stories = {
                     { text: "🌿 Enter the Whispering Woodland Trail", nextPage: 5 }
                 ]
             },
-            { 
-                page: 5, 
-                img: '🏡', 
-                text: "Following the soft glow of tiny lanterns hanging from wild mossy branches, Snow White stumbled upon a small clearing. Nestled among giant mushrooms was a cozy wooden cottage with tiny wooden shutters and smoke gently drifting from its stone chimney. She knocked gently, but hearing no answer, stepped quietly inside to rest." 
-            },
-            { 
-                page: 6, 
-                img: '🦊', 
-                text: "Entering the Whispering Woodland Trail, friendly forest animals—a red fox, a pair of inquisitive raccoons, and a gentle doe—guided her step-by-step through the thick brush. Together, they led her through the tangled vines and straight to the garden gate of a quaint, magical cottage hiding near a rushing stream." 
-            },
-            { 
-                page: 7, 
-                img: '🛏️', 
-                text: "Inside the cottage, everything was miniature! Seven tiny chairs sat around a sturdy wooden dinner table, and seven tiny unmade beds lined the loft upstairs. Exhausted from her long journey through the enchanted woods, Snow White curled across three of the little beds and fell into a peaceful, deep sleep." 
-            },
-            { 
-                page: 8, 
-                img: '⛏️', 
-                text: "At sunset, march steps echoed outside. The Seven Dwarfs—Doc, Grumpy, Happy, Sleepy, Bashful, Sneezy, and Dopey—returned home from digging for sparkling gems deep inside the mountains. Surprised to find a sleeping maiden, they listened as she shared her story. Touched by her gentle heart, they offered her a permanent home filled with safety and friendship." 
-            },
-            { 
-                page: 9, 
-                img: '🧙‍♀️', 
-                text: "Weeks passed happily until the Wicked Queen consulted her mirror once more and learned Snow White was still alive. Disguising herself as an old peasant peddler woman with a ragged cape, she journeyed to the cottage while the dwarfs were away working in the jewel mines." 
-            },
-            { 
-                page: 10, 
-                img: '🍎', 
-                text: "Knocking on the tiny wooden window, the disguised Queen held up a polished, bright red poison apple that gleamed temptingly in the sunlight. 'Take a bite, sweet girl,' the peddler croaked, 'and your deepest wish will come true!' Snow White hesitated at the threshold." 
-            },
+            { page: 5, img: '🏡', text: "Following the soft glow of tiny lanterns hanging from wild mossy branches, Snow White stumbled upon a small clearing. Nestled among giant mushrooms was a cozy wooden cottage with tiny wooden shutters and smoke gently drifting from its stone chimney. She knocked gently, but hearing no answer, stepped quietly inside to rest." },
+            { page: 6, img: '🦊', text: "Entering the Whispering Woodland Trail, friendly forest animals—a red fox, a pair of inquisitive raccoons, and a gentle doe—guided her step-by-step through the thick brush. Together, they led her through the tangled vines and straight to the garden gate of a quaint, magical cottage hiding near a rushing stream." },
+            { page: 7, img: '🛏️', text: "Inside the cottage, everything was miniature! Seven tiny chairs sat around a sturdy wooden dinner table, and seven tiny unmade beds lined the loft upstairs. Exhausted from her long journey through the enchanted woods, Snow White curled across three of the little beds and fell into a peaceful, deep sleep." },
+            { page: 8, img: '⛏️', text: "At sunset, march steps echoed outside. The Seven Dwarfs—Doc, Grumpy, Happy, Sleepy, Bashful, Sneezy, and Dopey—returned home from digging for sparkling gems deep inside the mountains. Surprised to find a sleeping maiden, they listened as she shared her story. Touched by her gentle heart, they offered her a permanent home filled with safety and friendship." },
+            { page: 9, img: '🧙‍♀️', text: "Weeks passed happily until the Wicked Queen consulted her mirror once more and learned Snow White was still alive. Disguising herself as an old peasant peddler woman with a ragged cape, she journeyed to the cottage while the dwarfs were away working in the jewel mines." },
+            { page: 10, img: '🍎', text: "Knocking on the tiny wooden window, the disguised Queen held up a polished, bright red poison apple that gleamed temptingly in the sunlight. 'Take a bite, sweet girl,' the peddler croaked, 'and your deepest wish will come true!' Snow White hesitated at the threshold." },
             { 
                 page: 11, 
                 img: '🍎', 
@@ -486,156 +623,48 @@ const stories = {
                     { text: "🍎 Take a Bite of the Apple", nextPage: 12 }
                 ]
             },
-            { 
-                page: 12, 
-                img: '🛡️', 
-                text: "Remembering the dwarfs' stern warnings, Snow White shook her head gently and stepped back. 'No thank you, kind auntie, I cannot accept gifts from strangers.' The Queen gasped in defeat, dropped the fruit, and fled into the dark mountains, never to be seen again!" 
-            },
-            { 
-                page: 13, 
-                img: '💤', 
-                text: "Snow White took a bite of the rosy red fruit and instantly fell into an enchanted slumber. Devastated, the Seven Dwarfs built a glass casket surrounded by forest blossoms to protect her until a brave Prince arrived, breaking the dark sleeping spell with a vow of true love." 
-            },
-            { 
-                page: 14, 
-                img: '🏰', 
-                text: "With safety restored across the realm, Snow White returned to the palace with her prince and forest friends. The kingdom celebrated with music, dancing, and feast days for months, living happily ever after! The end!" 
-            }
+            { page: 12, img: '🛡️', text: "Remembering the dwarfs' stern warnings, Snow White shook her head gently and stepped back. 'No thank you, kind auntie, I cannot accept gifts from strangers.' The Queen gasped in defeat, dropped the fruit, and fled into the dark mountains, never to be seen again!" },
+            { page: 13, img: '💤', text: "Snow White took a bite of the rosy red fruit and instantly fell into an enchanted slumber. Devastated, the Seven Dwarfs built a glass casket surrounded by forest blossoms to protect her until a brave Prince arrived, breaking the dark sleeping spell with a vow of true love." },
+            { page: 14, img: '🏰', text: "With safety restored across the realm, Snow White returned to the palace with her prince and forest friends. The kingdom celebrated with music, dancing, and feast days for months, living happily ever after! The end!" }
         ]
     },
     pip: {
         title: "Pip's Nebula Dream Voyage",
         pages: [
-            { 
-                page: 1, 
-                img: '🚀', 
-                text: "On the quiet star-dusted launchpad of Starlight Station 9, located on the outer rim of the Milky Way galaxy, lived Pip—a cheerful young rocket ship with glowing sapphire thrusters and a heat shield painted with bright yellow stars." 
-            },
-            { 
-                page: 2, 
-                img: '🗺️', 
-                text: "Every night, Pip gazed through his space-telescope at the Golden Nebula—a giant, swirling cloud of pink cosmic dust, sparkling newborn stars, and floating space crystals light-years away. More than anything, Pip dreamed of flying across the universe to explore it firsthand." 
-            },
-            { 
-                page: 3, 
-                img: '🪐', 
-                text: "One evening, after fueling his engine with liquid starlight, Pip counted down out loud: 'Three... Two... One... Liftoff!' With a magnificent roar of rainbow fire, he rocketed upward into the dark vacuum of deep space, zooming past icy comets and ringed planets." 
-            },
-            { 
-                page: 4, 
-                img: '☄️', 
-                text: "Halfway across the sector, Pip encountered a rocky asteroid belt tumbling directly in his navigational path. Giant boulders made of space granite spun left and right. Pip adjusted his steering fins and expertly bobbed, wooshed, and dodged around each fast-moving meteor!" 
-            },
-            { 
-                page: 5, 
-                img: '🛸', 
-                text: "Beyond the asteroid field, Pip spotted a gleaming silver saucer stranded near a lunar crater. A friendly blue alien named Orbit was waving for help! Orbit's propulsion engine was missing two glowing stardust batteries." 
-            },
-            { 
-                page: 6, 
-                img: '🔋', 
-                text: "Pip opened his cargo bay, pulled out extra solar power batteries, and helped Orbit repair his cosmic ship. Overjoyed, Orbit handed Pip an ancient star-map that revealed a shortcut through a warm solar wind stream." 
-            },
-            { 
-                page: 7, 
-                img: '🌌', 
-                text: "Riding the warm solar winds like an ocean wave, Pip finally reached the edges of the Golden Nebula! The cosmic cloud sparkled with gold dust, glowing space butterflies, and floating jelly-whales that sang soothing melodies across the galaxy." 
-            },
-            { 
-                page: 8, 
-                img: '🥳', 
-                text: "Friendly galaxy explorers and space creatures gathered on a nearby moon base to host a stellar picnic in Pip's honor, celebrating the tiny rocket who dared to dream big. Pip knew that no matter how vast space was, courage and kindness made every star feel close to home. The end!" 
-            }
+            { page: 1, img: '🚀', text: "On the quiet star-dusted launchpad of Starlight Station 9, located on the outer rim of the Milky Way galaxy, lived Pip—a cheerful young rocket ship with glowing sapphire thrusters and a heat shield painted with bright yellow stars." },
+            { page: 2, img: '🗺️', text: "Every night, Pip gazed through his space-telescope at the Golden Nebula—a giant, swirling cloud of pink cosmic dust, sparkling newborn stars, and floating space crystals light-years away. More than anything, Pip dreamed of flying across the universe to explore it firsthand." },
+            { page: 3, img: '🪐', text: "One evening, after fueling his engine with liquid starlight, Pip counted down out loud: 'Three... Two... One... Liftoff!' With a magnificent roar of rainbow fire, he rocketed upward into the dark vacuum of deep space, zooming past icy comets and ringed planets." },
+            { page: 4, img: '☄️', text: "Halfway across the sector, Pip encountered a rocky asteroid belt tumbling directly in his navigational path. Giant boulders made of space granite spun left and right. Pip adjusted his steering fins and expertly bobbed, wooshed, and dodged around each fast-moving meteor!" },
+            { page: 5, img: '🛸', text: "Beyond the asteroid field, Pip spotted a gleaming silver saucer stranded near a lunar crater. A friendly blue alien named Orbit was waving for help! Orbit's propulsion engine was missing two glowing stardust batteries." },
+            { page: 6, img: '🔋', text: "Pip opened his cargo bay, pulled out extra solar power batteries, and helped Orbit repair his cosmic ship. Overjoyed, Orbit handed Pip an ancient star-map that revealed a shortcut through a warm solar wind stream." },
+            { page: 7, img: '🌌', text: "Riding the warm solar winds like an ocean wave, Pip finally reached the edges of the Golden Nebula! The cosmic cloud sparkled with gold dust, glowing space butterflies, and floating jelly-whales that sang soothing melodies across the galaxy." },
+            { page: 8, img: '🥳', text: "Friendly galaxy explorers and space creatures gathered on a nearby moon base to host a stellar picnic in Pip's honor, celebrating the tiny rocket who dared to dream big. Pip knew that no matter how vast space was, courage and kindness made every star feel close to home. The end!" }
         ]
     },
     leo: {
         title: "Leo's Grand Jungle Symphony",
         pages: [
-            { 
-                page: 1, 
-                img: '🦁', 
-                text: "Deep in the lush heart of the Sunlit Savanna lived Leo, a young lion with a fluffy golden mane and a heart full of rhythm. While the other young lions practiced ferocious roars to grow up to be kings, Leo preferred to pat his paws against hollow logs, crafting rhythmic beats that echoed across the plains." 
-            },
-            { 
-                page: 2, 
-                img: '🥁', 
-                text: "Leo collected dry gourd shells, hollow bamboo stalks, and stretched tree bark to assemble his very own jungle drum kit under the wide canopy of an ancient baobab tree. Every morning, he drummed out lively beats that set the rhythm for the entire savanna." 
-            },
-            { 
-                page: 3, 
-                img: '📜', 
-                text: "One sunny afternoon, a flock of colorful toucans fluttered through the trees dropping golden leaves. They carried invitations to the Great Jungle Talent Contest, where the animal king would award a sparkling golden trophy to the best musical performer in the forest." 
-            },
-            { 
-                page: 4, 
-                img: '🦜', 
-                text: "Leo spent days composing a drum rhythm that captured the spirit of the savanna: the gentle pitter-patter of morning rain, the rushing stride of running zebras, and the deep boom of thunder across the hills." 
-            },
-            { 
-                page: 5, 
-                img: '🌴', 
-                text: "On the night of the grand show, fireflies illuminated the woodland stage. Leo watched nervously as the parrots sang high operatic notes and the baboons performed acrobatic flips. Soon, his name was announced to the waiting crowd." 
-            },
-            { 
-                page: 6, 
-                img: '🎶', 
-                text: "Stepping up to his wooden instruments, Leo took a deep breath and began to play. His paws moved fast like lightning! He drummed a thunderous rhythm that filled every heart in the clearing with energy and joy." 
-            },
-            { 
-                page: 7, 
-                img: '💃', 
-                text: "The music was so infectious that the elephants began stomping their feet, the monkeys swung rhythmically from vines, and even the stern elder lions began tapping their paws in harmony!" 
-            },
-            { 
-                page: 8, 
-                img: '🏆', 
-                text: "The crowd cheered with deafening applause as Leo was awarded the golden Rhythm Crown. Leo smiled bright, proving to the entire jungle that being true to your own unique passion is the greatest roar of all. The end!" 
-            }
+            { page: 1, img: '🦁', text: "Deep in the lush heart of the Sunlit Savanna lived Leo, a young lion with a fluffy golden mane and a heart full of rhythm. While the other young lions practiced ferocious roars to grow up to be kings, Leo preferred to pat his paws against hollow logs, crafting rhythmic beats that echoed across the plains." },
+            { page: 2, img: '🥁', text: "Leo collected dry gourd shells, hollow bamboo stalks, and stretched tree bark to assemble his very own jungle drum kit under the wide canopy of an ancient baobab tree. Every morning, he drummed out lively beats that set the rhythm for the entire savanna." },
+            { page: 3, img: '📜', text: "One sunny afternoon, a flock of colorful toucans fluttered through the trees dropping golden leaves. They carried invitations to the Great Jungle Talent Contest, where the animal king would award a sparkling golden trophy to the best musical performer in the forest." },
+            { page: 4, img: '🦜', text: "Leo spent days composing a drum rhythm that captured the spirit of the savanna: the gentle pitter-patter of morning rain, the rushing stride of running zebras, and the deep boom of thunder across the hills." },
+            { page: 5, img: '🌴', text: "On the night of the grand show, fireflies illuminated the woodland stage. Leo watched nervously as the parrots sang high operatic notes and the baboons performed acrobatic flips. Soon, his name was announced to the waiting crowd." },
+            { page: 6, img: '🎶', text: "Stepping up to his wooden instruments, Leo took a deep breath and began to play. His paws moved fast like lightning! He drummed a thunderous rhythm that filled every heart in the clearing with energy and joy." },
+            { page: 7, img: '💃', text: "The music was so infectious that the elephants began stomping their feet, the monkeys swung rhythmically from vines, and even the stern elder lions began tapping their paws in harmony!" },
+            { page: 8, img: '🏆', text: "The crowd cheered with deafening applause as Leo was awarded the golden Rhythm Crown. Leo smiled bright, proving to the entire jungle that being true to your own unique passion is the greatest roar of all. The end!" }
         ]
     },
     mira: {
         title: "Mira & The Lost Coral Kingdom",
         pages: [
-            { 
-                page: 1, 
-                img: '🧜‍♀️', 
-                text: "Far beneath the turquoise surface of the tropical sea lay the kingdom of Aquaria, home to Mira the mermaid. Mira possessed sparkling emerald fins and spent her days tending to the delicate ocean gardens of glowing sea anemones, giant pink clams, and vibrant coral reefs." 
-            },
-            { 
-                page: 2, 
-                img: '🪸', 
-                text: "One morning, Mira swam down to the main reef and noticed a distressing change: the vibrant corals were losing their iridescent shimmer, fading into dull grey stone. Without the magic of the main coral reef, the tiny fish, sea turtles, and starfish had no place to play or build their homes." 
-            },
-            { 
-                page: 3, 
-                img: '📜', 
-                text: "The elder sea turtle, Barnaby, swam up to Mira and unrolled an ancient kelp parchment map. 'The heart of our reef can only be restored by the legendary Pearl of Lumina,' he explained, 'hidden deep inside the Sunken Sea Cave across the trench.'" 
-            },
-            { 
-                page: 4, 
-                img: '🐬', 
-                text: "Mira knew she couldn't make the long journey alone. She whistled a high underwater tune, calling upon her two closest sea companions: Bubbles, an energetic bottle-nosed dolphin, and Barnaby the wise octopus, who knew every secret pathway in the ocean depths." 
-            },
-            { 
-                page: 5, 
-                img: '🌊', 
-                text: "Together, the trio swam past swirling underwater currents, glowing jellyfish fields, and dark underwater chasms. Whenever they encountered a tricky path, Barnaby used his eight arms to move obstacles, while Bubbles used echolocation to guide them safely through murky waters." 
-            },
-            { 
-                page: 6, 
-                img: '💎', 
-                text: "At last, deep within the shimmering Sunken Sea Cave, they discovered the Pearl of Lumina resting upon a bed of crystalline sand. It shone with every hue of the rainbow, illuminating the dark cavern with warm light." 
-            },
-            { 
-                page: 7, 
-                img: '✨', 
-                text: "Carefully carrying the pearl back to Aquaria, Mira gently placed it upon the central altar of the reef. Instantly, a wave of magical iridescent energy pulsed through the waters! The coral burst back into brilliant shades of violet, orange, turquoise, and gold." 
-            },
-            { 
-                page: 8, 
-                img: '🎉', 
-                text: "Thousands of colorful reef fish swirled around Mira, singing songs of gratitude. The ocean kingdom was saved, and Mira's bravery ensured that the magical coral gardens would flourish for generations to come. The end!" 
-            }
+            { page: 1, img: '🧜‍♀️', text: "Far beneath the turquoise surface of the tropical sea lay the kingdom of Aquaria, home to Mira the mermaid. Mira possessed sparkling emerald fins and spent her days tending to the delicate ocean gardens of glowing sea anemones, giant pink clams, and vibrant coral reefs." },
+            { page: 2, img: '🪸', text: "One morning, Mira swam down to the main reef and noticed a distressing change: the vibrant corals were losing their iridescent shimmer, fading into dull grey stone. Without the magic of the main coral reef, the tiny fish, sea turtles, and starfish had no place to play or build their homes." },
+            { page: 3, img: '📜', text: "The elder sea turtle, Barnaby, swam up to Mira and unrolled an ancient kelp parchment map. 'The heart of our reef can only be restored by the legendary Pearl of Lumina,' he explained, 'hidden deep inside the Sunken Sea Cave across the trench.'" },
+            { page: 4, img: '🐬', text: "Mira knew she couldn't make the long journey alone. She whistled a high underwater tune, calling upon her two closest sea companions: Bubbles, an energetic bottle-nosed dolphin, and Barnaby the wise octopus, who knew every secret pathway in the ocean depths." },
+            { page: 5, img: '🌊', text: "Together, the trio swam past swirling underwater currents, glowing jellyfish fields, and dark underwater chasms. Whenever they encountered a tricky path, Barnaby used his eight arms to move obstacles, while Bubbles used echolocation to guide them safely through murky waters." },
+            { page: 6, img: '💎', text: "At last, deep within the shimmering Sunken Sea Cave, they discovered the Pearl of Lumina resting upon a bed of crystalline sand. It shone with every hue of the rainbow, illuminating the dark cavern with warm light." },
+            { page: 7, img: '✨', text: "Carefully carrying the pearl back to Aquaria, Mira gently placed it upon the central altar of the reef. Instantly, a wave of magical iridescent energy pulsed through the waters! The coral burst back into brilliant shades of violet, orange, turquoise, and gold." },
+            { page: 8, img: '🎉', text: "Thousands of colorful reef fish swirled around Mira, singing songs of gratitude. The ocean kingdom was saved, and Mira's bravery ensured that the magical coral gardens would flourish for generations to come. The end!" }
         ]
     }
 };
@@ -1489,14 +1518,9 @@ function checkExperimentComplete(card) {
 }
 
 // ============================================================
-// INITIAL LOAD & EVENT LISTENERS
+// INITIAL LOAD
 // ============================================================
 window.onload = () => {
     checkLoginSession();
     renderStoryPage();
-
-    const loginForm = document.querySelector('#loginScreen form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleKidLogin);
-    }
 };
