@@ -9,29 +9,47 @@
 </head>
 <body>
 
-    <!-- ================= KIDS LOGIN SCREEN OVERLAY ================= -->
+    <!-- ================= LOGIN SCREEN OVERLAY ================= -->
     <div id="loginScreen" class="login-overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <div class="login-card floating-anim">
             <div class="login-header">
                 <span class="login-icon" aria-hidden="true">🚀</span>
                 <h2 id="loginTitle">Welcome Explorer!</h2>
-                <p>Please enter your email & password to start learning!</p>
+                <p>Select role to log in</p>
+                <div class="login-toggle-btns">
+                    <button type="button" id="tabKidLogin" class="toggle-btn active" onclick="toggleLoginType('kid')">Kid Login</button>
+                    <button type="button" id="tabAdminLogin" class="toggle-btn" onclick="toggleLoginType('admin')">Admin Login</button>
+                </div>
             </div>
             
-            <form id="kidsLoginForm" onsubmit="handleKidLogin(event)">
+            <!-- Kid Login Form -->
+            <form id="kidLoginForm" onsubmit="handleKidLogin(event)">
                 <div class="input-group">
-                    <label for="kidEmail">✉️ Explorer Email</label>
-                    <input type="email" id="kidEmail" placeholder="Enter your email address" required autocomplete="email">
+                    <label for="loginKidSelect">👤 Select Explorer</label>
+                    <select id="loginKidSelect" required>
+                        <option value="" disabled selected>Choose your profile...</option>
+                    </select>
                 </div>
-                
                 <div class="input-group">
-                    <label for="kidPassword">🔑 Secret Password</label>
-                    <input type="password" id="kidPassword" placeholder="••••••••" required autocomplete="current-password">
+                    <label for="loginKidPin">🔑 Secret 4-Digit PIN</label>
+                    <input type="password" id="loginKidPin" maxlength="4" placeholder="••••" pattern="[0-9]{4}" required autocomplete="current-password">
                 </div>
-
-                <div id="loginErrorMsg" class="login-error-msg" aria-live="assertive"></div>
-
+                <div id="kidLoginErrorMsg" class="login-error-msg" aria-live="assertive"></div>
                 <button type="submit" class="login-submit-btn">Blast Off! 🚀</button>
+            </form>
+
+            <!-- Admin Login Form -->
+            <form id="adminLoginForm" style="display: none;" onsubmit="handleAdminLogin(event)">
+                <div class="input-group">
+                    <label for="adminEmail">✉️ Admin Email</label>
+                    <input type="email" id="adminEmail" placeholder="yaasin@gmail.com" required autocomplete="email">
+                </div>
+                <div class="input-group">
+                    <label for="adminPassword">🔑 Password</label>
+                    <input type="password" id="adminPassword" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <div id="adminLoginErrorMsg" class="login-error-msg" aria-live="assertive"></div>
+                <button type="submit" class="login-submit-btn">Admin Log In 🛠️</button>
             </form>
         </div>
     </div>
@@ -49,10 +67,19 @@
             <button class="nav-btn" onclick="switchTab('lab', event)">🧪 Science Lab</button>
         </nav>
         <div class="player-stats">
+            <!-- Active Profile Info -->
+            <div id="activeUserBadge" class="user-badge">
+                <span id="activeAvatar">🚀</span>
+                <span id="activeName">Explorer</span>
+            </div>
+
+            <!-- Admin Only Add Kid Button -->
+            <button id="addKidBtn" class="add-account-btn" style="display: none;" onclick="openCreateAccountModal()" title="Add Kid Profile">➕ Add Kid</button>
+
             <button class="stats-btn" onclick="openBadgesModal()" title="My Badges" aria-label="View Badges">🏅 <span id="badgeCount">0</span></button>
             <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
             <div class="level-display" title="Explorer level">Lvl <span id="levelCount">1</span></div>
-            <button class="logout-btn" onclick="handleKidLogout()" title="Log Out" aria-label="Log Out">🚪 Logout</button>
+            <button class="logout-btn" onclick="handleLogout()" title="Log Out" aria-label="Log Out">🚪 Logout</button>
         </div>
     </header>
 
@@ -64,7 +91,7 @@
     <!-- Main Content Container -->
     <main class="container">
 
-        <!-- ================= ENCYCLOPEDIA TAB ================= -->
+        <!-- ENCYCLOPEDIA TAB -->
         <section id="encyclopedia" class="tab-content active" aria-label="Encyclopedia Section">
             <div class="hero-banner ency-hero">
                 <h1>🔍 Kids Encyclopedia Explorer</h1>
@@ -143,7 +170,7 @@
             </div>
         </section>
 
-        <!-- ================= GAMES TAB ================= -->
+        <!-- GAMES TAB -->
         <section id="games" class="tab-content" aria-label="Games Section">
             <div class="hero-banner games-hero">
                 <h1>🎮 Arcade & Learning Games</h1>
@@ -226,7 +253,7 @@
             </div>
         </section>
 
-        <!-- ================= BOOKS TAB ================= -->
+        <!-- BOOKS TAB -->
         <section id="books" class="tab-content" aria-label="Storybooks Section">
             <div class="hero-banner books-hero">
                 <h1>📖 Interactive Multi-Storybook</h1>
@@ -260,7 +287,7 @@
             </div>
         </section>
 
-        <!-- ================= LAB TAB ================= -->
+        <!-- LAB TAB -->
         <section id="lab" class="tab-content" aria-label="Science Lab Section">
             <div class="hero-banner lab-hero">
                 <h1>🧪 Instructive Science & Craft Lab</h1>
@@ -322,6 +349,42 @@
         </section>
 
     </main>
+
+    <!-- Modal Popup: Create Kid Profile (ADMIN ONLY) -->
+    <div id="createAccountModal" class="modal" onclick="closeCreateModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="createAccountTitle">
+        <div class="modal-content create-account-content">
+            <button class="close-btn" onclick="closeCreateAccountModal()" aria-label="Close modal">&times;</button>
+            <div class="modal-icon">🎨</div>
+            <h2 id="createAccountTitle">Create Kid Explorer Profile</h2>
+            <p class="badges-subtitle">Add a kid profile so they can log in with their name & PIN!</p>
+
+            <form id="createKidAccountForm" onsubmit="handleCreateKidAccount(event)">
+                <div class="input-group">
+                    <label for="newKidName">👤 Explorer Name</label>
+                    <input type="text" id="newKidName" placeholder="e.g. Leo, Maya, Sam" required>
+                </div>
+
+                <div class="input-group">
+                    <label>Choose Avatar</label>
+                    <div class="avatar-picker" id="avatarPicker">
+                        <button type="button" class="avatar-option active" onclick="selectAvatar('🚀', this)">🚀</button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦄', this)">🦄</button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🤖', this)">🤖</button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦁', this)">🦁</button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦖', this)">🦖</button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🧜‍♀️', this)">🧜‍♀️</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="newKidPin">🔑 Secret 4-Digit PIN</label>
+                    <input type="password" id="newKidPin" maxlength="4" placeholder="1234" required pattern="[0-9]{4}">
+                </div>
+
+                <button type="submit" class="login-submit-btn">Create Kid Profile 🎉</button>
+            </form>
+        </div>
+    </div>
 
     <!-- Modal Popup: Encyclopedia Fact -->
     <div id="encyModal" class="modal" onclick="closeModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
