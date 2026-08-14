@@ -10,27 +10,26 @@
 <body>
 
     <!-- ================= KIDS LOGIN SCREEN OVERLAY ================= -->
-    <div id="loginScreen" class="login-overlay">
+    <div id="loginScreen" class="login-overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <div class="login-card floating-anim">
             <div class="login-header">
-                <span class="login-icon">🚀</span>
-                <h2>Welcome Explorer!</h2>
+                <span class="login-icon" aria-hidden="true">🚀</span>
+                <h2 id="loginTitle">Welcome Explorer!</h2>
                 <p>Please enter your email & password to start learning!</p>
             </div>
             
             <form id="kidsLoginForm" onsubmit="handleKidLogin(event)">
                 <div class="input-group">
                     <label for="kidEmail">✉️ Explorer Email</label>
-                    <!-- Updated: Removed visible email placeholder -->
-                    <input type="email" id="kidEmail" placeholder="Enter your email address" required>
+                    <input type="email" id="kidEmail" placeholder="Enter your email address" required autocomplete="email">
                 </div>
                 
                 <div class="input-group">
                     <label for="kidPassword">🔑 Secret Password</label>
-                    <input type="password" id="kidPassword" placeholder="••••••••" required>
+                    <input type="password" id="kidPassword" placeholder="••••••••" required autocomplete="current-password">
                 </div>
 
-                <div id="loginErrorMsg" class="login-error-msg"></div>
+                <div id="loginErrorMsg" class="login-error-msg" aria-live="assertive"></div>
 
                 <button type="submit" class="login-submit-btn">Blast Off! 🚀</button>
             </form>
@@ -40,25 +39,25 @@
     <!-- Main Navigation Bar -->
     <header class="navbar">
         <div class="logo">
-            <span class="logo-icon">🚀</span>
+            <span class="logo-icon" aria-hidden="true">🚀</span>
             <span class="logo-text">KidZone <span class="badge-pro">PLUS</span></span>
         </div>
-        <nav class="nav-links">
+        <nav class="nav-links" aria-label="Main Navigation">
             <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('lab', event)">🧪 Science Lab</button>
         </nav>
         <div class="player-stats">
-            <button class="stats-btn" onclick="openBadgesModal()" title="My Badges">🏅 <span id="badgeCount">0</span></button>
+            <button class="stats-btn" onclick="openBadgesModal()" title="My Badges" aria-label="View Badges">🏅 <span id="badgeCount">0</span></button>
             <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
             <div class="level-display" title="Explorer level">Lvl <span id="levelCount">1</span></div>
-            <button class="logout-btn" onclick="handleKidLogout()" title="Log Out">🚪 Logout</button>
+            <button class="logout-btn" onclick="handleKidLogout()" title="Log Out" aria-label="Log Out">🚪 Logout</button>
         </div>
     </header>
 
     <!-- XP Progress Bar -->
-    <div class="xp-bar-track">
+    <div class="xp-bar-track" aria-label="Level Progress">
         <div class="xp-bar-fill" id="xpBarFill"></div>
     </div>
 
@@ -66,15 +65,15 @@
     <main class="container">
 
         <!-- ================= ENCYCLOPEDIA TAB ================= -->
-        <section id="encyclopedia" class="tab-content active">
+        <section id="encyclopedia" class="tab-content active" aria-label="Encyclopedia Section">
             <div class="hero-banner ency-hero">
                 <h1>🔍 Kids Encyclopedia Explorer</h1>
                 <p>Discover amazing facts about space, animals, dinosaurs, and oceans!</p>
             </div>
 
             <div class="controls-bar">
-                <input type="text" id="encySearch" placeholder="Search topics (e.g. T-Rex, Mars)..." onkeyup="filterEncyclopedia()">
-                <div class="filter-buttons">
+                <input type="text" id="encySearch" placeholder="Search topics (e.g. T-Rex, Mars)..." onkeyup="filterEncyclopedia()" aria-label="Search Encyclopedia Topics">
+                <div class="filter-buttons" role="group" aria-label="Category Filters">
                     <button class="filter-btn active" onclick="filterCategory('all', event)">All</button>
                     <button class="filter-btn" onclick="filterCategory('space', event)">🪐 Space</button>
                     <button class="filter-btn" onclick="filterCategory('animals', event)">🦁 Animals</button>
@@ -85,81 +84,93 @@
             </div>
 
             <div class="cards-grid" id="encyGrid">
-                <div class="card" data-category="space" onclick="openModal('mars')">
+                <div class="card" data-category="space" onclick="openModal('mars')" role="button" tabindex="0">
                     <div class="card-badge">Space</div>
-                    <div class="card-icon">🔴</div>
+                    <div class="card-icon" aria-hidden="true">🔴</div>
                     <h3>Mars the Red Planet</h3>
                     <p>Why is Mars red? Is there water on Mars?</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="animals" onclick="openModal('cheetah')">
+                <div class="card" data-category="animals" onclick="openModal('cheetah')" role="button" tabindex="0">
                     <div class="card-badge">Animals</div>
-                    <div class="card-icon">🐆</div>
+                    <div class="card-icon" aria-hidden="true">🐆</div>
                     <h3>Cheetah: Speed King</h3>
                     <p>The fastest land animal on planet Earth!</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="dinosaurs" onclick="openModal('trex')">
+                <div class="card" data-category="dinosaurs" onclick="openModal('trex')" role="button" tabindex="0">
                     <div class="card-badge">Dinosaurs</div>
-                    <div class="card-icon">🦖</div>
+                    <div class="card-icon" aria-hidden="true">🦖</div>
                     <h3>Tyrannosaurus Rex</h3>
                     <p>Meet the king of the prehistoric world.</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="space" onclick="openModal('moon')">
+                <div class="card" data-category="space" onclick="openModal('moon')" role="button" tabindex="0">
                     <div class="card-badge">Space</div>
-                    <div class="card-icon">🌕</div>
+                    <div class="card-icon" aria-hidden="true">🌕</div>
                     <h3>Earth's Moon</h3>
                     <p>How far away is the moon and how does it shine?</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="animals" onclick="openModal('blue-whale')">
+                <div class="card" data-category="animals" onclick="openModal('blue-whale')" role="button" tabindex="0">
                     <div class="card-badge">Animals</div>
-                    <div class="card-icon">🐋</div>
+                    <div class="card-icon" aria-hidden="true">🐋</div>
                     <h3>Blue Whale</h3>
                     <p>The largest creature to ever live on Earth!</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="ocean" onclick="openModal('dolphin')">
+                <div class="card" data-category="ocean" onclick="openModal('dolphin')" role="button" tabindex="0">
                     <div class="card-badge">Ocean</div>
-                    <div class="card-icon">🐬</div>
+                    <div class="card-icon" aria-hidden="true">🐬</div>
                     <h3>Dolphins: Ocean Genius</h3>
                     <p>How do dolphins "see" with sound?</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="ocean" onclick="openModal('octopus')">
+                <div class="card" data-category="ocean" onclick="openModal('octopus')" role="button" tabindex="0">
                     <div class="card-badge">Ocean</div>
-                    <div class="card-icon">🐙</div>
+                    <div class="card-icon" aria-hidden="true">🐙</div>
                     <h3>Octopus: Eight-Armed Wonder</h3>
                     <p>Why does an octopus have three hearts?</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
-                <div class="card" data-category="ocean" onclick="openModal('reef')">
+                <div class="card" data-category="ocean" onclick="openModal('reef')" role="button" tabindex="0">
                     <div class="card-badge">Ocean</div>
-                    <div class="card-icon">🪸</div>
+                    <div class="card-icon" aria-hidden="true">🪸</div>
                     <h3>Coral Reefs</h3>
                     <p>Are corals rocks, plants, or animals?</p>
-                    <button class="card-btn">Explore Fact ➔</button>
+                    <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
             </div>
         </section>
 
         <!-- ================= GAMES TAB ================= -->
-        <section id="games" class="tab-content">
+        <section id="games" class="tab-content" aria-label="Games Section">
             <div class="hero-banner games-hero">
                 <h1>🎮 Arcade & Learning Games</h1>
-                <p>Play interactive action games, math challenges, and test your 500-question trivia skills!</p>
+                <p>Play interactive action games, language quests, and test your skills!</p>
             </div>
 
-            <div class="game-selector">
-                <button class="game-tab-btn active" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
+            <div class="game-selector" role="tablist">
+                <button class="game-tab-btn active" onclick="showGame('duo-game', event)">🦉 Duolingo Dash</button>
+                <button class="game-tab-btn" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
                 <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
                 <button class="game-tab-btn" onclick="showGame('pacman-game', event)">🟡 Pac-Man Classic</button>
                 <button class="game-tab-btn" onclick="showGame('memory-match', event)">🧩 Emoji Memory Match</button>
             </div>
 
+            <!-- Game 0: Duolingo Language Dash -->
+            <div id="duo-game" class="game-wrapper">
+                <div class="game-stats">
+                    <span>Hearts: <strong id="duoHearts">❤️❤️❤️</strong></span>
+                    <span>Streak: 🔥 <strong id="duoStreak">0</strong></span>
+                    <span>Score: <strong id="duoScore">0</strong></span>
+                    <button class="restart-btn" onclick="initDuoGame()">🔄 New Lesson</button>
+                </div>
+                <div class="duo-container" id="duoContainer"></div>
+            </div>
+
             <!-- Game 1: Kids Math Game -->
-            <div id="math-game" class="game-wrapper">
+            <div id="math-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Question: <strong id="mathProgress">1 / 5</strong></span>
                     <span>Score: <strong id="mathScoreDisplay">0</strong></span>
@@ -168,7 +179,7 @@
                 <div class="quiz-container" id="mathContainer"></div>
             </div>
 
-            <!-- Game 2: 500 Trivia Quiz -->
+            <!-- Game 2: Trivia Quiz -->
             <div id="quiz-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Question: <strong id="quizProgress">1 / 5</strong></span>
@@ -178,7 +189,7 @@
                 <div class="quiz-container" id="quizContainer"></div>
             </div>
 
-            <!-- Game 3: Pac-Man Mini Game -->
+            <!-- Game 3: Pac-Man Game -->
             <div id="pacman-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Score: <strong id="score">0</strong></span>
@@ -187,20 +198,20 @@
                     <button class="restart-btn" onclick="resetPacmanGame()">🔄 Restart Game</button>
                 </div>
                 <div class="canvas-container">
-                    <canvas id="pacmanCanvas" width="440" height="440"></canvas>
+                    <canvas id="pacmanCanvas" width="440" height="440" aria-label="Pac-Man Game Board"></canvas>
                 </div>
                 
-                <div class="dpad-container">
-                    <button class="dpad-btn up" onclick="setPacmanDir(0, -1)">▲</button>
+                <div class="dpad-container" aria-label="Game Direction Pad">
+                    <button class="dpad-btn up" onclick="setPacmanDir(0, -1)" aria-label="Up">▲</button>
                     <div class="dpad-middle">
-                        <button class="dpad-btn left" onclick="setPacmanDir(-1, 0)">◄</button>
-                        <button class="dpad-btn right" onclick="setPacmanDir(1, 0)">►</button>
+                        <button class="dpad-btn left" onclick="setPacmanDir(-1, 0)" aria-label="Left">◄</button>
+                        <button class="dpad-btn right" onclick="setPacmanDir(1, 0)" aria-label="Right">►</button>
                     </div>
-                    <button class="dpad-btn down" onclick="setPacmanDir(0, 1)">▼</button>
+                    <button class="dpad-btn down" onclick="setPacmanDir(0, 1)" aria-label="Down">▼</button>
                 </div>
 
                 <div class="game-controls-help">
-                    <p>🎮 <strong>Controls:</strong> Use <strong>Arrow Keys</strong> or <strong>D-Pad</strong> to guide Pac-Man! Eat dots🟡, avoid ghosts👻, and grab the big golden pellets ✨ to turn ghosts blue and gobble them up!</p>
+                    <p>🎮 <strong>Controls:</strong> Use <strong>Arrow Keys</strong> or <strong>D-Pad</strong> to guide Pac-Man! Eat dots🟡, avoid ghosts👻, and grab golden pellets ✨ to eat ghosts!</p>
                 </div>
             </div>
 
@@ -216,7 +227,7 @@
         </section>
 
         <!-- ================= BOOKS TAB ================= -->
-        <section id="books" class="tab-content">
+        <section id="books" class="tab-content" aria-label="Storybooks Section">
             <div class="hero-banner books-hero">
                 <h1>📖 Interactive Multi-Storybook</h1>
                 <p>Pick a story below, turn the pages, make choices, and listen to spoken narration!</p>
@@ -233,12 +244,11 @@
                 <div class="book-card" id="activeBook">
                     <div class="book-page">
                         <div class="page-number" id="pageNumber">Page 1</div>
-                        <div class="book-illustration floating-anim" id="bookImg">👑</div>
+                        <div class="book-illustration floating-anim" id="bookImg" aria-hidden="true">👑</div>
                         <h2 id="bookTitle">Interactive Snow White</h2>
                         <div class="book-text" id="bookText">Loading story...</div>
                         
                         <div class="story-choices" id="storyChoices" style="display:none;"></div>
-                        
                         <div class="the-end-banner" id="theEndBanner" style="display:none;">🎉 The End! 🎉</div>
                     </div>
                     <div class="book-controls">
@@ -251,7 +261,7 @@
         </section>
 
         <!-- ================= LAB TAB ================= -->
-        <section id="lab" class="tab-content">
+        <section id="lab" class="tab-content" aria-label="Science Lab Section">
             <div class="hero-banner lab-hero">
                 <h1>🧪 Instructive Science & Craft Lab</h1>
                 <p>Safe, fun, step-by-step DIY experiments you can try at home!</p>
@@ -260,7 +270,7 @@
             <div class="lab-grid">
                 <div class="experiment-card">
                     <div class="exp-header">
-                        <span class="exp-icon">🌋</span>
+                        <span class="exp-icon" aria-hidden="true">🌋</span>
                         <div>
                             <h3>Fizzy Baking Soda Volcano</h3>
                             <span class="diff-tag easy">Easy • 10 mins</span>
@@ -276,17 +286,17 @@
                         </ul>
                         <h4>Step-by-Step Instructions:</h4>
                         <ol class="steps-interactive">
-                            <li onclick="toggleStep(this)">Place your plastic cup on a tray or in the sink.</li>
-                            <li onclick="toggleStep(this)">Add 2 tablespoons of baking soda into the cup.</li>
-                            <li onclick="toggleStep(this)">Mix a few drops of red food coloring into the vinegar.</li>
-                            <li onclick="toggleStep(this)">Pour the vinegar in and watch the volcano erupt! 💥</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Place your plastic cup on a tray or in the sink.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Add 2 tablespoons of baking soda into the cup.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Mix a few drops of red food coloring into the vinegar.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Pour the vinegar in and watch the volcano erupt! 💥</li>
                         </ol>
                     </div>
                 </div>
 
                 <div class="experiment-card">
                     <div class="exp-header">
-                        <span class="exp-icon">🌈</span>
+                        <span class="exp-icon" aria-hidden="true">🌈</span>
                         <div>
                             <h3>Rainbow Walking Water</h3>
                             <span class="diff-tag medium">Medium • 30 mins</span>
@@ -301,10 +311,10 @@
                         </ul>
                         <h4>Step-by-Step Instructions:</h4>
                         <ol class="steps-interactive">
-                            <li onclick="toggleStep(this)">Fill glasses with water and add primary food colors.</li>
-                            <li onclick="toggleStep(this)">Fold paper towels into strips.</li>
-                            <li onclick="toggleStep(this)">Place towel strips connecting the glasses together.</li>
-                            <li onclick="toggleStep(this)">Watch water travel up the towels to mix new secondary colors!</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Fill glasses with water and add primary food colors.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Fold paper towels into strips.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Place towel strips connecting the glasses together.</li>
+                            <li onclick="toggleStep(this)" tabindex="0" role="button">Watch water travel up the towels to mix new secondary colors!</li>
                         </ol>
                     </div>
                 </div>
@@ -314,9 +324,9 @@
     </main>
 
     <!-- Modal Popup: Encyclopedia Fact -->
-    <div id="encyModal" class="modal" onclick="closeModalOnBg(event)">
+    <div id="encyModal" class="modal" onclick="closeModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <button class="close-btn" onclick="closeModal()" aria-label="Close dialog">&times;</button>
             <div class="modal-icon" id="modalIcon">🔍</div>
             <h2 id="modalTitle">Fact Title</h2>
             <p id="modalBody">Fact details...</p>
@@ -324,24 +334,24 @@
     </div>
 
     <!-- Modal Popup: Badges -->
-    <div id="badgesModal" class="modal" onclick="closeBadgesModalOnBg(event)">
+    <div id="badgesModal" class="modal" onclick="closeBadgesModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="badgeModalTitle">
         <div class="modal-content badges-modal-content">
-            <span class="close-btn" onclick="closeBadgesModal()">&times;</span>
+            <button class="close-btn" onclick="closeBadgesModal()" aria-label="Close badges dialog">&times;</button>
             <div class="modal-icon">🏅</div>
-            <h2>My Badge Collection</h2>
+            <h2 id="badgeModalTitle">My Badge Collection</h2>
             <p class="badges-subtitle">Play, read, and explore to unlock them all!</p>
             <div class="badges-grid" id="badgesGrid"></div>
         </div>
     </div>
 
     <!-- Toast & Confetti layers -->
-    <div id="toastContainer" class="toast-container"></div>
-    <div id="confettiContainer" class="confetti-container"></div>
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+    <div id="confettiContainer" class="confetti-container" aria-hidden="true"></div>
 
-    <!-- Friendly mascot buddy -->
-    <div class="mascot" id="mascot" onclick="mascotSpeak()">
-        <div class="mascot-bubble" id="mascotBubble"></div>
-        <span class="mascot-emoji">🤖</span>
+    <!-- Mascot buddy -->
+    <div class="mascot" id="mascot" onclick="mascotSpeak()" role="button" aria-label="Mascot Helper" tabindex="0">
+        <div class="mascot-bubble" id="mascotBubble" aria-live="polite"></div>
+        <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
     <script src="script.js"></script>
