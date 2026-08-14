@@ -1,7 +1,16 @@
 // ============================================================
-// SOUND EFFECTS ENGINE
+// SOUND EFFECTS ENGINE & AUDIO CONTEXT ACTIVATION
 // ============================================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function unlockAudio() {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
 function playSound(freq, type = 'sine', duration = 0.1) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
@@ -23,55 +32,82 @@ function playChime(notes, type = 'triangle') {
 }
 
 // ============================================================
+// GLOBAL KEYBOARD & ACCESSIBILITY HANDLERS
+// ============================================================
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeModal();
+        closeBadgesModal();
+    }
+});
+
+// ============================================================
 // STRICT LOGIN & AUTHENTICATION SYSTEM
 // ============================================================
 const ALLOWED_EMAIL = "yaasin@gmail.com";
 const ALLOWED_PASS = "yaasin786";
 
 function checkLoginSession() {
-    // Requires login on every new session/visit
     const isLoggedIn = sessionStorage.getItem('kidzone_logged_in');
     const loginOverlay = document.getElementById('loginScreen');
     
-    if (isLoggedIn === 'true') {
-        loginOverlay.classList.add('hidden');
-        loadProgress(); // Restore badges, stars, and levels upon valid session
-    } else {
-        loginOverlay.classList.remove('hidden');
+    if (loginOverlay) {
+        if (isLoggedIn === 'true') {
+            loginOverlay.classList.add('hidden');
+            loadProgress();
+        } else {
+            loginOverlay.classList.remove('hidden');
+        }
     }
 }
 
 function handleKidLogin(event) {
-    event.preventDefault();
-    const emailInput = document.getElementById('kidEmail').value.trim().toLowerCase();
-    const passwordInput = document.getElementById('kidPassword').value.trim();
+    if (event) event.preventDefault();
+    
+    const emailElem = document.getElementById('kidEmail');
+    const passElem = document.getElementById('kidPassword');
     const errorMsg = document.getElementById('loginErrorMsg');
 
-    // Strict credential check
+    if (!emailElem || !passElem) {
+        console.error("Login input elements not found!");
+        return;
+    }
+
+    const emailInput = emailElem.value.trim().toLowerCase();
+    const passwordInput = passElem.value.trim();
+
     if (emailInput === ALLOWED_EMAIL && passwordInput === ALLOWED_PASS) {
         sessionStorage.setItem('kidzone_logged_in', 'true');
         localStorage.setItem('kidzone_user_email', emailInput);
 
-        errorMsg.style.display = "none";
-        document.getElementById('loginScreen').classList.add('hidden');
+        if (errorMsg) errorMsg.style.display = "none";
         
-        loadProgress(); // Load saved progress for this specific email
+        const loginOverlay = document.getElementById('loginScreen');
+        if (loginOverlay) loginOverlay.classList.add('hidden');
         
+        loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
         showToast(`Welcome back, Explorer! 🚀`, '✨', 3500);
     } else {
         playSound(150, 'sawtooth', 0.3);
-        errorMsg.innerText = "❌ Access Denied! Invalid email or password.";
-        errorMsg.style.display = "block";
+        if (errorMsg) {
+            errorMsg.innerText = "❌ Access Denied! Invalid email or password.";
+            errorMsg.style.display = "block";
+        }
     }
 }
 
 function handleKidLogout() {
     playSound(300);
     sessionStorage.removeItem('kidzone_logged_in');
-    document.getElementById('kidPassword').value = '';
-    document.getElementById('loginScreen').classList.remove('hidden');
+    
+    const passElem = document.getElementById('kidPassword');
+    if (passElem) passElem.value = '';
+    
+    const loginOverlay = document.getElementById('loginScreen');
+    if (loginOverlay) loginOverlay.classList.remove('hidden');
+    
     showToast('Logged out! Access locked. 👋', '🔒', 3000);
 }
 
@@ -94,6 +130,7 @@ const BADGES = {
     memoryMaster: { icon: '🧩', name: 'Memory Master',       desc: 'Matched every card in Memory Match!' },
     quizWhiz:     { icon: '🏆', name: 'Quiz Whiz',           desc: 'Got a perfect score in Trivia Quiz!' },
     mathGenius:   { icon: '🔢', name: 'Math Genius',         desc: 'Aced a Math Wizard round!' },
+    duoLingo:     { icon: '🦉', name: 'Linguist Star',       desc: 'Completed a Duolingo Dash lesson!' },
     superstar:    { icon: '🌟', name: 'Superstar Explorer',  desc: 'Collected 100 stars!' }
 };
 
@@ -137,12 +174,19 @@ function loadProgress() {
 }
 
 function updateStatsDisplay() {
-    document.getElementById('starCount').innerText = stars;
-    document.getElementById('levelCount').innerText = level;
-    document.getElementById('badgeCount').innerText = unlockedBadges.size;
+    const starElem = document.getElementById('starCount');
+    const levelElem = document.getElementById('levelCount');
+    const badgeElem = document.getElementById('badgeCount');
+    const xpBar = document.getElementById('xpBarFill');
 
-    const starsIntoLevel = stars % 50;
-    document.getElementById('xpBarFill').style.width = `${(starsIntoLevel / 50) * 100}%`;
+    if (starElem) starElem.innerText = stars;
+    if (levelElem) levelElem.innerText = level;
+    if (badgeElem) badgeElem.innerText = unlockedBadges.size;
+
+    if (xpBar) {
+        const starsIntoLevel = stars % 50;
+        xpBar.style.width = `${(starsIntoLevel / 50) * 100}%`;
+    }
 }
 
 function addStars(amount) {
@@ -178,6 +222,8 @@ function unlockBadge(id) {
 // --- Toasts & Confetti ---
 function showToast(message, icon = '🎉', duration = 3000) {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${message}</span>`;
@@ -192,6 +238,8 @@ function showToast(message, icon = '🎉', duration = 3000) {
 const CONFETTI_EMOJI = ['🎉', '⭐', '✨', '🎈', '🥳', '💥'];
 function launchConfetti(count = 30) {
     const container = document.getElementById('confettiContainer');
+    if (!container) return;
+
     for (let i = 0; i < count; i++) {
         const piece = document.createElement('div');
         piece.className = 'confetti-piece';
@@ -207,7 +255,9 @@ function launchConfetti(count = 30) {
 
 function renderBadgesGrid() {
     const grid = document.getElementById('badgesGrid');
+    if (!grid) return;
     grid.innerHTML = '';
+
     Object.keys(BADGES).forEach(id => {
         const b = BADGES[id];
         const unlocked = unlockedBadges.has(id);
@@ -225,12 +275,16 @@ function renderBadgesGrid() {
 function openBadgesModal() {
     playSound(600);
     renderBadgesGrid();
-    document.getElementById('badgesModal').style.display = 'flex';
+    const modal = document.getElementById('badgesModal');
+    if (modal) modal.style.display = 'flex';
 }
+
 function closeBadgesModal() {
     playSound(300);
-    document.getElementById('badgesModal').style.display = 'none';
+    const modal = document.getElementById('badgesModal');
+    if (modal) modal.style.display = 'none';
 }
+
 function closeBadgesModalOnBg(e) {
     if (e.target.id === 'badgesModal') closeBadgesModal();
 }
@@ -238,14 +292,17 @@ function closeBadgesModalOnBg(e) {
 // --- Mascot Buddy ---
 const MASCOT_TIPS = [
     "Did you know? Try the Surprise Me button for a random fact! 🎲",
-    "Try out the Math Wizard game to practice 500 different math problems! 🔢",
+    "Master Spanish, French, and German in Duolingo Dash! 🦉",
+    "Try out the Math Wizard game to practice dynamic math problems! 🔢",
     "Reading a whole storybook earns you a special badge! 📖",
     "Finish a science experiment to become a Junior Scientist! 🔬",
-    "Test your skills with the 500-question Trivia Quiz! 🧠",
     "Collect 100 stars to become a Superstar Explorer! 🌟"
 ];
+
 function mascotSpeak() {
     const bubble = document.getElementById('mascotBubble');
+    if (!bubble) return;
+    
     bubble.innerText = MASCOT_TIPS[Math.floor(Math.random() * MASCOT_TIPS.length)];
     bubble.classList.add('show');
     playSound(700, 'sine', 0.15);
@@ -266,11 +323,12 @@ function switchTab(tabId, evt) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
-    document.getElementById(tabId).classList.add('active');
+    const targetTab = document.getElementById(tabId);
+    if (targetTab) targetTab.classList.add('active');
     if (evt) evt.currentTarget.classList.add('active');
 
     if (tabId === 'games') {
-        initMathGame();
+        initDuoGame();
     }
 }
 
@@ -299,7 +357,9 @@ function openModal(id) {
         document.getElementById('modalIcon').innerText = data.icon;
         document.getElementById('modalTitle').innerText = data.title;
         document.getElementById('modalBody').innerText = data.body;
-        document.getElementById('encyModal').style.display = 'flex';
+        
+        const modal = document.getElementById('encyModal');
+        if (modal) modal.style.display = 'flex';
 
         if (!factsViewed.has(id)) {
             factsViewed.add(id);
@@ -313,7 +373,8 @@ function openModal(id) {
 
 function closeModal() {
     playSound(300);
-    document.getElementById('encyModal').style.display = 'none';
+    const modal = document.getElementById('encyModal');
+    if (modal) modal.style.display = 'none';
 }
 
 function closeModalOnBg(e) {
@@ -321,7 +382,9 @@ function closeModalOnBg(e) {
 }
 
 function filterEncyclopedia() {
-    const query = document.getElementById('encySearch').value.toLowerCase();
+    const searchElem = document.getElementById('encySearch');
+    if (!searchElem) return;
+    const query = searchElem.value.toLowerCase();
     const cards = document.querySelectorAll('#encyGrid .card');
     cards.forEach(card => {
         const text = card.innerText.toLowerCase();
@@ -345,51 +408,236 @@ function surpriseMe() {
     const ids = Object.keys(encycloData);
     const randomId = ids[Math.floor(Math.random() * ids.length)];
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelector('.filter-btn').classList.add('active');
+    
+    const firstFilter = document.querySelector('.filter-btn');
+    if (firstFilter) firstFilter.classList.add('active');
+    
     document.querySelectorAll('#encyGrid .card').forEach(card => card.style.display = 'block');
     openModal(randomId);
 }
 
 // ============================================================
-// STORYBOOKS
+// STORYBOOKS (EXTENDED & REWORKED COMPLETE SCRIPTS)
 // ============================================================
 const stories = {
-    snowwhite: [
-        { page: 1, img: '👑', text: "Once upon a time, in a kingdom far away, lived a sweet princess named Snow White. Her skin was as white as snow, and her hair as dark as night." },
-        { page: 2, img: '🪞', text: "The jealous Queen looked into her Magic Mirror and asked, 'Who is the fairest of them all?' The mirror answered: 'Snow White!' Furious, the Queen sent Snow White deep into the enchanted forest." },
-        { page: 3, img: '🌲', text: "Snow White ran into the mysterious forest. She came to a fork in the path. Which path should she take?",
-            choices: [
-                { text: "🏡 Take Cozy Cottage Path", nextPage: 3 },
-                { text: "🌲 Enter Whispering Woods", nextPage: 4 }
-            ]
-        },
-        { page: 4, img: '🏡', text: "Snow White found a cozy tiny cottage! Inside were 7 small beds. The Seven Dwarfs welcomed her warmly and offered her a safe place to stay." },
-        { page: 4, img: '🦊', text: "Snow White entered the Whispering Woods. Friendly woodland creatures guided her through the trees and led her safely to a warm cottage nearby!" },
-        { page: 5, img: '🍎', text: "One afternoon, an old woman disguised in a cloak knocked on the cottage door, offering Snow White a shiny, red apple. What should she do?",
-            choices: [
-                { text: "❌ Politely Refuse the Apple", nextPage: 5 },
-                { text: "🍎 Take a Bite of the Apple", nextPage: 6 }
-            ]
-        },
-        { page: 6, img: '🛡️', text: "Snow White remembered the dwarfs' advice and gently refused! The disguised Wicked Queen gasped in defeat and ran away into the forest forever." },
-        { page: 6, img: '💤', text: "Snow White took a bite and fell into a deep, magical sleep. Luckily, a handsome Prince arrived with a magical cure and broke the spell with love!" },
-        { page: 7, img: '🏰', text: "Snow White returned to the kingdom alongside her friends and lived happily ever after! The end!" }
-    ],
-    pip: [
-        { page: 1, img: '🛸', text: "Once upon a time, in a small launchpad near the sparkling Milky Way, lived Pip—a tiny rocket with big bright dreams of visiting the Golden Nebula." },
-        { page: 2, img: '🌟', text: "Pip zoomed past glowing asteroids and playful space butterflies. 'Higher and higher!' Pip cheered, blasting colorful rocket bubbles into the dark sky." },
-        { page: 3, img: '🪐', text: "Finally, Pip arrived at the Golden Nebula! Friendly space aliens waved and invited Pip for a stellar star-berry picnic. The end!" }
-    ],
-    leo: [
-        { page: 1, img: '🦁', text: "Deep in the sunny savannah, Leo the little lion loved to make music! But instead of roaring, he loved playing rhythmic beats on wooden drums." },
-        { page: 2, img: '🎵', text: "One day, the jungle held a grand talent show. Leo tapped out a magical melody, and all the monkeys and elephants began dancing happily!" },
-        { page: 3, img: '👑', text: "Leo was crowned the Rhythm King of the Jungle, showing everyone that it's great to follow your own beat!" }
-    ],
-    mira: [
-        { page: 1, img: '🧜', text: "Far beneath the waves, Mira the mermaid guarded the brightest coral reef in the whole ocean, full of swirling fish and glowing shells." },
-        { page: 2, img: '🐠', text: "One day the coral began to fade. Mira gathered her friends—a wise octopus and a playful dolphin—to find the magic pearl that could bring the colors back." },
-        { page: 3, img: '🪸', text: "Together they found the pearl deep in a sunken cave. The reef burst back into rainbow colors, and Mira's whole ocean family celebrated. The end!" }
-    ]
+    snowwhite: {
+        title: "Snow White & The Whispering Enchantment",
+        pages: [
+            { 
+                page: 1, 
+                img: '👑', 
+                text: "Once upon a time, deep within a kingdom encircled by mist and emerald mountains, lived Princess Snow White. She was kind to every creature, from the smallest bluebird to the oldest forest stag. Her skin was as white as winter snow, her lips red as wild roses, and her hair dark as midnight. Yet, despite her warmth, the kingdom held a shadow in the high tower of the royal palace." 
+            },
+            { 
+                page: 2, 
+                img: '🪞', 
+                text: "High in that tower, the jealous Queen stood before her ancient, silver-framed Magic Mirror. 'Mirror, mirror on the wall, who is the fairest of them all?' she demanded. The glass shimmered with a pale, ethereal light and whispered back: 'Queen, your beauty is true, 'tis plain to see, but Snow White in the forest is a thousand times more fair than thee!' Driven by bitter envy, the Queen vowed to banish the young princess forever." 
+            },
+            { 
+                page: 3, 
+                img: '🌲', 
+                text: "Fleeing into the unknown depths of the forest under a blanket of moonlight, Snow White found herself surrounded by looming oak trees that seemed to whisper in the night wind. The path split before her into two mysterious trails hidden beneath thick fog. She had to decide which path to trust in the dark." 
+            },
+            { 
+                page: 4, 
+                img: '🌲', 
+                text: "Which path should Snow White take through the dark woods?",
+                choices: [
+                    { text: "🏡 Follow the Cozy Lantern Path", nextPage: 4 },
+                    { text: "🌿 Enter the Whispering Woodland Trail", nextPage: 5 }
+                ]
+            },
+            { 
+                page: 5, 
+                img: '🏡', 
+                text: "Following the soft glow of tiny lanterns hanging from wild mossy branches, Snow White stumbled upon a small clearing. Nestled among giant mushrooms was a cozy wooden cottage with tiny wooden shutters and smoke gently drifting from its stone chimney. She knocked gently, but hearing no answer, stepped quietly inside to rest." 
+            },
+            { 
+                page: 6, 
+                img: '🦊', 
+                text: "Entering the Whispering Woodland Trail, friendly forest animals—a red fox, a pair of inquisitive raccoons, and a gentle doe—guided her step-by-step through the thick brush. Together, they led her through the tangled vines and straight to the garden gate of a quaint, magical cottage hiding near a rushing stream." 
+            },
+            { 
+                page: 7, 
+                img: '🛏️', 
+                text: "Inside the cottage, everything was miniature! Seven tiny chairs sat around a sturdy wooden dinner table, and seven tiny unmade beds lined the loft upstairs. Exhausted from her long journey through the enchanted woods, Snow White curled across three of the little beds and fell into a peaceful, deep sleep." 
+            },
+            { 
+                page: 8, 
+                img: '⛏️', 
+                text: "At sunset, march steps echoed outside. The Seven Dwarfs—Doc, Grumpy, Happy, Sleepy, Bashful, Sneezy, and Dopey—returned home from digging for sparkling gems deep inside the mountains. Surprised to find a sleeping maiden, they listened as she shared her story. Touched by her gentle heart, they offered her a permanent home filled with safety and friendship." 
+            },
+            { 
+                page: 9, 
+                img: '🧙‍♀️', 
+                text: "Weeks passed happily until the Wicked Queen consulted her mirror once more and learned Snow White was still alive. Disguising herself as an old peasant peddler woman with a ragged cape, she journeyed to the cottage while the dwarfs were away working in the jewel mines." 
+            },
+            { 
+                page: 10, 
+                img: '🍎', 
+                text: "Knocking on the tiny wooden window, the disguised Queen held up a polished, bright red poison apple that gleamed temptingly in the sunlight. 'Take a bite, sweet girl,' the peddler croaked, 'and your deepest wish will come true!' Snow White hesitated at the threshold." 
+            },
+            { 
+                page: 11, 
+                img: '🍎', 
+                text: "What should Snow White do with the mysterious stranger?",
+                choices: [
+                    { text: "❌ Politely Refuse the Apple", nextPage: 11 },
+                    { text: "🍎 Take a Bite of the Apple", nextPage: 12 }
+                ]
+            },
+            { 
+                page: 12, 
+                img: '🛡️', 
+                text: "Remembering the dwarfs' stern warnings, Snow White shook her head gently and stepped back. 'No thank you, kind auntie, I cannot accept gifts from strangers.' The Queen gasped in defeat, dropped the fruit, and fled into the dark mountains, never to be seen again!" 
+            },
+            { 
+                page: 13, 
+                img: '💤', 
+                text: "Snow White took a bite of the rosy red fruit and instantly fell into an enchanted slumber. Devastated, the Seven Dwarfs built a glass casket surrounded by forest blossoms to protect her until a brave Prince arrived, breaking the dark sleeping spell with a vow of true love." 
+            },
+            { 
+                page: 14, 
+                img: '🏰', 
+                text: "With safety restored across the realm, Snow White returned to the palace with her prince and forest friends. The kingdom celebrated with music, dancing, and feast days for months, living happily ever after! The end!" 
+            }
+        ]
+    },
+    pip: {
+        title: "Pip's Nebula Dream Voyage",
+        pages: [
+            { 
+                page: 1, 
+                img: '🚀', 
+                text: "On the quiet star-dusted launchpad of Starlight Station 9, located on the outer rim of the Milky Way galaxy, lived Pip—a cheerful young rocket ship with glowing sapphire thrusters and a heat shield painted with bright yellow stars." 
+            },
+            { 
+                page: 2, 
+                img: '🗺️', 
+                text: "Every night, Pip gazed through his space-telescope at the Golden Nebula—a giant, swirling cloud of pink cosmic dust, sparkling newborn stars, and floating space crystals light-years away. More than anything, Pip dreamed of flying across the universe to explore it firsthand." 
+            },
+            { 
+                page: 3, 
+                img: '🪐', 
+                text: "One evening, after fueling his engine with liquid starlight, Pip counted down out loud: 'Three... Two... One... Liftoff!' With a magnificent roar of rainbow fire, he rocketed upward into the dark vacuum of deep space, zooming past icy comets and ringed planets." 
+            },
+            { 
+                page: 4, 
+                img: '☄️', 
+                text: "Halfway across the sector, Pip encountered a rocky asteroid belt tumbling directly in his navigational path. Giant boulders made of space granite spun left and right. Pip adjusted his steering fins and expertly bobbed, wooshed, and dodged around each fast-moving meteor!" 
+            },
+            { 
+                page: 5, 
+                img: '🛸', 
+                text: "Beyond the asteroid field, Pip spotted a gleaming silver saucer stranded near a lunar crater. A friendly blue alien named Orbit was waving for help! Orbit's propulsion engine was missing two glowing stardust batteries." 
+            },
+            { 
+                page: 6, 
+                img: '🔋', 
+                text: "Pip opened his cargo bay, pulled out extra solar power batteries, and helped Orbit repair his cosmic ship. Overjoyed, Orbit handed Pip an ancient star-map that revealed a shortcut through a warm solar wind stream." 
+            },
+            { 
+                page: 7, 
+                img: '🌌', 
+                text: "Riding the warm solar winds like an ocean wave, Pip finally reached the edges of the Golden Nebula! The cosmic cloud sparkled with gold dust, glowing space butterflies, and floating jelly-whales that sang soothing melodies across the galaxy." 
+            },
+            { 
+                page: 8, 
+                img: '🥳', 
+                text: "Friendly galaxy explorers and space creatures gathered on a nearby moon base to host a stellar picnic in Pip's honor, celebrating the tiny rocket who dared to dream big. Pip knew that no matter how vast space was, courage and kindness made every star feel close to home. The end!" 
+            }
+        ]
+    },
+    leo: {
+        title: "Leo's Grand Jungle Symphony",
+        pages: [
+            { 
+                page: 1, 
+                img: '🦁', 
+                text: "Deep in the lush heart of the Sunlit Savanna lived Leo, a young lion with a fluffy golden mane and a heart full of rhythm. While the other young lions practiced ferocious roars to grow up to be kings, Leo preferred to pat his paws against hollow logs, crafting rhythmic beats that echoed across the plains." 
+            },
+            { 
+                page: 2, 
+                img: '🥁', 
+                text: "Leo collected dry gourd shells, hollow bamboo stalks, and stretched tree bark to assemble his very own jungle drum kit under the wide canopy of an ancient baobab tree. Every morning, he drummed out lively beats that set the rhythm for the entire savanna." 
+            },
+            { 
+                page: 3, 
+                img: '📜', 
+                text: "One sunny afternoon, a flock of colorful toucans fluttered through the trees dropping golden leaves. They carried invitations to the Great Jungle Talent Contest, where the animal king would award a sparkling golden trophy to the best musical performer in the forest." 
+            },
+            { 
+                page: 4, 
+                img: '🦜', 
+                text: "Leo spent days composing a drum rhythm that captured the spirit of the savanna: the gentle pitter-patter of morning rain, the rushing stride of running zebras, and the deep boom of thunder across the hills." 
+            },
+            { 
+                page: 5, 
+                img: '🌴', 
+                text: "On the night of the grand show, fireflies illuminated the woodland stage. Leo watched nervously as the parrots sang high operatic notes and the baboons performed acrobatic flips. Soon, his name was announced to the waiting crowd." 
+            },
+            { 
+                page: 6, 
+                img: '🎶', 
+                text: "Stepping up to his wooden instruments, Leo took a deep breath and began to play. His paws moved fast like lightning! He drummed a thunderous rhythm that filled every heart in the clearing with energy and joy." 
+            },
+            { 
+                page: 7, 
+                img: '💃', 
+                text: "The music was so infectious that the elephants began stomping their feet, the monkeys swung rhythmically from vines, and even the stern elder lions began tapping their paws in harmony!" 
+            },
+            { 
+                page: 8, 
+                img: '🏆', 
+                text: "The crowd cheered with deafening applause as Leo was awarded the golden Rhythm Crown. Leo smiled bright, proving to the entire jungle that being true to your own unique passion is the greatest roar of all. The end!" 
+            }
+        ]
+    },
+    mira: {
+        title: "Mira & The Lost Coral Kingdom",
+        pages: [
+            { 
+                page: 1, 
+                img: '🧜‍♀️', 
+                text: "Far beneath the turquoise surface of the tropical sea lay the kingdom of Aquaria, home to Mira the mermaid. Mira possessed sparkling emerald fins and spent her days tending to the delicate ocean gardens of glowing sea anemones, giant pink clams, and vibrant coral reefs." 
+            },
+            { 
+                page: 2, 
+                img: '🪸', 
+                text: "One morning, Mira swam down to the main reef and noticed a distressing change: the vibrant corals were losing their iridescent shimmer, fading into dull grey stone. Without the magic of the main coral reef, the tiny fish, sea turtles, and starfish had no place to play or build their homes." 
+            },
+            { 
+                page: 3, 
+                img: '📜', 
+                text: "The elder sea turtle, Barnaby, swam up to Mira and unrolled an ancient kelp parchment map. 'The heart of our reef can only be restored by the legendary Pearl of Lumina,' he explained, 'hidden deep inside the Sunken Sea Cave across the trench.'" 
+            },
+            { 
+                page: 4, 
+                img: '🐬', 
+                text: "Mira knew she couldn't make the long journey alone. She whistled a high underwater tune, calling upon her two closest sea companions: Bubbles, an energetic bottle-nosed dolphin, and Barnaby the wise octopus, who knew every secret pathway in the ocean depths." 
+            },
+            { 
+                page: 5, 
+                img: '🌊', 
+                text: "Together, the trio swam past swirling underwater currents, glowing jellyfish fields, and dark underwater chasms. Whenever they encountered a tricky path, Barnaby used his eight arms to move obstacles, while Bubbles used echolocation to guide them safely through murky waters." 
+            },
+            { 
+                page: 6, 
+                img: '💎', 
+                text: "At last, deep within the shimmering Sunken Sea Cave, they discovered the Pearl of Lumina resting upon a bed of crystalline sand. It shone with every hue of the rainbow, illuminating the dark cavern with warm light." 
+            },
+            { 
+                page: 7, 
+                img: '✨', 
+                text: "Carefully carrying the pearl back to Aquaria, Mira gently placed it upon the central altar of the reef. Instantly, a wave of magical iridescent energy pulsed through the waters! The coral burst back into brilliant shades of violet, orange, turquoise, and gold." 
+            },
+            { 
+                page: 8, 
+                img: '🎉', 
+                text: "Thousands of colorful reef fish swirled around Mira, singing songs of gratitude. The ocean kingdom was saved, and Mira's bravery ensured that the magical coral gardens would flourish for generations to come. The end!" 
+            }
+        ]
+    }
 };
 
 let currentStoryKey = 'snowwhite';
@@ -405,42 +653,55 @@ function selectStory(key, evt) {
 }
 
 function renderStoryPage() {
-    const list = stories[currentStoryKey];
+    const storyData = stories[currentStoryKey];
+    if (!storyData) return;
+
+    const list = storyData.pages;
     const p = list[currentStoryPage];
     const isLastPage = currentStoryPage === list.length - 1;
 
-    document.getElementById('pageNumber').innerText = `Page ${p.page}`;
-    document.getElementById('bookImg').innerText = p.img;
-    document.getElementById('bookText').innerText = p.text;
+    const pageNumElem = document.getElementById('pageNumber');
+    const bookTitleElem = document.getElementById('bookTitle');
+    const bookImgElem = document.getElementById('bookImg');
+    const bookTextElem = document.getElementById('bookText');
+
+    if (pageNumElem) pageNumElem.innerText = `Page ${p.page}`;
+    if (bookTitleElem) bookTitleElem.innerText = storyData.title;
+    if (bookImgElem) bookImgElem.innerText = p.img;
+    if (bookTextElem) bookTextElem.innerText = p.text;
 
     const choicesContainer = document.getElementById('storyChoices');
-    choicesContainer.innerHTML = '';
+    const nextBtn = document.getElementById('nextPageBtn');
+    const prevBtn = document.getElementById('prevPageBtn');
 
-    if (p.choices) {
-        choicesContainer.style.display = 'flex';
-        document.getElementById('nextPageBtn').style.display = 'none';
+    if (choicesContainer) {
+        choicesContainer.innerHTML = '';
+        if (p.choices) {
+            choicesContainer.style.display = 'flex';
+            if (nextBtn) nextBtn.style.display = 'none';
 
-        p.choices.forEach(choice => {
-            const btn = document.createElement('button');
-            btn.className = 'choice-btn';
-            btn.innerText = choice.text;
-            btn.onclick = () => {
-                playSound(600);
-                currentStoryPage = choice.nextPage;
-                renderStoryPage();
-            };
-            choicesContainer.appendChild(btn);
-        });
-    } else {
-        choicesContainer.style.display = 'none';
-        document.getElementById('nextPageBtn').style.display = 'inline-block';
+            p.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.innerText = choice.text;
+                btn.onclick = () => {
+                    playSound(600);
+                    currentStoryPage = choice.nextPage;
+                    renderStoryPage();
+                };
+                choicesContainer.appendChild(btn);
+            });
+        } else {
+            choicesContainer.style.display = 'none';
+            if (nextBtn) nextBtn.style.display = 'inline-block';
+        }
     }
 
-    document.getElementById('prevPageBtn').disabled = (currentStoryPage === 0);
-    document.getElementById('nextPageBtn').disabled = isLastPage;
+    if (prevBtn) prevBtn.disabled = (currentStoryPage === 0);
+    if (nextBtn) nextBtn.disabled = isLastPage;
 
     const endBanner = document.getElementById('theEndBanner');
-    endBanner.style.display = isLastPage ? 'block' : 'none';
+    if (endBanner) endBanner.style.display = isLastPage ? 'block' : 'none';
 
     if (isLastPage && !finishedStories.has(currentStoryKey)) {
         finishedStories.add(currentStoryKey);
@@ -456,19 +717,21 @@ function changePage(delta) {
     playSound(500);
     currentStoryPage += delta;
     
+    // Dynamic logic for Snow White story branches
     if (currentStoryKey === 'snowwhite') {
-        if (currentStoryPage === 4 && delta === 1) currentStoryPage = 5;
-        if (currentStoryPage === 6 && delta === 1) currentStoryPage = 7;
+        if (currentStoryPage === 5 && delta === 1) currentStoryPage = 6;
+        if (currentStoryPage === 12 && delta === 1) currentStoryPage = 13;
     }
     
     renderStoryPage();
 }
 
-function speakText() {
+function speakText(customText = null, lang = 'en-US') {
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const text = stories[currentStoryKey][currentStoryPage].text;
+        const text = customText || stories[currentStoryKey].pages[currentStoryPage].text;
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
         utterance.pitch = 1.2;
         utterance.rate = 0.9;
         window.speechSynthesis.speak(utterance);
@@ -487,11 +750,19 @@ function showGame(gameId, evt) {
         pausePacmanGame();
     }
 
-    document.getElementById('math-game').style.display = (gameId === 'math-game') ? 'block' : 'none';
-    document.getElementById('quiz-game').style.display = (gameId === 'quiz-game') ? 'block' : 'none';
-    document.getElementById('pacman-game').style.display = (gameId === 'pacman-game') ? 'block' : 'none';
-    document.getElementById('memory-match').style.display = (gameId === 'memory-match') ? 'block' : 'none';
+    const duo = document.getElementById('duo-game');
+    const math = document.getElementById('math-game');
+    const quiz = document.getElementById('quiz-game');
+    const pacman = document.getElementById('pacman-game');
+    const memory = document.getElementById('memory-match');
 
+    if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
+    if (math) math.style.display = (gameId === 'math-game') ? 'block' : 'none';
+    if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
+    if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
+    if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
+
+    if (gameId === 'duo-game') initDuoGame();
     if (gameId === 'math-game') initMathGame();
     if (gameId === 'quiz-game') initQuiz();
     if (gameId === 'memory-match') initMemoryGame();
@@ -499,7 +770,114 @@ function showGame(gameId, evt) {
 }
 
 // ============================================================
-// GAME 1: KIDS MATH WIZARD GAME (500 Dynamic Questions)
+// GAME 0: DUOLINGO DASH ENGINE
+// ============================================================
+const duoQuestions = [
+    { prompt: "Translate: 'Hola, ¿cómo estás?'", lang: "es-ES", options: ["Hello, how are you?", "Goodbye, my friend", "Good morning!", "Thank you very much"], answer: 0, icon: "🇪🇸" },
+    { prompt: "Translate: 'Apple' into Spanish", lang: "es-ES", options: ["El perro", "La manzana", "El gato", "El agua"], answer: 1, icon: "🍎" },
+    { prompt: "Translate: 'Bonjour, mon ami!'", lang: "fr-FR", options: ["Goodnight, my cat!", "Hello, my friend!", "See you tomorrow!", "Where are you?"], answer: 1, icon: "🇫🇷" },
+    { prompt: "Translate: 'Cat' into French", lang: "fr-FR", options: ["Le chat", "Le chien", "La maison", "Le poisson"], answer: 0, icon: "🐱" },
+    { prompt: "Translate: 'Guten Tag!'", lang: "de-DE", options: ["Good evening!", "Good day / Hello!", "Thank you!", "Please!"], answer: 1, icon: "🇩🇪" },
+    { prompt: "Translate: 'Water' into German", lang: "de-DE", options: ["Brot", "Milch", "Wasser", "Kaffee"], answer: 2, icon: "💧" }
+];
+
+let duoIndex = 0, duoScore = 0, duoHearts = 3, duoStreak = 0;
+let duoCurrentQuestions = [];
+
+function initDuoGame() {
+    duoCurrentQuestions = shuffleArray([...duoQuestions]).slice(0, 5);
+    duoIndex = 0;
+    duoScore = 0;
+    duoHearts = 3;
+    updateDuoStats();
+    renderDuoQuestion();
+}
+
+function updateDuoStats() {
+    const heartsElem = document.getElementById('duoHearts');
+    const streakElem = document.getElementById('duoStreak');
+    const scoreElem = document.getElementById('duoScore');
+
+    if (heartsElem) heartsElem.innerText = '❤️'.repeat(Math.max(0, duoHearts));
+    if (streakElem) streakElem.innerText = duoStreak;
+    if (scoreElem) scoreElem.innerText = duoScore;
+}
+
+function renderDuoQuestion() {
+    const container = document.getElementById('duoContainer');
+    if (!container) return;
+
+    if (duoHearts <= 0) {
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">💔</div>
+                <h3>Out of Hearts!</h3>
+                <p>Don't worry! Practice makes perfect. Duo believes in you!</p>
+                <button class="restart-btn" onclick="initDuoGame()">🔄 Try Again</button>
+            </div>
+        `;
+        playChime([300, 200, 150], 'sawtooth');
+        return;
+    }
+
+    if (duoIndex >= duoCurrentQuestions.length) {
+        unlockBadge('duoLingo');
+        const earnedStars = duoScore * 5;
+        addStars(earnedStars);
+        launchConfetti(40);
+
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">🦉</div>
+                <h3>Lesson Completed! Great Job!</h3>
+                <p>You earned <strong>${earnedStars} Stars</strong> ⭐!</p>
+                <button class="restart-btn" onclick="initDuoGame()">🔄 Play Next Lesson</button>
+            </div>
+        `;
+        playChime([523, 659, 784, 1046]);
+        return;
+    }
+
+    const q = duoCurrentQuestions[duoIndex];
+    container.innerHTML = `
+        <div class="quiz-question">
+            <div class="quiz-question-icon">${q.icon}</div>
+            <h3>${q.prompt}</h3>
+            <button class="book-btn audio-btn" style="margin-bottom: 12px;" onclick="speakText('${q.prompt.replace("Translate: ", "").replace(/'/g, "")}', '${q.lang}')">🔊 Listen Audio</button>
+            <div class="quiz-options">
+                ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerDuo(${i})">${opt}</button>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function answerDuo(choice) {
+    const q = duoCurrentQuestions[duoIndex];
+    const buttons = document.querySelectorAll('#duoContainer .quiz-option');
+    buttons.forEach(btn => btn.onclick = null);
+
+    if (buttons[q.answer]) buttons[q.answer].classList.add('correct');
+    if (choice === q.answer) {
+        playSound(880, 'sine', 0.2);
+        duoScore += 10;
+        duoStreak++;
+    } else {
+        playSound(180, 'sawtooth', 0.3);
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
+        duoHearts--;
+        duoStreak = 0;
+    }
+
+    updateDuoStats();
+
+    setTimeout(() => {
+        duoIndex++;
+        renderDuoQuestion();
+    }, 1000);
+}
+
+// ============================================================
+// GAME 1: KIDS MATH WIZARD GAME (500 Questions)
 // ============================================================
 let mathQuestionsPool = [];
 let mathRoundQuestions = [], mathIndex = 0, mathScore = 0;
@@ -527,14 +905,13 @@ function generate500MathQuestions() {
             num2 = Math.floor(Math.random() * 12) + 1;
             ans = num1 * num2;
             qText = `What is ${num1} × ${num2}?`;
-        } else { // Division
+        } else {
             num2 = Math.floor(Math.random() * 10) + 1;
             ans = Math.floor(Math.random() * 10) + 1;
             num1 = num2 * ans;
             qText = `What is ${num1} ÷ ${num2}?`;
         }
 
-        // Generate choices
         const choices = new Set([ans]);
         while (choices.size < 4) {
             let offset = (Math.floor(Math.random() * 6) + 1) * (Math.random() < 0.5 ? 1 : -1);
@@ -556,7 +933,6 @@ function generate500MathQuestions() {
 mathQuestionsPool = generate500MathQuestions();
 
 function initMathGame() {
-    // Generates a round using the math pool questions
     mathRoundQuestions = shuffleArray([...mathQuestionsPool]).slice(0, 5);
     mathIndex = 0;
     mathScore = 0;
@@ -565,11 +941,15 @@ function initMathGame() {
 
 function renderMathQuestion() {
     const container = document.getElementById('mathContainer');
+    if (!container) return;
     const total = mathRoundQuestions.length;
 
+    const mathProgElem = document.getElementById('mathProgress');
+    const mathScoreElem = document.getElementById('mathScoreDisplay');
+
     if (mathIndex >= total) {
-        document.getElementById('mathProgress').innerText = `${total} / ${total}`;
-        document.getElementById('mathScoreDisplay').innerText = mathScore;
+        if (mathProgElem) mathProgElem.innerText = `${total} / ${total}`;
+        if (mathScoreElem) mathScoreElem.innerText = mathScore;
 
         const perfect = mathScore === total;
         if (perfect) unlockBadge('mathGenius');
@@ -589,8 +969,8 @@ function renderMathQuestion() {
         return;
     }
 
-    document.getElementById('mathProgress').innerText = `${mathIndex + 1} / ${total}`;
-    document.getElementById('mathScoreDisplay').innerText = mathScore;
+    if (mathProgElem) mathProgElem.innerText = `${mathIndex + 1} / ${total}`;
+    if (mathScoreElem) mathScoreElem.innerText = mathScore;
 
     const q = mathRoundQuestions[mathIndex];
     container.innerHTML = `
@@ -609,13 +989,13 @@ function answerMath(choice) {
     const buttons = document.querySelectorAll('#mathContainer .quiz-option');
     buttons.forEach(btn => btn.onclick = null);
 
-    buttons[q.answer].classList.add('correct');
+    if (buttons[q.answer]) buttons[q.answer].classList.add('correct');
     if (choice === q.answer) {
         playSound(800, 'sine', 0.2);
         mathScore++;
     } else {
         playSound(200, 'sawtooth', 0.3);
-        buttons[choice].classList.add('incorrect');
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
 
     setTimeout(() => {
@@ -625,7 +1005,7 @@ function answerMath(choice) {
 }
 
 // ============================================================
-// GAME 2: 500 DYNAMIC TRIVIA QUIZ (No Repeats Engine)
+// GAME 2: TRIVIA QUIZ ENGINE
 // ============================================================
 const quizTopics = [
     { cat: "Space", icon: "🪐", items: [
@@ -641,45 +1021,23 @@ const quizTopics = [
         { q: "How many legs does a spider have?", options: ["6", "8", "10", "12"], a: 1 },
         { q: "What do giant pandas eat almost exclusively?", options: ["Bamboo", "Grass", "Eucalyptus", "Fish"], a: 0 },
         { q: "Which bird is famous for being unable to fly?", options: ["Eagle", "Penguin", "Parrot", "Robin"], a: 1 }
-    ]},
-    { cat: "Geography & Earth", icon: "🌍", items: [
-        { q: "What is the largest ocean on Earth?", options: ["Atlantic Ocean", "Pacific Ocean", "Indian Ocean", "Arctic Ocean"], a: 1 },
-        { q: "Which is the tallest mountain above sea level?", options: ["K2", "Mount Everest", "Kilimanjaro", "Mount Fuji"], a: 1 },
-        { q: "What gas do trees produce that humans need to breathe?", options: ["Carbon Dioxide", "Oxygen", "Nitrogen", "Helium"], a: 1 },
-        { q: "Which continent is the South Pole located on?", options: ["Asia", "Australia", "Antarctica", "Europe"], a: 2 },
-        { q: "What primary substance makes up clouds?", options: ["Cotton", "Water droplets / Ice", "Gasoline", "Smoke"], a: 1 }
-    ]},
-    { cat: "Science & Nature", icon: "🔬", items: [
-        { q: "What temperature does water boil at (Celsius)?", options: ["50°C", "100°C", "150°C", "200°C"], a: 1 },
-        { q: "How many teeth do adult humans normally have?", options: ["20", "28", "32", "40"], a: 2 },
-        { q: "What is the hardest natural substance on Earth?", options: ["Gold", "Iron", "Diamond", "Granite"], a: 2 },
-        { q: "Which part of the plant absorbs water from the soil?", options: ["Leaves", "Roots", "Flowers", "Stem"], a: 1 },
-        { q: "What force pulls objects toward the center of the Earth?", options: ["Magnetism", "Gravity", "Friction", "Electricity"], a: 1 }
     ]}
 ];
 
 function generate500TriviaQuestions() {
     const list = [];
-    
-    // 1. Load base curated questions
     quizTopics.forEach(topic => {
         topic.items.forEach(item => {
             list.push({ q: item.q, options: item.options, answer: item.a, icon: topic.icon });
         });
     });
 
-    // 2. Dynamic knowledge pool to reach 500 unique entries
     const dynamicFacts = [
         { q: "What is the capital city of France?", correct: "Paris", wrong: ["London", "Berlin", "Rome"], icon: "🏰" },
         { q: "Which color do you get when you mix Red and Yellow?", correct: "Orange", wrong: ["Purple", "Green", "Brown"], icon: "🎨" },
         { q: "How many days are in a leap year?", correct: "366", wrong: ["365", "360", "300"], icon: "📅" },
         { q: "What is the main ingredient in bread?", correct: "Flour", wrong: ["Rice", "Sugar", "Corn"], icon: "🍞" },
-        { q: "Which instrument has 88 black and white keys?", correct: "Piano", wrong: ["Guitar", "Flute", "Drum"], icon: "🎹" },
-        { q: "What shape has 3 sides?", correct: "Triangle", wrong: ["Square", "Circle", "Pentagon"], icon: "📐" },
-        { q: "How many primary colors are there?", correct: "3", wrong: ["2", "5", "7"], icon: "🎨" },
-        { q: "Which insect makes honey?", correct: "Honeybee", wrong: ["Ant", "Butterfly", "Beetle"], icon: "🐝" },
-        { q: "What is the frozen form of water?", correct: "Ice", wrong: ["Steam", "Cloud", "Juice"], icon: "🧊" },
-        { q: "Which season comes after Winter?", correct: "Spring", wrong: ["Summer", "Autumn", "Winter"], icon: "🌸" }
+        { q: "Which instrument has 88 black and white keys?", correct: "Piano", wrong: ["Guitar", "Flute", "Drum"], icon: "🎹" }
     ];
 
     let i = list.length;
@@ -699,20 +1057,16 @@ function generate500TriviaQuestions() {
 }
 
 const all500Questions = generate500TriviaQuestions();
-
-// Deck tracking so questions never repeat until deck empties
 let availableQuizIndices = [];
 let quizOrder = [];
 let quizIndex = 0;
 let quizScore = 0;
 
 function initQuiz() {
-    // Refill deck when full round of 500 questions completes
     if (!availableQuizIndices || availableQuizIndices.length < 5) {
         availableQuizIndices = shuffleArray([...Array(all500Questions.length).keys()]);
     }
 
-    // Pull next 5 unplayed questions
     quizOrder = availableQuizIndices.splice(0, 5);
     quizIndex = 0;
     quizScore = 0;
@@ -721,11 +1075,15 @@ function initQuiz() {
 
 function renderQuizQuestion() {
     const container = document.getElementById('quizContainer');
+    if (!container) return;
     const total = quizOrder.length;
 
+    const quizProgElem = document.getElementById('quizProgress');
+    const quizScoreElem = document.getElementById('quizScoreDisplay');
+
     if (quizIndex >= total) {
-        document.getElementById('quizProgress').innerText = `${total} / ${total}`;
-        document.getElementById('quizScoreDisplay').innerText = quizScore;
+        if (quizProgElem) quizProgElem.innerText = `${total} / ${total}`;
+        if (quizScoreElem) quizScoreElem.innerText = quizScore;
 
         const perfect = quizScore === total;
         if (perfect) unlockBadge('quizWhiz');
@@ -738,7 +1096,6 @@ function renderQuizQuestion() {
                 <div class="quiz-result-icon">${perfect ? '🏆' : '🎯'}</div>
                 <h3>Quiz Round Complete!</h3>
                 <p>You scored ${quizScore} / ${total}!</p>
-                <p><strong>${availableQuizIndices.length}</strong> new questions remaining in the deck!</p>
                 <p>Earned ${earnedStars} stars ⭐</p>
                 <button class="restart-btn" onclick="initQuiz()">🔄 Play Next Round</button>
             </div>
@@ -747,8 +1104,8 @@ function renderQuizQuestion() {
         return;
     }
 
-    document.getElementById('quizProgress').innerText = `${quizIndex + 1} / ${total}`;
-    document.getElementById('quizScoreDisplay').innerText = quizScore;
+    if (quizProgElem) quizProgElem.innerText = `${quizIndex + 1} / ${total}`;
+    if (quizScoreElem) quizScoreElem.innerText = quizScore;
 
     const q = all500Questions[quizOrder[quizIndex]];
     container.innerHTML = `
@@ -767,13 +1124,13 @@ function answerQuiz(choice) {
     const buttons = document.querySelectorAll('#quizContainer .quiz-option');
     buttons.forEach(btn => btn.onclick = null);
 
-    buttons[q.answer].classList.add('correct');
+    if (buttons[q.answer]) buttons[q.answer].classList.add('correct');
     if (choice === q.answer) {
         playSound(800, 'sine', 0.2);
         quizScore++;
     } else {
         playSound(200, 'sawtooth', 0.3);
-        buttons[choice].classList.add('incorrect');
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
 
     setTimeout(() => {
@@ -827,7 +1184,8 @@ function initPacmanGame() {
     const pauseBtn = document.getElementById('pausePacmanBtn');
     if (pauseBtn) pauseBtn.innerText = '⏸️ Pause';
 
-    document.getElementById('score').innerText = pacScore;
+    const scoreElem = document.getElementById('score');
+    if (scoreElem) scoreElem.innerText = pacScore;
     updateLivesDisplay();
 
     pacman = { x: 5, y: 5, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
@@ -898,7 +1256,8 @@ function updatePacmanGame() {
         map[pacman.y][pacman.x] = 2;
         pacScore += 10;
         playSound(600, 'sine', 0.05);
-        document.getElementById('score').innerText = pacScore;
+        const scoreElem = document.getElementById('score');
+        if (scoreElem) scoreElem.innerText = pacScore;
         if (pacScore >= 100) unlockBadge('gamer');
     }
 
@@ -908,7 +1267,8 @@ function updatePacmanGame() {
         frightenedTicks = 25;
         ghosts.forEach(g => g.frightened = true);
         playChime([400, 300, 200], 'square');
-        document.getElementById('score').innerText = pacScore;
+        const scoreElem = document.getElementById('score');
+        if (scoreElem) scoreElem.innerText = pacScore;
         if (pacScore >= 100) unlockBadge('gamer');
     }
 
@@ -932,7 +1292,8 @@ function updatePacmanGame() {
             if (ghost.frightened) {
                 playChime([500, 700, 900]);
                 pacScore += 100;
-                document.getElementById('score').innerText = pacScore;
+                const scoreElem = document.getElementById('score');
+                if (scoreElem) scoreElem.innerText = pacScore;
                 ghost.x = ghost.startX;
                 ghost.y = ghost.startY;
                 ghost.frightened = false;
@@ -953,6 +1314,7 @@ function updatePacmanGame() {
 }
 
 function drawPacmanBoard() {
+    if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (let r = 0; r < map.length; r++) {
@@ -1006,7 +1368,8 @@ function drawPacmanBoard() {
 }
 
 function updateLivesDisplay() {
-    document.getElementById('lives').innerText = '❤️'.repeat(pacLives);
+    const livesElem = document.getElementById('lives');
+    if (livesElem) livesElem.innerText = '❤️'.repeat(pacLives);
 }
 
 function resetPacmanGame() {
@@ -1026,8 +1389,12 @@ function initMemoryGame() {
     grid.innerHTML = '';
     moves = 0; matches = 0;
     flippedCards = [];
-    document.getElementById('memoryMoves').innerText = moves;
-    document.getElementById('memoryMatches').innerText = `${matches} / ${emojis.length}`;
+
+    const movesElem = document.getElementById('memoryMoves');
+    const matchesElem = document.getElementById('memoryMatches');
+    
+    if (movesElem) movesElem.innerText = moves;
+    if (matchesElem) matchesElem.innerText = `${matches} / ${emojis.length}`;
 
     memoryCards = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
 
@@ -1037,7 +1404,10 @@ function initMemoryGame() {
         card.dataset.emoji = emoji;
         card.dataset.index = index;
         card.innerText = emoji;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
         card.onclick = () => flipMemoryCard(card);
+        card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') flipMemoryCard(card); };
         grid.appendChild(card);
     });
 }
@@ -1050,7 +1420,8 @@ function flipMemoryCard(card) {
 
         if (flippedCards.length === 2) {
             moves++;
-            document.getElementById('memoryMoves').innerText = moves;
+            const movesElem = document.getElementById('memoryMoves');
+            if (movesElem) movesElem.innerText = moves;
             checkMemoryMatch();
         }
     }
@@ -1063,7 +1434,10 @@ function checkMemoryMatch() {
         c1.classList.add('matched');
         c2.classList.add('matched');
         matches++;
-        document.getElementById('memoryMatches').innerText = `${matches} / ${emojis.length}`;
+        
+        const matchesElem = document.getElementById('memoryMatches');
+        if (matchesElem) matchesElem.innerText = `${matches} / ${emojis.length}`;
+        
         flippedCards = [];
         if (matches === emojis.length) {
             setTimeout(() => {
@@ -1095,10 +1469,14 @@ function toggleStep(el) {
 
 function checkExperimentComplete(card) {
     if (!card) return;
-    const steps = card.querySelectorAll('.steps-interactive li');
-    const done = card.querySelectorAll('.steps-interactive li.completed');
-    if (steps.length > 0 && steps.length === done.length) {
-        const key = card.querySelector('h3').innerText;
+    
+    const totalSteps = card.querySelectorAll('.steps-interactive li').length;
+    const done = card.querySelectorAll('.steps-interactive li.completed').length;
+    
+    if (totalSteps > 0 && totalSteps === done) {
+        const titleElem = card.querySelector('h3');
+        const key = titleElem ? titleElem.innerText : 'Experiment';
+        
         if (!completedExperiments.has(key)) {
             completedExperiments.add(key);
             addStars(10);
@@ -1111,9 +1489,14 @@ function checkExperimentComplete(card) {
 }
 
 // ============================================================
-// INITIAL LOAD
+// INITIAL LOAD & EVENT LISTENERS
 // ============================================================
 window.onload = () => {
     checkLoginSession();
     renderStoryPage();
+
+    const loginForm = document.querySelector('#loginScreen form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleKidLogin);
+    }
 };
