@@ -6,18 +6,18 @@ import {
     doc, 
     setDoc, 
     getDoc, 
-    getDocs, 
     onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// TODO: Replace with your actual Firebase Web App configuration object
+// Firebase Web App configuration object
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDprgTd5C-H8vq18OHSCyCdgG08KLsEgDs",
+    authDomain: "kidzoneapp-3a074.firebaseapp.com",
+    projectId: "kidzoneapp-3a074",
+    storageBucket: "kidzoneapp-3a074.firebasestorage.app",
+    messagingSenderId: "235123295283",
+    appId: "1:235123295283:web:86e89736f70cb6f9d94f46",
+    measurementId: "G-Y8NGVL88QV"
 };
 
 // Initialize Firebase & Firestore Database
@@ -315,7 +315,6 @@ async function handleCreateKidAccount(event) {
     };
 
     try {
-        // Direct cloud sync to Firestore
         await setDoc(doc(db, "kidProfiles", newId), newProfile);
 
         closeCreateAccountModal();
@@ -366,7 +365,6 @@ async function saveProgress() {
             finishedStories: [...finishedStories],
             completedExperiments: [...completedExperiments]
         };
-        // Persist game state directly to Firestore cloud database
         await setDoc(doc(db, "kidProgress", currentActiveId), data);
     } catch (e) {
         console.error("Cloud Save error:", e);
@@ -1605,8 +1603,8 @@ function checkExperimentComplete(card) {
 // ============================================================
 // INITIAL LOAD & REALTIME SUBSCRIBERS
 // ============================================================
-window.onload = () => {
+window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     checkLoginSession();
     renderStoryPage();
-};
+});
