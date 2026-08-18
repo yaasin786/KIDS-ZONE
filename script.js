@@ -133,6 +133,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Helper function to shuffle questions
+function shuffleArray(array) {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
 // Keep dynamic profiles cache in memory
 let cachedKidProfiles = [];
 
@@ -228,7 +238,6 @@ const CONFETTI_EMOJI = ['🎉', '⭐', '✨', '🎈', '🥳', '💥'];
 function launchConfetti(count = 20) {
     const container = document.getElementById('confettiContainer');
     if (!container) {
-        console.log(`🎉 Launched ${count} confetti particles!`);
         return;
     }
 
@@ -797,10 +806,6 @@ window.mascotSpeak = mascotSpeak;
 function switchTab(tabId, evt) {
     playSound(440);
 
-    if (tabId !== 'games') {
-        pausePacmanGame();
-    }
-
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
@@ -822,17 +827,11 @@ function showGame(gameId, evt) {
         evt.currentTarget.classList.add('active');
     }
 
-    if (gameId !== 'pacman-game') {
-        pausePacmanGame();
-    }
-
-    // Modern Hub Views & Legacy Views Toggle
     const duo = document.getElementById('duo-game');
     const math = document.getElementById('math-game');
     const quiz = document.getElementById('quiz-game');
     const pacman = document.getElementById('pacman-game');
     const memory = document.getElementById('memory-match');
-    const trivia = document.getElementById('trivia-game');
     const mauritius = document.getElementById('mauritius-game');
 
     if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
@@ -840,7 +839,6 @@ function showGame(gameId, evt) {
     if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
     if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
     if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
-    if (trivia) trivia.style.display = (gameId === 'trivia-game') ? 'block' : 'none';
     if (mauritius) mauritius.style.display = (gameId === 'mauritius-game') ? 'block' : 'none';
 
     // Game initializations
@@ -848,8 +846,6 @@ function showGame(gameId, evt) {
     if (gameId === 'math-game') initMathGame();
     if (gameId === 'quiz-game') initQuiz();
     if (gameId === 'memory-match') initMemoryGame();
-    if (gameId === 'pacman-game' && !pacInterval) initPacmanGame();
-    if (gameId === 'trivia-game') initTriviaGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
 }
 window.showGame = showGame;
@@ -1217,7 +1213,7 @@ function answerDuo(choice) {
 window.answerDuo = answerDuo;
 
 // ============================================================
-// GAME 1: MATH WIZARD (500 Dynamic Questions Pool)
+// GAME 1: MATH WIZARD (Dynamic Generator)
 // ============================================================
 let mathQuestionsPool = [];
 let mathRoundQuestions = [], mathIndex = 0, mathScore = 0;
@@ -1347,115 +1343,10 @@ function answerMath(choice) {
 window.answerMath = answerMath;
 
 // ============================================================
-// GAME 2: TRIVIA QUIZ ENGINE & GENERAL TRIVIA
+// GAME 2: TRIVIA QUIZ ENGINE
 // ============================================================
-const quizTopics = [
-    { cat: "Space", icon: "🪐", items: [
-        { q: "Which planet is known as the Red Planet?", options: ["Mars", "Venus", "Jupiter", "Saturn"], a: 0 },
-        { q: "What is the largest planet in our solar system?", options: ["Earth", "Jupiter", "Saturn", "Neptune"], a: 1 },
-        { q: "What shines at the center of our Solar System?", options: ["The Moon", "The Sun", "Mars", "Polaris"], a: 1 },
-        { q: "How many planets are in our Solar System?", options: ["7", "8", "9", "10"], a: 1 },
-        { q: "Which planet is closest to the Sun?", options: ["Mercury", "Venus", "Earth", "Mars"], a: 0 }
-    ]},
-    { cat: "Animals", icon: "🦁", items: [
-        { q: "What is the fastest land animal in the world?", options: ["Cheetah", "Lion", "Horse", "Leopard"], a: 0 },
-        { q: "Which animal is the largest living mammal?", options: ["Elephant", "Blue Whale", "Giraffe", "Hippo"], a: 1 },
-        { q: "How many legs does a spider have?", options: ["6", "8", "10", "12"], a: 1 },
-        { q: "What do giant pandas eat almost exclusively?", options: ["Bamboo", "Grass", "Eucalyptus", "Fish"], a: 0 },
-        { q: "Which bird is famous for being unable to fly?", options: ["Eagle", "Penguin", "Parrot", "Robin"], a: 1 }
-    ]}
-];
-
-const triviaQuestions = [
-    { q: "What color do you get when you mix Red and Yellow?", options: ["Green", "Orange", "Purple", "Brown"], a: 1, icon: "🎨" },
-    { q: "How many legs does a spider have?", options: ["6", "8", "10", "4"], a: 1, icon: "🕷️" },
-    { q: "Which planet is known as the Red Planet?", options: ["Venus", "Mars", "Jupiter", "Saturn"], a: 1, icon: "🪐" },
-    { q: "What is the largest land animal?", options: ["Giraffe", "Blue Whale", "Elephant", "Hippo"], a: 2, icon: "🐘" },
-    { q: "Which animal produces milk and lays eggs?", options: ["Platypus", "Kangaroo", "Ostrich", "Bat"], a: 0, icon: "🦫" }
-];
-
-let triviaIndex = 0, triviaScore = 0;
-
-function initTriviaGame() {
-    triviaIndex = 0;
-    triviaScore = 0;
-    renderTriviaQuestion();
-}
-window.initTriviaGame = initTriviaGame;
-
-function renderTriviaQuestion() {
-    const container = document.getElementById('triviaContainer');
-    if (!container) return;
-    const total = triviaQuestions.length;
-
-    const progElem = document.getElementById('triviaProgress');
-    const scoreElem = document.getElementById('triviaScoreDisplay');
-
-    if (triviaIndex >= total) {
-        if (progElem) progElem.innerText = `${total} / ${total}`;
-        if (scoreElem) scoreElem.innerText = triviaScore;
-
-        const earnedStars = triviaScore * 5;
-        addStars(earnedStars);
-        launchConfetti(30);
-
-        container.innerHTML = `
-            <div class="quiz-result">
-                <div class="quiz-result-icon">🏆</div>
-                <h3>Trivia Completed!</h3>
-                <p>You scored ${triviaScore} / ${total} and won ${earnedStars} stars ⭐!</p>
-                <button class="restart-btn" onclick="initTriviaGame()">🔄 Play Again</button>
-            </div>
-        `;
-        playChime([523, 659, 784, 1046]);
-        return;
-    }
-
-    if (progElem) progElem.innerText = `${triviaIndex + 1} / ${total}`;
-    if (scoreElem) scoreElem.innerText = triviaScore;
-
-    const q = triviaQuestions[triviaIndex];
-    container.innerHTML = `
-        <div class="quiz-question">
-            <div class="quiz-question-icon">${q.icon}</div>
-            <h3>${q.q}</h3>
-            <button class="book-btn audio-btn" style="margin-bottom: 12px;" onclick="speakText('${q.q}')">🔊 Read Question</button>
-            <div class="quiz-options">
-                ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerTrivia(${i})">${opt}</button>`).join('')}
-            </div>
-        </div>
-    `;
-}
-
-function answerTrivia(choice) {
-    const q = triviaQuestions[triviaIndex];
-    const buttons = document.querySelectorAll('#triviaContainer .quiz-option');
-    buttons.forEach(btn => btn.onclick = null);
-
-    if (buttons[q.a]) buttons[q.a].classList.add('correct');
-    if (choice === q.a) {
-        playSound(800, 'sine', 0.2);
-        triviaScore++;
-    } else {
-        playSound(200, 'sawtooth', 0.3);
-        if (buttons[choice]) buttons[choice].classList.add('incorrect');
-    }
-
-    setTimeout(() => {
-        triviaIndex++;
-        renderTriviaQuestion();
-    }, 1000);
-}
-window.answerTrivia = answerTrivia;
-
 function generate500TriviaQuestions() {
     const list = [];
-    quizTopics.forEach(topic => {
-        topic.items.forEach(item => {
-            list.push({ q: item.q, options: item.options, answer: item.a, icon: topic.icon });
-        });
-    });
-
     const dynamicFacts = [
         { q: "What is the capital city of France?", correct: "Paris", wrong: ["London", "Berlin", "Rome"], icon: "🏰" },
         { q: "Which color do you get when you mix Red and Yellow?", correct: "Orange", wrong: ["Purple", "Green", "Brown"], icon: "🎨" },
@@ -1464,8 +1355,7 @@ function generate500TriviaQuestions() {
         { q: "Which instrument has 88 black and white keys?", correct: "Piano", wrong: ["Guitar", "Flute", "Drum"], icon: "🎹" }
     ];
 
-    let i = list.length;
-    while (list.length < 500) {
+    for (let i = 0; i < 500; i++) {
         const fact = dynamicFacts[i % dynamicFacts.length];
         const allOpts = shuffleArray([fact.correct, ...fact.wrong]);
         list.push({
@@ -1474,7 +1364,6 @@ function generate500TriviaQuestions() {
             answer: allOpts.indexOf(fact.correct),
             icon: fact.icon
         });
-        i++;
     }
 
     return list;
@@ -1591,7 +1480,7 @@ function setMruLevel(lvl) {
 window.setMruLevel = setMruLevel;
 
 function initMauritiusGame() {
-    filteredMruQuestions = mauritiusQuestions.filter(q => q.level === currentMruLevel);
+    filteredMruQuestions = shuffleArray(mauritiusQuestions.filter(q => q.level === currentMruLevel));
     mruIndex = 0;
     mruScore = 0;
     renderMauritiusQuestion();
@@ -1601,60 +1490,62 @@ window.initMauritiusGame = initMauritiusGame;
 function renderMauritiusQuestion() {
     const container = document.getElementById('mruContainer');
     if (!container) return;
-    const total = filteredMruQuestions.length;
 
-    const progElem = document.getElementById('mruProgress');
+    const total = filteredMruQuestions.length;
+    const progressElem = document.getElementById('mruProgress');
     const scoreElem = document.getElementById('mruScoreDisplay');
 
     if (mruIndex >= total) {
-        if (progElem) progElem.innerText = `${total} / ${total}`;
+        if (progressElem) progressElem.innerText = `${total} / ${total}`;
         if (scoreElem) scoreElem.innerText = mruScore;
 
-        const percentage = Math.round((mruScore / total) * 100);
-        const passed = percentage >= 80;
-        const earnedStars = mruScore * 2;
-        addStars(earnedStars);
+        const passPercentage = (mruScore / total) * 100;
+        let unlockedNext = false;
 
-        if (passed && currentMruLevel === unlockedMruLevel && unlockedMruLevel < 3) {
+        if (passPercentage >= 80 && currentMruLevel === unlockedMruLevel && unlockedMruLevel < 3) {
             unlockedMruLevel++;
+            unlockedNext = true;
+            
+            const nextBtn = document.getElementById(`mruLvl${unlockedMruLevel}Btn`);
+            if (nextBtn) nextBtn.disabled = false;
         }
 
-        if (passed) launchConfetti(30);
+        const perfect = mruScore === total;
+        const earnedStars = mruScore * 10;
+        addStars(earnedStars);
+
+        if (passPercentage >= 80) launchConfetti(40);
 
         container.innerHTML = `
             <div class="quiz-result">
-                <div class="quiz-result-icon">${passed ? '🏆' : '🔒'}</div>
-                <h3>Level ${currentMruLevel} ${passed ? 'Completed!' : 'Failed!'}</h3>
-                <p>Score: ${mruScore} / ${total} (${percentage}%)</p>
-                <p>${passed ? `Great job! You earned ${earnedStars} stars ⭐!` : 'You need at least 80% (24/30) to unlock the next level.'}</p>
-                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
-                    <button class="restart-btn" onclick="initMauritiusGame()">🔄 Try Again</button>
-                    ${unlockedMruLevel > currentMruLevel ? `<button class="restart-btn" style="background: #22c55e;" onclick="setMruLevel(${currentMruLevel + 1})">🚀 Next Level</button>` : ''}
+                <div class="quiz-result-icon">${perfect ? '🇲🇺🎉' : passPercentage >= 80 ? '🌟' : '📚'}</div>
+                <h3>Level ${currentMruLevel} Quiz Complete!</h3>
+                <p>You scored <strong>${mruScore} / ${total}</strong> (${Math.round(passPercentage)}%)!</p>
+                <p>You earned <strong>${earnedStars} Stars</strong> ⭐!</p>
+                ${unlockedNext ? `<p style="color: #48bb78; font-weight: bold;">🎉 Level ${unlockedMruLevel} is now Unlocked!</p>` : ''}
+                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button class="restart-btn" onclick="initMauritiusGame()">🔄 Replay Level ${currentMruLevel}</button>
+                    ${unlockedMruLevel > currentMruLevel ? `<button class="restart-btn" style="background: var(--primary-green);" onclick="setMruLevel(${currentMruLevel + 1})">🚀 Move to Level ${currentMruLevel + 1}</button>` : ''}
                 </div>
             </div>
         `;
-        playChime(passed ? [523, 659, 784, 1046] : [300, 250, 200]);
+        playChime(perfect ? [523, 659, 784, 1046] : [523, 659]);
         return;
     }
 
-    if (progElem) progElem.innerText = `${mruIndex + 1} / ${total}`;
+    if (progressElem) progressElem.innerText = `${mruIndex + 1} / ${total}`;
     if (scoreElem) scoreElem.innerText = mruScore;
 
     const q = filteredMruQuestions[mruIndex];
     container.innerHTML = `
-        <div style="margin-bottom: 12px; display: flex; gap: 8px; justify-content: center;">
-            <button id="mruLvl1Btn" class="filter-btn lvl-btn ${currentMruLevel === 1 ? 'active' : ''}" onclick="setMruLevel(1)">Level 1</button>
-            <button id="mruLvl2Btn" class="filter-btn lvl-btn ${currentMruLevel === 2 ? 'active' : ''} ${unlockedMruLevel < 2 ? 'locked' : ''}" onclick="setMruLevel(2)">
-                ${unlockedMruLevel < 2 ? '🔒 ' : ''}Level 2
-            </button>
-            <button id="mruLvl3Btn" class="filter-btn lvl-btn ${currentMruLevel === 3 ? 'active' : ''} ${unlockedMruLevel < 3 ? 'locked' : ''}" onclick="setMruLevel(3)">
-                ${unlockedMruLevel < 3 ? '🔒 ' : ''}Level 3
-            </button>
+        <div class="level-tabs" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+            <button id="mruLvl1Btn" class="lvl-btn ${currentMruLevel === 1 ? 'active' : ''}" onclick="setMruLevel(1)">Level 1: Easy</button>
+            <button id="mruLvl2Btn" class="lvl-btn ${currentMruLevel === 2 ? 'active' : ''}" ${unlockedMruLevel < 2 ? 'disabled' : ''} onclick="setMruLevel(2)">Level 2: Medium ${unlockedMruLevel < 2 ? '🔒' : ''}</button>
+            <button id="mruLvl3Btn" class="lvl-btn ${currentMruLevel === 3 ? 'active' : ''}" ${unlockedMruLevel < 3 ? 'disabled' : ''} onclick="setMruLevel(3)">Level 3: Hard ${unlockedMruLevel < 3 ? '🔒' : ''}</button>
         </div>
         <div class="quiz-question">
             <div class="quiz-question-icon">${q.icon}</div>
             <h3>${q.q}</h3>
-            <button class="book-btn audio-btn" style="margin-bottom: 12px;" onclick="speakText('${q.q}')">🔊 Read Question</button>
             <div class="quiz-options">
                 ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerMauritius(${i})">${opt}</button>`).join('')}
             </div>
@@ -1668,6 +1559,7 @@ function answerMauritius(choice) {
     buttons.forEach(btn => btn.onclick = null);
 
     if (buttons[q.a]) buttons[q.a].classList.add('correct');
+
     if (choice === q.a) {
         playSound(800, 'sine', 0.2);
         mruScore++;
@@ -1679,379 +1571,339 @@ function answerMauritius(choice) {
     setTimeout(() => {
         mruIndex++;
         renderMauritiusQuestion();
-    }, 1000);
+    }, 1200);
 }
 window.answerMauritius = answerMauritius;
 
-function shuffleArray(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-}
-
 // ============================================================
-// GAME 3: PAC-MAN ENGINE
+// GAME 4: PAC-MAN ENGINE
 // ============================================================
-let canvas, ctx, pacman, ghosts, map, pacScore, pacLives, pacInterval, mouthAngle = 0.2, mouthSpeed = 0.02;
-let frightenedTicks = 0;
-let isPacmanPaused = false;
-const tileSize = 40;
+const canvas = document.getElementById('pacmanCanvas');
+const ctx = canvas ? canvas.getContext('2d') : null;
 
-const initialMap = [
+const pacMap = [
     [1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,1,0,0,0,3,0,1],
-    [1,0,1,0,1,0,1,1,1,0,1],
-    [1,0,1,0,0,0,0,0,1,0,1],
-    [1,0,1,1,1,2,1,1,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1,1,1,0,1],
-    [1,0,1,0,0,0,0,0,1,0,1],
-    [1,0,1,0,1,1,1,0,1,0,1],
-    [1,3,0,0,0,1,0,0,0,0,1],
+    [1,2,2,2,1,2,2,2,2,2,1],
+    [1,3,1,2,1,2,1,1,1,2,1],
+    [1,2,1,2,2,2,2,2,1,2,1],
+    [1,2,1,1,1,0,1,1,1,2,1],
+    [1,2,2,2,0,0,0,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,2,1],
+    [1,2,1,2,2,2,2,2,1,2,1],
+    [1,3,1,2,1,1,1,2,1,3,1],
+    [1,2,2,2,2,2,2,2,2,2,1],
     [1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-function initPacmanGame() {
-    canvas = document.getElementById('pacmanCanvas');
-    if (!canvas) return;
-    ctx = canvas.getContext('2d');
+const tileSize = 40;
+let pacGrid = [];
+let pacman = { x: 5, y: 5, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
+let ghosts = [];
 
-    map = JSON.parse(JSON.stringify(initialMap));
-    pacScore = 0;
-    pacLives = 3;
-    frightenedTicks = 0;
-    isPacmanPaused = false;
-    
-    const pauseBtn = document.getElementById('pausePacmanBtn');
-    if (pauseBtn) pauseBtn.innerText = '⏸️ Pause';
-
-    const scoreElem = document.getElementById('score');
-    if (scoreElem) scoreElem.innerText = pacScore;
-    updateLivesDisplay();
-
-    pacman = { x: 5, y: 5, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
-    ghosts = [
-        { x: 1, y: 1, startX: 1, startY: 1, color: 'red', dirX: 1, dirY: 0, frightened: false },
-        { x: 9, y: 9, startX: 9, startY: 9, color: 'pink', dirX: -1, dirY: 0, frightened: false }
-    ];
-
-    clearInterval(pacInterval);
-    pacInterval = setInterval(updatePacmanGame, 200);
-
-    window.removeEventListener('keydown', handlePacmanKeys);
-    window.addEventListener('keydown', handlePacmanKeys);
-}
-window.initPacmanGame = initPacmanGame;
-
-function pausePacmanGame() {
-    if (pacInterval) {
-        clearInterval(pacInterval);
-        pacInterval = null;
-        isPacmanPaused = true;
-        const pauseBtn = document.getElementById('pausePacmanBtn');
-        if (pauseBtn) pauseBtn.innerText = '▶️ Resume';
-    }
-}
-
-function resumePacmanGame() {
-    if (isPacmanPaused) {
-        isPacmanPaused = false;
-        clearInterval(pacInterval);
-        pacInterval = setInterval(updatePacmanGame, 200);
-        const pauseBtn = document.getElementById('pausePacmanBtn');
-        if (pauseBtn) pauseBtn.innerText = '⏸️ Pause';
-    }
-}
-
-function togglePausePacman() {
-    playSound(400);
-    if (isPacmanPaused) resumePacmanGame(); else pausePacmanGame();
-}
-window.togglePausePacman = togglePausePacman;
-
-function handlePacmanKeys(e) {
-    if (e.key === 'ArrowUp') setPacmanDir(0, -1);
-    if (e.key === 'ArrowDown') setPacmanDir(0, 1);
-    if (e.key === 'ArrowLeft') setPacmanDir(-1, 0);
-    if (e.key === 'ArrowRight') setPacmanDir(1, 0);
-}
+let pScore = 0;
+let pLives = 3;
+let powerPelletTimer = 0;
+let pacGameInterval = null;
+let pacIsPaused = false;
 
 function setPacmanDir(dx, dy) {
-    if (isPacmanPaused) resumePacmanGame();
     pacman.nextDirX = dx;
     pacman.nextDirY = dy;
 }
 window.setPacmanDir = setPacmanDir;
 
-function updatePacmanGame() {
-    if (isPacmanPaused) return;
+function resetPacmanGame() {
+    pScore = 0;
+    pLives = 3;
+    powerPelletTimer = 0;
+    pacIsPaused = false;
 
-    if (map[pacman.y + pacman.nextDirY][pacman.x + pacman.nextDirX] !== 1) {
+    const pauseBtn = document.getElementById('pausePacmanBtn');
+    if (pauseBtn) pauseBtn.innerText = '⏸️ Pause';
+
+    pacGrid = pacMap.map(row => [...row]);
+    pacman = { x: 5, y: 5, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
+
+    ghosts = [
+        { x: 1, y: 1, color: '#FF0000', dirX: 1, dirY: 0 },
+        { x: 9, y: 1, color: '#FFB8FF', dirX: -1, dirY: 0 },
+        { x: 1, y: 9, color: '#00FFFF', dirX: 0, dirY: -1 },
+        { x: 9, y: 9, color: '#FFB852', dirX: 0, dirY: 1 }
+    ];
+
+    updatePacmanHUD();
+
+    if (pacGameInterval) clearInterval(pacGameInterval);
+    pacGameInterval = setInterval(pacmanGameLoop, 220);
+}
+window.resetPacmanGame = resetPacmanGame;
+
+function togglePausePacman() {
+    pacIsPaused = !pacIsPaused;
+    const pauseBtn = document.getElementById('pausePacmanBtn');
+    if (pauseBtn) pauseBtn.innerText = pacIsPaused ? '▶️ Resume' : '⏸️ Pause';
+    playSound(400);
+}
+window.togglePausePacman = togglePausePacman;
+
+function updatePacmanHUD() {
+    const sElem = document.getElementById('score');
+    const lElem = document.getElementById('lives');
+    if (sElem) sElem.innerText = pScore;
+    if (lElem) lElem.innerText = '❤️'.repeat(Math.max(0, pLives));
+}
+
+function pacmanGameLoop() {
+    if (pacIsPaused || !ctx) return;
+
+    if (powerPelletTimer > 0) powerPelletTimer--;
+
+    // Move Pac-man
+    if (canMove(pacman.x + pacman.nextDirX, pacman.y + pacman.nextDirY)) {
         pacman.dirX = pacman.nextDirX;
         pacman.dirY = pacman.nextDirY;
     }
 
-    if (map[pacman.y + pacman.dirY][pacman.x + pacman.dirX] !== 1) {
+    if (canMove(pacman.x + pacman.dirX, pacman.y + pacman.dirY)) {
         pacman.x += pacman.dirX;
         pacman.y += pacman.dirY;
     }
 
-    if (map[pacman.y][pacman.x] === 0) {
-        map[pacman.y][pacman.x] = 2;
-        pacScore += 10;
+    // Check Pellets
+    const currentCell = pacGrid[pacman.y][pacman.x];
+    if (currentCell === 2) {
+        pacGrid[pacman.y][pacman.x] = 0;
+        pScore += 10;
         playSound(600, 'sine', 0.05);
-        const scoreElem = document.getElementById('score');
-        if (scoreElem) scoreElem.innerText = pacScore;
-        if (pacScore >= 100) unlockBadge('gamer');
+    } else if (currentCell === 3) {
+        pacGrid[pacman.y][pacman.x] = 0;
+        pScore += 50;
+        powerPelletTimer = 30; // ~6.6 seconds
+        playSound(900, 'triangle', 0.2);
     }
 
-    if (map[pacman.y][pacman.x] === 3) {
-        map[pacman.y][pacman.x] = 2;
-        pacScore += 50;
-        frightenedTicks = 25;
-        ghosts.forEach(g => g.frightened = true);
-        playChime([400, 300, 200], 'square');
-        const scoreElem = document.getElementById('score');
-        if (scoreElem) scoreElem.innerText = pacScore;
-        if (pacScore >= 100) unlockBadge('gamer');
-    }
+    if (pScore >= 100) unlockBadge('gamer');
 
-    if (frightenedTicks > 0) {
-        frightenedTicks--;
-        if (frightenedTicks === 0) ghosts.forEach(g => g.frightened = false);
-    }
+    // Move Ghosts
+    ghosts.forEach(g => {
+        const validDirs = [];
+        const directions = [
+            { x: 0, y: -1 },
+            { x: 0, y: 1 },
+            { x: -1, y: 0 },
+            { x: 1, y: 0 }
+        ];
 
-    ghosts.forEach(ghost => {
-        const possibleDirs = [];
-        [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx, dy]) => {
-            if (map[ghost.y + dy][ghost.x + dx] !== 1) possibleDirs.push([dx, dy]);
+        directions.forEach(d => {
+            if (canMove(g.x + d.x, g.y + d.y)) validDirs.push(d);
         });
-        if (possibleDirs.length > 0) {
-            const [dx, dy] = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
-            ghost.x += dx;
-            ghost.y += dy;
+
+        if (validDirs.length > 0) {
+            const chosen = validDirs[Math.floor(Math.random() * validDirs.length)];
+            g.x += chosen.x;
+            g.y += chosen.y;
         }
 
-        if (ghost.x === pacman.x && ghost.y === pacman.y) {
-            if (ghost.frightened) {
-                playChime([500, 700, 900]);
-                pacScore += 100;
-                const scoreElem = document.getElementById('score');
-                if (scoreElem) scoreElem.innerText = pacScore;
-                ghost.x = ghost.startX;
-                ghost.y = ghost.startY;
-                ghost.frightened = false;
+        // Collision Check
+        if (g.x === pacman.x && g.y === pacman.y) {
+            if (powerPelletTimer > 0) {
+                // Eat ghost
+                g.x = 5;
+                g.y = 4;
+                pScore += 200;
+                playSound(1000, 'sine', 0.2);
             } else {
-                playSound(150, 'sawtooth', 0.3);
-                pacLives--;
-                updateLivesDisplay();
-                pacman.x = 5; pacman.y = 5;
-                if (pacLives === 0) {
-                    showToast(`Game Over! Final score: ${pacScore}`, '💥', 3500);
-                    initPacmanGame();
+                // Lose life
+                pLives--;
+                playSound(150, 'sawtooth', 0.4);
+                pacman.x = 5;
+                pacman.y = 5;
+                pacman.dirX = 0;
+                pacman.dirY = 0;
+
+                if (pLives <= 0) {
+                    clearInterval(pacGameInterval);
+                    alert(`🎮 Game Over! Your Final Score: ${pScore}`);
+                    addStars(Math.floor(pScore / 10));
                 }
             }
         }
     });
 
-    drawPacmanBoard();
+    updatePacmanHUD();
+    drawPacmanCanvas();
 }
 
-function drawPacmanBoard() {
+function canMove(x, y) {
+    if (x < 0 || x >= 11 || y < 0 || y >= 11) return false;
+    return pacGrid[y][x] !== 1;
+}
+
+function drawPacmanCanvas() {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (let r = 0; r < map.length; r++) {
-        for (let c = 0; c < map[r].length; c++) {
-            if (map[r][c] === 1) {
-                ctx.fillStyle = '#1e3a8a';
-                ctx.fillRect(c * tileSize, r * tileSize, tileSize - 2, tileSize - 2);
-            } else if (map[r][c] === 0) {
-                ctx.fillStyle = '#FFE74C';
+    for (let r = 0; r < 11; r++) {
+        for (let c = 0; c < 11; c++) {
+            const tile = pacGrid[r][c];
+            if (tile === 1) {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                ctx.strokeStyle = '#3b82f6';
+                ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
+            } else if (tile === 2) {
+                ctx.fillStyle = '#fbbf24';
                 ctx.beginPath();
-                ctx.arc(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, 4, 0, Math.PI * 2);
+                ctx.arc(c * tileSize + 20, r * tileSize + 20, 4, 0, Math.PI * 2);
                 ctx.fill();
-            } else if (map[r][c] === 3) {
-                const pulse = 6 + Math.sin(Date.now() / 150) * 2;
-                ctx.fillStyle = '#FFD700';
-                ctx.shadowColor = '#FFD700';
-                ctx.shadowBlur = 10;
+            } else if (tile === 3) {
+                ctx.fillStyle = '#f59e0b';
                 ctx.beginPath();
-                ctx.arc(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, pulse, 0, Math.PI * 2);
+                ctx.arc(c * tileSize + 20, r * tileSize + 20, 9, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.shadowBlur = 0;
             }
         }
     }
 
-    mouthAngle += mouthSpeed;
-    if (mouthAngle > 0.4 || mouthAngle < 0.05) mouthSpeed = -mouthSpeed;
-
-    ctx.fillStyle = '#FFE74C';
+    // Draw Pac-man
+    ctx.fillStyle = '#facc15';
     ctx.beginPath();
-    let rotation = 0;
-    if (pacman.dirX === 1) rotation = 0;
-    if (pacman.dirX === -1) rotation = Math.PI;
-    if (pacman.dirY === -1) rotation = 1.5 * Math.PI;
-    if (pacman.dirY === 1) rotation = 0.5 * Math.PI;
-
-    ctx.arc(
-        pacman.x * tileSize + tileSize / 2,
-        pacman.y * tileSize + tileSize / 2,
-        15,
-        rotation + mouthAngle,
-        rotation + Math.PI * 2 - mouthAngle
-    );
-    ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
+    ctx.arc(pacman.x * tileSize + 20, pacman.y * tileSize + 20, 16, 0.2 * Math.PI, 1.8 * Math.PI);
+    ctx.lineTo(pacman.x * tileSize + 20, pacman.y * tileSize + 20);
     ctx.fill();
 
-    ghosts.forEach(ghost => {
-        ctx.font = '24px serif';
-        ctx.fillText(ghost.frightened ? '😨' : '👻', ghost.x * tileSize + 8, ghost.y * tileSize + 28);
+    // Draw Ghosts
+    ghosts.forEach(g => {
+        ctx.fillStyle = (powerPelletTimer > 0) ? '#3b82f6' : g.color;
+        ctx.beginPath();
+        ctx.arc(g.x * tileSize + 20, g.y * tileSize + 20, 15, 0, Math.PI * 2);
+        ctx.fill();
     });
 }
 
-function updateLivesDisplay() {
-    const livesElem = document.getElementById('lives');
-    if (livesElem) livesElem.innerText = '❤️'.repeat(pacLives);
-}
+window.addEventListener('keydown', e => {
+    const pTab = document.getElementById('pacman-game');
+    if (!pTab || pTab.style.display === 'none') return;
 
-function resetPacmanGame() {
-    playSound(400);
-    initPacmanGame();
-}
-window.resetPacmanGame = resetPacmanGame;
+    if (e.key === 'ArrowUp') setPacmanDir(0, -1);
+    if (e.key === 'ArrowDown') setPacmanDir(0, 1);
+    if (e.key === 'ArrowLeft') setPacmanDir(-1, 0);
+    if (e.key === 'ArrowRight') setPacmanDir(1, 0);
+});
 
 // ============================================================
-// GAME 4: MEMORY MATCH
+// GAME 5: MEMORY MATCH ENGINE
 // ============================================================
-const emojis = ['🐶', '🐱', '🐸', '🦁', '🐵', '🦄'];
-let memoryCards = [], flippedCards = [], moves = 0, matches = 0;
+const memoryIcons = ['🦁', '🦄', '🤖', '🦖', '🧜‍♀️', '🚀'];
+let memoryCards = [];
+let flippedCards = [];
+let memoryMoves = 0;
+let memoryMatches = 0;
 
 function initMemoryGame() {
     const grid = document.getElementById('memoryGrid');
     if (!grid) return;
+
     grid.innerHTML = '';
-    moves = 0; matches = 0;
+    memoryCards = shuffleArray([...memoryIcons, ...memoryIcons]);
     flippedCards = [];
+    memoryMoves = 0;
+    memoryMatches = 0;
 
     const movesElem = document.getElementById('memoryMoves');
     const matchesElem = document.getElementById('memoryMatches');
-    
-    if (movesElem) movesElem.innerText = moves;
-    if (matchesElem) matchesElem.innerText = `${matches} / ${emojis.length}`;
+    if (movesElem) movesElem.innerText = 0;
+    if (matchesElem) matchesElem.innerText = '0 / 6';
 
-    memoryCards = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
-
-    memoryCards.forEach((emoji, index) => {
+    memoryCards.forEach((icon, idx) => {
         const card = document.createElement('div');
         card.className = 'memory-card';
-        card.dataset.emoji = emoji;
-        card.dataset.index = index;
-        card.innerText = emoji;
-        card.setAttribute('role', 'button');
-        card.setAttribute('tabindex', '0');
+        card.dataset.icon = icon;
+        card.dataset.index = idx;
+        card.innerHTML = `<span class="card-inner">❓</span>`;
         card.onclick = () => flipMemoryCard(card);
-        card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') flipMemoryCard(card); };
         grid.appendChild(card);
     });
 }
 window.initMemoryGame = initMemoryGame;
 
 function flipMemoryCard(card) {
-    if (flippedCards.length < 2 && !card.classList.contains('flipped') && !card.classList.contains('matched')) {
-        playSound(500);
-        card.classList.add('flipped');
-        flippedCards.push(card);
+    if (flippedCards.length >= 2 || card.classList.contains('flipped') || card.classList.contains('matched')) return;
 
-        if (flippedCards.length === 2) {
-            moves++;
-            const movesElem = document.getElementById('memoryMoves');
-            if (movesElem) movesElem.innerText = moves;
-            checkMemoryMatch();
-        }
-    }
-}
+    playSound(500);
+    card.classList.add('flipped');
+    card.querySelector('.card-inner').innerText = card.dataset.icon;
+    flippedCards.push(card);
 
-function checkMemoryMatch() {
-    const [c1, c2] = flippedCards;
-    if (c1.dataset.emoji === c2.dataset.emoji) {
-        playSound(800, 'sine', 0.3);
-        c1.classList.add('matched');
-        c2.classList.add('matched');
-        matches++;
-        
-        const matchesElem = document.getElementById('memoryMatches');
-        if (matchesElem) matchesElem.innerText = `${matches} / ${emojis.length}`;
-        
-        flippedCards = [];
-        if (matches === emojis.length) {
-            setTimeout(() => {
-                playChime([700, 900, 1100], 'triangle');
-                launchConfetti(35);
-                addStars(15);
-                unlockBadge('memoryMaster');
-                showToast(`All matched in ${moves} moves!`, '🧩', 3500);
-            }, 300);
-        }
-    } else {
-        setTimeout(() => {
-            playSound(250);
-            c1.classList.remove('flipped');
-            c2.classList.remove('flipped');
+    if (flippedCards.length === 2) {
+        memoryMoves++;
+        const movesElem = document.getElementById('memoryMoves');
+        if (movesElem) movesElem.innerText = memoryMoves;
+
+        const [c1, c2] = flippedCards;
+        if (c1.dataset.icon === c2.dataset.icon) {
+            playSound(900, 'sine', 0.2);
+            c1.classList.add('matched');
+            c2.classList.add('matched');
+            memoryMatches++;
+
+            const matchesElem = document.getElementById('memoryMatches');
+            if (matchesElem) matchesElem.innerText = `${memoryMatches} / 6`;
+
             flippedCards = [];
-        }, 800);
+
+            if (memoryMatches === 6) {
+                unlockBadge('memoryMaster');
+                addStars(15);
+                launchConfetti(40);
+                setTimeout(() => alert(`🧩 Amazing! Memory match complete in ${memoryMoves} moves!`), 300);
+            }
+        } else {
+            setTimeout(() => {
+                playSound(200, 'sawtooth', 0.2);
+                c1.classList.remove('flipped');
+                c2.classList.remove('flipped');
+                c1.querySelector('.card-inner').innerText = '❓';
+                c2.querySelector('.card-inner').innerText = '❓';
+                flippedCards = [];
+            }, 900);
+        }
     }
 }
 
 // ============================================================
-// SCIENCE LAB
+// LAB EXPERIMENTS CONTROLLER
 // ============================================================
-function toggleStep(el) {
-    playSound(400);
-    el.classList.toggle('completed');
-    checkExperimentComplete(el.closest('.experiment-card'));
-}
-window.toggleStep = toggleStep;
+function toggleStep(element) {
+    playSound(450);
+    element.classList.toggle('completed');
 
-function checkExperimentComplete(card) {
+    const card = element.closest('.experiment-card');
     if (!card) return;
-    
+
     const totalSteps = card.querySelectorAll('.steps-interactive li').length;
-    const done = card.querySelectorAll('.steps-interactive li.completed').length;
-    
-    if (totalSteps > 0 && totalSteps === done) {
-        const titleElem = card.querySelector('h3');
-        const key = titleElem ? titleElem.innerText : 'Experiment';
-        
-        if (!completedExperiments.has(key)) {
-            completedExperiments.add(key);
+    const completedSteps = card.querySelectorAll('.steps-interactive li.completed').length;
+
+    if (totalSteps > 0 && totalSteps === completedSteps) {
+        const title = card.querySelector('h3') ? card.querySelector('h3').innerText : 'Experiment';
+        if (!completedExperiments.has(title)) {
+            completedExperiments.add(title);
             addStars(10);
             unlockBadge('scientist');
-            launchConfetti(30);
-            showToast(`Experiment complete: ${key}!`, '🔬', 3500);
+            launchConfetti(35);
+            showToast(`Experiment Completed: ${title}! 🔬`, '🧪', 3500);
             saveProgress();
         }
     }
 }
-
-// Global expose functions for explicit window calls
-window.showGame = showGame;
-window.initTriviaGame = initTriviaGame;
+window.toggleStep = toggleStep;
 
 // ============================================================
-// INITIALIZATION ON DOM READY
+// APP INITIALIZATION ENTRY POINT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     checkLoginSession();
     renderStoryPage();
-    initTriviaGame();
-});
-
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pausePacmanGame();
+    resetPacmanGame();
 });
