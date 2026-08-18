@@ -6,6 +6,7 @@ import {
     doc, 
     setDoc, 
     getDoc, 
+    deleteDoc, 
     onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -72,6 +73,7 @@ window.addEventListener('keydown', (e) => {
         closeModal();
         closeBadgesModal();
         closeCreateAccountModal();
+        closeAdminPortalModal();
     }
 });
 
@@ -133,6 +135,9 @@ function listenToKidProfiles() {
         });
         populateKidSelect();
         setupUIForSession();
+        if (document.getElementById('adminPortalModal').style.display === 'flex') {
+            renderAdminPortalProfiles();
+        }
     }, (error) => {
         console.error("Firestore sync error:", error);
     });
@@ -218,15 +223,18 @@ window.handleAdminLogin = handleAdminLogin;
 
 function setupUIForSession() {
     const addKidBtn = document.getElementById('addKidBtn');
+    const manageProfilesBtn = document.getElementById('manageProfilesBtn');
     const avatarElem = document.getElementById('activeAvatar');
     const nameElem = document.getElementById('activeName');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
+        if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
     } else {
         if (addKidBtn) addKidBtn.style.display = 'none';
+        if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
         const kid = cachedKidProfiles.find(p => p.id === currentActiveId);
         if (kid) {
             if (avatarElem) avatarElem.innerText = kid.avatar;
@@ -330,6 +338,74 @@ async function handleCreateKidAccount(event) {
     }
 }
 window.handleCreateKidAccount = handleCreateKidAccount;
+
+// ============================================================
+// ADMIN CONSOLE: DELETE KID PROFILES
+// ============================================================
+function openAdminPortalModal() {
+    if (currentRole !== 'admin') {
+        showToast('Only Admin can manage profiles!', '⚠️', 3000);
+        return;
+    }
+    playSound(600);
+    renderAdminPortalProfiles();
+    const modal = document.getElementById('adminPortalModal');
+    if (modal) modal.style.display = 'flex';
+}
+window.openAdminPortalModal = openAdminPortalModal;
+
+function closeAdminPortalModal() {
+    playSound(300);
+    const modal = document.getElementById('adminPortalModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeAdminPortalModal = closeAdminPortalModal;
+
+function closeAdminPortalModalOnBg(e) {
+    if (e.target.id === 'adminPortalModal') closeAdminPortalModal();
+}
+window.closeAdminPortalModalOnBg = closeAdminPortalModalOnBg;
+
+function renderAdminPortalProfiles() {
+    const container = document.getElementById('adminProfilesList');
+    if (!container) return;
+    
+    if (cachedKidProfiles.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No kid profiles created yet.</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    cachedKidProfiles.forEach(p => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color);';
+        
+        div.innerHTML = `
+            <div style="font-weight: 700;">
+                <span style="font-size: 1.2rem; margin-right: 8px;">${p.avatar}</span> ${p.name} <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 6px;">(PIN: ${p.pin})</span>
+            </div>
+            <button class="logout-btn" style="padding: 6px 12px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+async function deleteKidProfile(kidId, kidName) {
+    if (currentRole !== 'admin') return;
+    if (!confirm(`Are you sure you want to permanently delete ${kidName}'s profile?`)) return;
+
+    try {
+        await deleteDoc(doc(db, "kidProfiles", kidId));
+        await deleteDoc(doc(db, "kidProgress", kidId));
+        
+        playSound(300);
+        showToast(`Profile for ${kidName} was deleted.`, '🗑️', 3500);
+    } catch (e) {
+        console.error("Error removing document: ", e);
+        showToast('Error deleting profile from database.', '❌', 3000);
+    }
+}
+window.deleteKidProfile = deleteKidProfile;
 
 // ============================================================
 // REWARDS & SAVE SYSTEM PER PROFILE (FIRESTORE SYNC)
