@@ -156,7 +156,10 @@ function populateKidSelect() {
     });
 }
 
-function handleKidLogin(event) {
+// ============================================================
+// UPDATED: KID LOGIN WITH TIMESTAMP HISTORY TRACKING
+// ============================================================
+async function handleKidLogin(event) {
     if (event) event.preventDefault();
     const kidId = document.getElementById('loginKidSelect').value;
     const pinInput = document.getElementById('loginKidPin').value.trim();
@@ -171,6 +174,17 @@ function handleKidLogin(event) {
 
         currentRole = 'kid';
         currentActiveId = kid.id;
+
+        // Log exact current timestamp and update profile in Firestore
+        const loginTimeISO = new Date().toISOString();
+        try {
+            await setDoc(doc(db, "kidProfiles", kid.id), {
+                lastLogin: loginTimeISO,
+                loginCount: (kid.loginCount || 0) + 1
+            }, { merge: true });
+        } catch (e) {
+            console.error("Failed to record login timestamp:", e);
+        }
 
         if (errorMsg) errorMsg.style.display = "none";
         document.getElementById('loginScreen').classList.add('hidden');
@@ -340,7 +354,7 @@ async function handleCreateKidAccount(event) {
 window.handleCreateKidAccount = handleCreateKidAccount;
 
 // ============================================================
-// ADMIN CONSOLE: DELETE KID PROFILES
+// ADMIN CONSOLE WITH LOGIN TIMESTAMP DISPLAY
 // ============================================================
 function openAdminPortalModal() {
     if (currentRole !== 'admin') {
@@ -378,13 +392,32 @@ function renderAdminPortalProfiles() {
     container.innerHTML = '';
     cachedKidProfiles.forEach(p => {
         const div = document.createElement('div');
-        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color);';
+        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);';
         
+        // Format timestamp string safely
+        let formattedDate = 'Never logged in';
+        if (p.lastLogin) {
+            const dateObj = new Date(p.lastLogin);
+            formattedDate = dateObj.toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
         div.innerHTML = `
-            <div style="font-weight: 700;">
-                <span style="font-size: 1.2rem; margin-right: 8px;">${p.avatar}</span> ${p.name} <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 6px;">(PIN: ${p.pin})</span>
+            <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+                <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-color);">
+                    <span style="font-size: 1.2rem; margin-right: 6px;">${p.avatar}</span> ${p.name} 
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">(PIN: ${p.pin})</span>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                    <span>🕒 Last Login:</span>
+                    <strong style="color: var(--primary-blue-dark); font-weight: 700;">${formattedDate}</strong>
+                </div>
             </div>
-            <button class="logout-btn" style="padding: 6px 12px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
+            <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
         `;
         container.appendChild(div);
     });
