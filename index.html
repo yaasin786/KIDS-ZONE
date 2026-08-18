@@ -390,16 +390,16 @@
         </div>
     </div>
 
-    <!-- NEW Modal Popup: Admin Profile Management Portal (ADMIN ONLY) -->
+    <!-- REWORKED Admin Profile & Activity Management Portal (ADMIN ONLY) -->
     <div id="adminPortalModal" class="modal" onclick="closeAdminPortalModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="adminPortalTitle" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 550px; width: 90%;">
             <button class="close-btn" onclick="closeAdminPortalModal()" aria-label="Close portal">&times;</button>
             <div class="modal-icon">⚙️</div>
-            <h2 id="adminPortalTitle">Admin Profile Console</h2>
-            <p class="badges-subtitle">Manage registered Kid Explorer profiles below. Deleting a profile is permanent.</p>
+            <h2 id="adminPortalTitle">Admin Explorer Console</h2>
+            <p class="badges-subtitle">Manage profiles and view real-time kid login history below.</p>
             
-            <div id="adminProfilesList" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-                <!-- Dynamically Populated List with Delete Buttons -->
+            <div id="adminProfilesList" style="margin-top: 20px; display: flex; flex-direction: column; gap: 14px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                <!-- Dynamically Populated List with Delete Buttons & Login Timestamps -->
             </div>
         </div>
     </div>
