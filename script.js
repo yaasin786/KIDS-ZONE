@@ -1,3 +1,110 @@
+// ============================================================
+// MAURITIUS LEARNING HUB DATA
+// ============================================================
+const mauritiusQuestions = [
+    // ========================================================
+    // LEVEL 1: EASY (Basic Facts, Geography & Culture) - 30 Qs
+    // ========================================================
+    { level: 1, q: "What is the capital city of Mauritius?", options: ["Curepipe", "Port Louis", "Grand Baie", "Rose Hill"], a: 1, icon: "🏙️" },
+    { level: 1, q: "Which famous extinct flightless bird was endemic to Mauritius?", options: ["Kiwi", "Dodo", "Moa", "Penguin"], a: 1, icon: "🦤" },
+    { level: 1, q: "What are the four colors of the Mauritian national flag?", options: ["Red, Blue, Yellow, Green", "Green, White, Red, Blue", "Red, White, Blue, Yellow", "Yellow, Black, Red, Green"], a: 0, icon: "🇲🇺" },
+    { level: 1, q: "In which ocean is Mauritius located?", options: ["Atlantic Ocean", "Pacific Ocean", "Indian Ocean", "Arctic Ocean"], a: 2, icon: "🌊" },
+    { level: 1, q: "In what year did Mauritius gain its independence?", options: ["1968", "1950", "1982", "1992"], a: 0, icon: "🎉" },
+    { level: 1, q: "What is the official currency used in Mauritius?", options: ["Euro", "Dollar", "Mauritian Rupee", "Franc"], a: 2, icon: "🪙" },
+    { level: 1, q: "Which traditional music and dance form originated in Mauritius?", options: ["Sega", "Reggae", "Salsa", "Samba"], a: 0, icon: "💃" },
+    { level: 1, q: "Which island dependency lies roughly 560 km east of main Mauritius?", options: ["Réunion", "Rodrigues", "Madagascar", "Seychelles"], a: 1, icon: "🏝️" },
+    { level: 1, q: "Which famous natural site features multi-colored volcanic earth?", options: ["Black River Gorges", "Chamarel Seven Coloured Earth", "Trou aux Cerfs", "Le Morne"], a: 1, icon: "🌈" },
+    { level: 1, q: "Which crop historically dominated agriculture across Mauritius?", options: ["Rice", "Sugarcane", "Wheat", "Cotton"], a: 1, icon: "🌾" },
+    { level: 1, q: "Which animal is depicted on the left side of the Mauritian Coat of Arms?", options: ["Lion", "Dodo", "Tiger", "Deer"], a: 1, icon: "🛡️" },
+    { level: 1, q: "Which animal is depicted on the right side of the Mauritian Coat of Arms?", options: ["Sambar Deer", "Leopard", "Horse", "Dolphin"], a: 0, icon: "🦌" },
+    { level: 1, q: "What primary language is most widely spoken in daily conversation across Mauritius?", options: ["English", "French", "Mauritian Creole", "Hindi"], a: 2, icon: "🗣️" },
+    { level: 1, q: "What major international airport serves Mauritius?", options: ["Sir Seewoosagur Ramgoolam International Airport", "Roland Garros Airport", "Ivato Airport", "Plaisance International Airport"], a: 0, icon: "✈️" },
+    { level: 1, q: "What is the national flower of Mauritius?", options: ["Trochetia boutoniana", "Hibiscus", "Lotus", "Orchid"], a: 0, icon: "🌺" },
+    { level: 1, q: "Which month is Mauritian Independence Day celebrated every year?", options: ["January 1", "March 12", "July 14", "December 25"], a: 1, icon: "📅" },
+    { level: 1, q: "What mountain shape resembles a head looking at the sky near Port Louis?", options: ["Le Pouce", "Pieter Both", "Corps de Garde", "Le Morne"], a: 0, icon: "🖐️" },
+    { level: 1, q: "Which popular beach destination in the north is known for aquatic activities?", options: ["Grand Baie", "Curepipe", "Vacoas", "Moka"], a: 0, icon: "🏖️" },
+    { level: 1, q: "What island off the east coast is famous for turquoise waters and water sports?", options: ["Île aux Cerfs", "Île aux Aigrettes", "Flat Island", "Coin de Mire"], a: 0, icon: "⛵" },
+    { level: 1, q: "Which nature reserve island is protected by the Mauritian Wildlife Foundation?", options: ["Île aux Aigrettes", "Île aux Cerfs", "Round Island", "Gunner's Quoin"], a: 0, icon: "🐢" },
+    { level: 1, q: "What type of climate does Mauritius experience?", options: ["Tropical", "Arctic", "Desert", "Mediterranean"], a: 0, icon: "☀️" },
+    { level: 1, q: "What major body of water surrounds the island's coastline?", options: ["Barrier Reef Lagoon", "Fjord System", "Bay of Bengal", "Red Sea"], a: 0, icon: "🐠" },
+    { level: 1, q: "Which street food snack consists of fried split-pea cakes?", options: ["Dholl Puri", "Gâteau Piment", "Samoussa", "Mine Frit"], a: 1, icon: "🧆" },
+    { level: 1, q: "What flatbread filled with yellow split peas is widely considered the national street food?", options: ["Roti", "Dholl Puri", "Naan", "Farata"], a: 1, icon: "🌯" },
+    { level: 1, q: "In which hemisphere is Mauritius located?", options: ["Northern Hemisphere", "Southern Hemisphere", "Western Hemisphere only", "North Pole"], a: 1, icon: "🌐" },
+    { level: 1, q: "What is the tallest mountain peak in Mauritius?", options: ["Piton de la Petite Rivière Noire", "Pieter Both", "Le Pouce", "Le Morne"], a: 0, icon: "🏔️" },
+    { level: 1, q: "Which public holiday celebrates the arrival of indentured laborers in Mauritius?", options: ["Aapravasi Ghat Day (Nov 2)", "Labor Day", "Republic Day", "Emancipation Day"], a: 0, icon: "⚓" },
+    { level: 1, q: "Which religious festival of lights is widely celebrated across the island?", options: ["Diwali", "Eid", "Cavadee", "Maha Shivaratri"], a: 0, icon: "🪔" },
+    { level: 1, q: "What sacred lake in Grand Bassin is dedicated to Lord Shiva?", options: ["Ganga Talao", "Trou aux Cerfs", "Mare aux Vacoas", "Bassin Blanc"], a: 0, icon: "🕉️" },
+    { level: 1, q: "What is the driving side of the road in Mauritius?", options: ["Left side", "Right side", "Center", "Either side"], a: 0, icon: "🚗" },
+
+    // ========================================================
+    // LEVEL 2: MEDIUM (Colonial Eras, Leaders & Culture) - 30 Qs
+    // ========================================================
+    { level: 2, q: "Which European power was the first to establish a permanent settlement in 1598?", options: ["French", "British", "Dutch", "Portuguese"], a: 2, icon: "⛵" },
+    { level: 2, q: "Which French Governor developed Port Louis into a major naval port?", options: ["Mahé de La Bourdonnais", "Charles Decaen", "Pierre Poivre", "Robert Farquhar"], a: 0, icon: "🏛️" },
+    { level: 2, q: "Who is revered as the 'Father of the Nation' in Mauritius?", options: ["Sir Gaëtan Duval", "Sir Seewoosagur Ramgoolam", "Aapravasi Ghat", "Emmanuel Anquetil"], a: 1, icon: "👑" },
+    { level: 2, q: "In which year did Mauritius officially transition into a Republic?", options: ["1968", "1975", "1992", "2000"], a: 2, icon: "📜" },
+    { level: 2, q: "What historic site marks the landing point of Indian indentured laborers?", options: ["Le Morne Brabant", "Aapravasi Ghat", "Eureka House", "Château de Labourdonnais"], a: 1, icon: "🧱" },
+    { level: 2, q: "What name was given to Mauritius during French colonial administration?", options: ["Isle de France", "Île Bourbon", "Dina Arobi", "New Holland"], a: 0, icon: "🇫🇷" },
+    { level: 2, q: "Who served as the first British Governor of Mauritius starting in 1810?", options: ["Sir Robert Farquhar", "Sir John Shaw", "Lord William Bentinck", "Sir Colville Barclay"], a: 0, icon: "🎩" },
+    { level: 2, q: "Which dormant volcanic crater is located in the town of Curepipe?", options: ["Le Pouce", "Trou aux Cerfs", "Pieter Both", "Mont Piton"], a: 1, icon: "🌋" },
+    { level: 2, q: "Who became the first female President of Mauritius in 2015?", options: ["Monique Ohsan Bellepeau", "Ameenah Gurib-Fakim", "Navin Ramgoolam", "Maya Hanoomanjee"], a: 1, icon: "👩‍💼" },
+    { level: 2, q: "Which mountain is famous for the large rock balanced precariously on its summit?", options: ["Le Morne Brabant", "Pieter Both", "Corps de Garde", "Moka Range"], a: 1, icon: "🏔️" },
+    { level: 2, q: "In what year did the Dutch permanently abandon Mauritius?", options: ["1710", "1658", "1750", "1810"], a: 0, icon: "🏚️" },
+    { level: 2, q: "Which French Governor established the famous Pamplemousses Botanical Garden?", options: ["Mahé de La Bourdonnais", "Pierre Poivre", "Charles Decaen", "Pierre Félix Bart"], a: 1, icon: "🌱" },
+    { level: 2, q: "What giant water lily species is famous at the Sir Seewoosagur Ramgoolam Botanical Garden?", options: ["Victoria amazonica", "Lotus flower", "Water Hyacinth", "Nymphaea caerulea"], a: 0, icon: "🪷" },
+    { level: 2, q: "What historic event occurred on February 1, 1835 in Mauritius?", options: ["Abolition of Slavery", "Arrival of First Dutch Ship", "Independence Proclamation", "Battle of Grand Port"], a: 0, icon: "🕊️" },
+    { level: 2, q: "Which political leader led the Movement Républicain and served as Prime Minister from 2000-2003?", options: ["Sir Anerood Jugnauth", "Paul Bérenger", "Navin Ramgoolam", "Pravind Jugnauth"], a: 0, icon: "👔" },
+    { level: 2, q: "Who was the only non-Hindu Prime Minister of Mauritius (serving 2003-2005)?", options: ["Sir Gaëtan Duval", "Paul Bérenger", "Xavier-Luc Duval", "Maurice Curé"], a: 1, icon: "🏛️" },
+    { level: 2, q: "Which historic building in Port Louis serves as the official seat of Parliament?", options: ["Government House", "The Citadel", "State House", "Plaza Theatre"], a: 0, icon: "🏛️" },
+    { level: 2, q: "What military fort built by the British overlooks the harbor of Port Louis?", options: ["Fort Adelaide (The Citadel)", "Fort Victoria", "Fort George", "Fort William"], a: 0, icon: "🏰" },
+    { level: 2, q: "Which primary trade agreement boosted the Mauritian textile industry in the late 20th century?", options: ["Lomé Convention", "NAFTA", "ASEAN", "MERCOSUR"], a: 0, icon: "🏭" },
+    { level: 2, q: "What is the largest natural reservoir in Mauritius?", options: ["Mare aux Vacoas", "La Nicolière", "Piton du Milieu", "Ferme Reservoir"], a: 0, icon: "💧" },
+    { level: 2, q: "Which outer island territory of Mauritius was detached by the UK in 1965 prior to independence?", options: ["Chagos Archipelago", "Rodrigues", "Agaléga", "Tromelin"], a: 0, icon: "🗺️" },
+    { level: 2, q: "What twin islands form a small dependency of Mauritius about 1,000 km north of Port Louis?", options: ["Agaléga", "Chagos", "Cargados Carajos", "Rodrigues"], a: 0, icon: "🏝️" },
+    { level: 2, q: "What archipelago of low-lying shoals and islets is managed by Mauritius for fishing?", options: ["St. Brandon (Cargados Carajos)", "Aldabra", "Farquhar", "Amirante"], a: 0, icon: "🐟" },
+    { level: 2, q: "Which famous French author wrote 'Paul et Virginie', setting it in Mauritius?", options: ["Jacques-Henri Bernardin de Saint-Pierre", "Victor Hugo", "Alexandre Dumas", "Gustave Flaubert"], a: 0, icon: "📚" },
+    { level: 2, q: "Which color on the Mauritian flag represents the struggle for freedom and independence?", options: ["Red", "Blue", "Yellow", "Green"], a: 0, icon: "🔴" },
+    { level: 2, q: "Which color on the flag represents the Indian Ocean surrounding the island?", options: ["Red", "Blue", "Yellow", "Green"], a: 1, icon: "🔵" },
+    { level: 2, q: "Which color on the flag represents the light of independence shining over the island?", options: ["Red", "Blue", "Yellow", "Green"], a: 2, icon: "🟡" },
+    { level: 2, q: "Which color on the flag represents the agriculture and lush vegetation of Mauritius?", options: ["Red", "Blue", "Yellow", "Green"], a: 3, icon: "🟢" },
+    { level: 2, q: "What trade system brought over 400,000 laborers from India between 1834 and 1920?", options: ["Indentured Labor System", "Slave Trade", "Free Migration", "Feudal System"], a: 0, icon: "⛓️" },
+    { level: 2, q: "Which constitutional court in the UK remains the highest court of appeal for Mauritius?", options: ["Judicial Committee of the Privy Council", "Supreme Court of the UK", "European Court of Human Rights", "International Court of Justice"], a: 0, icon: "⚖️" },
+
+    // ========================================================
+    // LEVEL 3: HARD (Deep History, Battles & Rare Knowledge) - 30 Qs
+    // ========================================================
+    { level: 3, q: "In what year did the French victory occur at the naval Battle of Grand Port?", options: ["1810", "1795", "1835", "1868"], a: 0, icon: "⚔️" },
+    { level: 3, q: "Which mountain was a sanctuary for runaway enslaved people known as maroons?", options: ["Trou aux Cerfs", "Le Morne Brabant", "Black River Peak", "Pieter Both"], a: 1, icon: "⛰️" },
+    { level: 3, q: "Which French botanist successfully smuggled nutmeg and clove trees into Mauritius?", options: ["Pierre Poivre", "Bernardin de Saint-Pierre", "Louis Antoine de Bougainville", "Charles Telfair"], a: 0, icon: "🌿" },
+    { level: 3, q: "Under British rule, in which year was slavery officially abolished in Mauritius?", options: ["1810", "1835", "1848", "1865"], a: 1, icon: "🕊️" },
+    { level: 3, q: "What name was assigned to Mauritius by Arab navigators in the 10th century?", options: ["Isle de France", "Dina Arobi", "Cerne", "Cirne"], a: 1, icon: "🗺️" },
+    { level: 3, q: "Which treaty formally ceded Mauritius to Great Britain in 1814?", options: ["Treaty of Versailles", "Treaty of Paris", "Treaty of Utrecht", "Treaty of Vienna"], a: 1, icon: "📜" },
+    { level: 3, q: "After whom was Mauritius named by Dutch Commander Wybrand van Warwijck in 1598?", options: ["Prince Maurice of Nassau", "St. Maurice", "Emperor Maurice", "Maurice de Saxe"], a: 0, icon: "👑" },
+    { level: 3, q: "In what year did the French ship 'Saint-Géran' shipwreck, inspiring the novel 'Paul et Virginie'?", options: ["1744", "1810", "1698", "1789"], a: 0, icon: "⚓" },
+    { level: 3, q: "In what year did British forces land at Cap Malheureux to invade the island?", options: ["1810", "1805", "1815", "1799"], a: 0, icon: "🪖" },
+    { level: 3, q: "What was the name of the French Governor who surrendered Mauritius to the British in 1810?", options: ["Charles Decaen", "Mahé de La Bourdonnais", "Pierre Poivre", "Isidore de Souillac"], a: 0, icon: "🏳️" },
+    { level: 3, q: "Which Portuguese explorer first sighted the Mascarene islands around 1507-1513?", options: ["Pedro Mascarenhas", "Vasco da Gama", "Ferdinand Magellan", "Diogo Cão"], a: 0, icon: "🧭" },
+    { level: 3, q: "What name did Portuguese sailors mark on maps for Mauritius prior to Dutch settlement?", options: ["Cirne", "Dina Arobi", "Ilha da Franca", "San Sebastiano"], a: 0, icon: "🗺️" },
+    { level: 3, q: "Which treaty ending the Napoleonic Wars allowed French settlers to retain their language and laws in Mauritius?", options: ["Treaty of Paris (1814)", "Treaty of Amiens", "Congress of Vienna", "Treaty of Ghent"], a: 0, icon: "⚖️" },
+    { level: 3, q: "In what year was the Mauritius Labour Party founded by Dr. Maurice Curé?", options: ["1936", "1948", "1922", "1958"], a: 0, icon: "🏛️" },
+    { level: 3, q: "Who was the legendary Maroon leader associated with resistance at Le Morne?", options: ["King Zouline", "Madame Francoise", "Ratsitatane", "Barbe Blanche"], a: 0, icon: "🛡️" },
+    { level: 3, q: "Which Malagasy prince was exiled to Mauritius and executed in 1822 after leading a revolt?", options: ["Ratsitatane", "Radama I", "Andrianampoinimerina", "Rainilaiarivony"], a: 0, icon: "👑" },
+    { level: 3, q: "In what year were the Mauritius Penny Black and Penny Red stamps issued?", options: ["1847", "1840", "1855", "1862"], a: 0, icon: "📮" },
+    { level: 3, q: "Which rare stamp wording error makes the 1847 Mauritius stamps world-famous?", options: ["'Post Office' instead of 'Post Paid'", "'Postage Free' instead of 'Post Office'", "'British Mauritius' instead of 'Mauritius'", "'Royal Mail' instead of 'Post Office'"], a: 0, icon: "✉️" },
+    { level: 3, q: "Who was the British Governor's wife who hosted the ball requiring the famous 1847 stamps?", options: ["Lady Elizabeth Gomm", "Lady Farquhar", "Lady Barkly", "Lady Gordon"], a: 0, icon: "💃" },
+    { level: 3, q: "Which epidemic devastated Port Louis in 1867, killing over 40,000 residents?", options: ["Malaria", "Cholera", "Bubonic Plague", "Yellow Fever"], a: 0, icon: "🦟" },
+    { level: 3, q: "In what year did Mahatma Gandhi visit Mauritius, encouraging education and political engagement?", options: ["1901", "1915", "1893", "1925"], a: 0, icon: "👓" },
+    { level: 3, q: "Who was the Indian lawyer sent by Mahatma Gandhi in 1907 to represent workers in Mauritius?", options: ["Manilal Doctor", "Gopal Krishna Gokhale", "B. R. Ambedkar", "Jawaharlal Nehru"], a: 0, icon: "⚖️" },
+    { level: 3, q: "Which agreement signed in 1965 led to the detachment of the Chagos Archipelago?", options: ["Lancaster House Agreement", "Port Louis Accord", "London Pact", "Diego Garcia Treaty"], a: 0, icon: "📜" },
+    { level: 3, q: "In what year did the U.N. International Court of Justice rule that the UK's detachment of Chagos was unlawful?", options: ["2019", "2010", "2005", "2022"], a: 0, icon: "🏛️" },
+    { level: 3, q: "Which endemic reptile species was saved from extinction on Round Island?", options: ["Round Island Boa", "Komodo Dragon", "Aldabra Tortoise", "Chameleon"], a: 0, icon: "🐍" },
+    { level: 3, q: "What rare endemic bird species was brought back from fewer than 10 individuals in the 1970s?", options: ["Mauritius Kestrel", "Pink Pigeon", "Echo Parakeet", "Dodo"], a: 0, icon: "🦅" },
+    { level: 3, q: "Who was the famous biologist who led conservation efforts for the Mauritius Kestrel?", options: ["Carl Jones", "Gerald Durrell", "David Attenborough", "Jane Goodall"], a: 0, icon: "🌿" },
+    { level: 3, q: "What is the name of the oldest racecourse in the Southern Hemisphere, located in Port Louis?", options: ["Champ de Mars", "Ascot", "Longchamp", "Flemington"], a: 0, icon: "🏇" },
+    { level: 3, q: "In what year was the Champ de Mars racecourse founded in Port Louis?", options: ["1812", "1835", "1850", "1790"], a: 0, icon: "🏁" },
+    { level: 3, q: "Which major constitutional reform introduced universal adult suffrage in Mauritius?", options: ["1948 Constitution", "1958 Constitution", "1968 Act", "1936 Reform"], a: 1, icon: "🗳️" }
+];
+
 // Import Firebase Firestore SDK modules
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
@@ -10,7 +117,9 @@ import {
     onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// Firebase Web App configuration object
+// ============================================================
+// FIREBASE CONFIGURATION & INITIALIZATION
+// ============================================================
 const firebaseConfig = {
     apiKey: "AIzaSyDprgTd5C-H8vq18OHSCyCdgG08KLsEgDs",
     authDomain: "kidzoneapp-3a074.firebaseapp.com",
@@ -21,7 +130,6 @@ const firebaseConfig = {
     measurementId: "G-Y8NGVL88QV"
 };
 
-// Initialize Firebase & Firestore Database
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -29,44 +137,68 @@ const db = getFirestore(app);
 let cachedKidProfiles = [];
 
 // ============================================================
-// SOUND EFFECTS ENGINE & AUDIO CONTEXT ACTIVATION
+// AUDIO & SOUND EFFECTS ENGINE
 // ============================================================
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = AudioCtx ? new AudioCtx() : null;
 
 function unlockAudio() {
-    if (audioCtx.state === 'suspended') {
+    if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
 }
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 document.addEventListener('keydown', unlockAudio, { once: true });
 
-function playSound(freq, type = 'sine', duration = 0.1) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+function playSound(freq, type = 'sine', duration = 0.15) {
+    try {
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {
+        // Fallback for browser audio restrictions
+    }
 }
 
 function playChime(notes, type = 'triangle') {
-    notes.forEach((freq, i) => {
-        setTimeout(() => playSound(freq, type, 0.25), i * 120);
+    notes.forEach((freq, index) => {
+        setTimeout(() => playSound(freq, type, 0.3), index * 120);
     });
 }
 
-// Global expose for inline HTML event handlers
+function speakText(customText = null, lang = 'en-US') {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const text = customText || (stories[currentStoryKey] ? stories[currentStoryKey].pages[currentStoryPage].text : '');
+        if (!text) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.pitch = 1.2;
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
+// Global window exposure for inline HTML handlers
 window.playSound = playSound;
 window.playChime = playChime;
+window.speakText = speakText;
 
 // ============================================================
-// GLOBAL KEYBOARD & ACCESSIBILITY HANDLERS
+// GLOBAL ACCESSIBILITY & TOASTS/CONFETTI
 // ============================================================
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -77,8 +209,44 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+function showToast(message, icon = '🎉', duration = 3000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${message}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    }, duration);
+}
+
+const CONFETTI_EMOJI = ['🎉', '⭐', '✨', '🎈', '🥳', '💥'];
+function launchConfetti(count = 20) {
+    const container = document.getElementById('confettiContainer');
+    if (!container) {
+        console.log(`🎉 Launched ${count} confetti particles!`);
+        return;
+    }
+
+    for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.innerText = CONFETTI_EMOJI[Math.floor(Math.random() * CONFETTI_EMOJI.length)];
+        piece.style.left = `${Math.random() * 100}vw`;
+        piece.style.fontSize = `${16 + Math.random() * 16}px`;
+        piece.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
+        piece.style.animationDelay = `${Math.random() * 0.4}s`;
+        container.appendChild(piece);
+        setTimeout(() => piece.remove(), 3800);
+    }
+}
+
 // ============================================================
-// STRICT ADMIN & KID AUTHENTICATION SYSTEM
+// AUTHENTICATION & PROFILE SYSTEM
 // ============================================================
 const ADMIN_EMAIL = "yaasin@gmail.com";
 const ADMIN_PASS = "yaasin786";
@@ -94,16 +262,16 @@ function toggleLoginType(type) {
     const tabAdmin = document.getElementById('tabAdminLogin');
 
     if (type === 'kid') {
-        kidForm.style.display = 'block';
-        adminForm.style.display = 'none';
-        tabKid.classList.add('active');
-        tabAdmin.classList.remove('active');
+        if (kidForm) kidForm.style.display = 'block';
+        if (adminForm) adminForm.style.display = 'none';
+        if (tabKid) tabKid.classList.add('active');
+        if (tabAdmin) tabAdmin.classList.remove('active');
         populateKidSelect();
     } else {
-        kidForm.style.display = 'none';
-        adminForm.style.display = 'block';
-        tabKid.classList.remove('active');
-        tabAdmin.classList.add('active');
+        if (kidForm) kidForm.style.display = 'none';
+        if (adminForm) adminForm.style.display = 'block';
+        if (tabKid) tabKid.classList.remove('active');
+        if (tabAdmin) tabAdmin.classList.add('active');
     }
 }
 window.toggleLoginType = toggleLoginType;
@@ -126,7 +294,6 @@ function checkLoginSession() {
     }
 }
 
-// Realtime sync from Firestore collection for mobile/cross-device profile display
 function listenToKidProfiles() {
     onSnapshot(collection(db, "kidProfiles"), (snapshot) => {
         cachedKidProfiles = [];
@@ -135,7 +302,8 @@ function listenToKidProfiles() {
         });
         populateKidSelect();
         setupUIForSession();
-        if (document.getElementById('adminPortalModal').style.display === 'flex') {
+        const adminModal = document.getElementById('adminPortalModal');
+        if (adminModal && adminModal.style.display === 'flex') {
             renderAdminPortalProfiles();
         }
     }, (error) => {
@@ -156,13 +324,14 @@ function populateKidSelect() {
     });
 }
 
-// ============================================================
-// UPDATED: KID LOGIN WITH TIMESTAMP HISTORY TRACKING
-// ============================================================
 async function handleKidLogin(event) {
     if (event) event.preventDefault();
-    const kidId = document.getElementById('loginKidSelect').value;
-    const pinInput = document.getElementById('loginKidPin').value.trim();
+    const selectElem = document.getElementById('loginKidSelect');
+    const pinElem = document.getElementById('loginKidPin');
+    if (!selectElem || !pinElem) return;
+
+    const kidId = selectElem.value;
+    const pinInput = pinElem.value.trim();
     const errorMsg = document.getElementById('kidLoginErrorMsg');
 
     const kid = cachedKidProfiles.find(p => p.id === kidId);
@@ -175,7 +344,6 @@ async function handleKidLogin(event) {
         currentRole = 'kid';
         currentActiveId = kid.id;
 
-        // Log exact current timestamp and update profile in Firestore
         const loginTimeISO = new Date().toISOString();
         try {
             await setDoc(doc(db, "kidProfiles", kid.id), {
@@ -187,7 +355,8 @@ async function handleKidLogin(event) {
         }
 
         if (errorMsg) errorMsg.style.display = "none";
-        document.getElementById('loginScreen').classList.add('hidden');
+        const loginOverlay = document.getElementById('loginScreen');
+        if (loginOverlay) loginOverlay.classList.add('hidden');
         
         setupUIForSession();
         loadProgress();
@@ -206,8 +375,12 @@ window.handleKidLogin = handleKidLogin;
 
 function handleAdminLogin(event) {
     if (event) event.preventDefault();
-    const email = document.getElementById('adminEmail').value.trim().toLowerCase();
-    const password = document.getElementById('adminPassword').value.trim();
+    const emailElem = document.getElementById('adminEmail');
+    const passElem = document.getElementById('adminPassword');
+    if (!emailElem || !passElem) return;
+
+    const email = emailElem.value.trim().toLowerCase();
+    const password = passElem.value.trim();
     const errorMsg = document.getElementById('adminLoginErrorMsg');
 
     if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
@@ -219,7 +392,8 @@ function handleAdminLogin(event) {
         currentActiveId = 'admin_yaasin';
 
         if (errorMsg) errorMsg.style.display = "none";
-        document.getElementById('loginScreen').classList.add('hidden');
+        const loginOverlay = document.getElementById('loginScreen');
+        if (loginOverlay) loginOverlay.classList.add('hidden');
 
         setupUIForSession();
         loadProgress();
@@ -266,8 +440,10 @@ function handleLogout() {
     currentRole = null;
     currentActiveId = null;
 
-    document.getElementById('loginKidPin').value = '';
-    document.getElementById('adminPassword').value = '';
+    const pinElem = document.getElementById('loginKidPin');
+    const passElem = document.getElementById('adminPassword');
+    if (pinElem) pinElem.value = '';
+    if (passElem) passElem.value = '';
     
     const loginOverlay = document.getElementById('loginScreen');
     if (loginOverlay) loginOverlay.classList.remove('hidden');
@@ -278,7 +454,7 @@ function handleLogout() {
 window.handleLogout = handleLogout;
 
 // ============================================================
-// ADMIN CREATES KID PROFILES (CLOUD SAVE TO FIRESTORE)
+// ADMIN MODAL & PROFILE MANAGEMENT
 // ============================================================
 let selectedAvatar = '🚀';
 
@@ -353,9 +529,6 @@ async function handleCreateKidAccount(event) {
 }
 window.handleCreateKidAccount = handleCreateKidAccount;
 
-// ============================================================
-// ADMIN CONSOLE WITH LOGIN TIMESTAMP DISPLAY
-// ============================================================
 function openAdminPortalModal() {
     if (currentRole !== 'admin') {
         showToast('Only Admin can manage profiles!', '⚠️', 3000);
@@ -394,7 +567,6 @@ function renderAdminPortalProfiles() {
         const div = document.createElement('div');
         div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);';
         
-        // Format timestamp string safely
         let formattedDate = 'Never logged in';
         if (p.lastLogin) {
             const dateObj = new Date(p.lastLogin);
@@ -441,9 +613,9 @@ async function deleteKidProfile(kidId, kidName) {
 window.deleteKidProfile = deleteKidProfile;
 
 // ============================================================
-// REWARDS & SAVE SYSTEM PER PROFILE (FIRESTORE SYNC)
+// PROGRESS TRACKING & BADGES SYSTEM
 // ============================================================
-let stars = 0;
+let userStars = 0;
 let level = 1;
 let unlockedBadges = new Set();
 let factsViewed = new Set();
@@ -467,7 +639,7 @@ async function saveProgress() {
     if (!currentActiveId) return;
     try {
         const data = {
-            stars,
+            stars: userStars,
             level,
             badges: [...unlockedBadges],
             factsViewed: [...factsViewed],
@@ -487,7 +659,7 @@ async function loadProgress() {
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
-            stars = 0;
+            userStars = 0;
             level = 1;
             unlockedBadges = new Set();
             factsViewed = new Set();
@@ -498,7 +670,7 @@ async function loadProgress() {
         }
         
         const d = docSnap.data();
-        stars = d.stars || 0;
+        userStars = d.stars || 0;
         level = d.level || 1;
         unlockedBadges = new Set(d.badges || []);
         factsViewed = new Set(d.factsViewed || []);
@@ -512,31 +684,32 @@ async function loadProgress() {
 }
 
 function updateStatsDisplay() {
-    const starElem = document.getElementById('starCount');
+    const starElem = document.getElementById('starCount') || document.getElementById('star-count');
     const levelElem = document.getElementById('levelCount');
     const badgeElem = document.getElementById('badgeCount');
     const xpBar = document.getElementById('xpBarFill');
 
-    if (starElem) starElem.innerText = stars;
+    if (starElem) starElem.innerText = userStars;
     if (levelElem) levelElem.innerText = level;
     if (badgeElem) badgeElem.innerText = unlockedBadges.size;
 
     if (xpBar) {
-        const starsIntoLevel = stars % 50;
+        const starsIntoLevel = userStars % 50;
         xpBar.style.width = `${(starsIntoLevel / 50) * 100}%`;
     }
 }
 
 function addStars(amount) {
-    stars += amount;
+    userStars += amount;
     checkLevelUp();
-    if (stars >= 100) unlockBadge('superstar');
+    if (userStars >= 100) unlockBadge('superstar');
     updateStatsDisplay();
     saveProgress();
 }
+window.addStars = addStars;
 
 function checkLevelUp() {
-    const newLevel = Math.floor(stars / 50) + 1;
+    const newLevel = Math.floor(userStars / 50) + 1;
     if (newLevel > level) {
         level = newLevel;
         showToast(`Level Up! You're now Level ${level}! 🚀`, '⬆️', 3500);
@@ -557,40 +730,6 @@ function unlockBadge(id) {
     renderBadgesGrid();
 }
 
-// --- Toasts & Confetti ---
-function showToast(message, icon = '🎉', duration = 3000) {
-    const container = document.getElementById('toastContainer');
-    if (!container) return;
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${message}</span>`;
-    container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 400);
-    }, duration);
-}
-
-const CONFETTI_EMOJI = ['🎉', '⭐', '✨', '🎈', '🥳', '💥'];
-function launchConfetti(count = 30) {
-    const container = document.getElementById('confettiContainer');
-    if (!container) return;
-
-    for (let i = 0; i < count; i++) {
-        const piece = document.createElement('div');
-        piece.className = 'confetti-piece';
-        piece.innerText = CONFETTI_EMOJI[Math.floor(Math.random() * CONFETTI_EMOJI.length)];
-        piece.style.left = `${Math.random() * 100}vw`;
-        piece.style.fontSize = `${16 + Math.random() * 16}px`;
-        piece.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
-        piece.style.animationDelay = `${Math.random() * 0.4}s`;
-        container.appendChild(piece);
-        setTimeout(() => piece.remove(), 3800);
-    }
-}
-
 function renderBadgesGrid() {
     const grid = document.getElementById('badgesGrid');
     if (!grid) return;
@@ -602,7 +741,7 @@ function renderBadgesGrid() {
         const slot = document.createElement('div');
         slot.className = `badge-slot ${unlocked ? 'unlocked' : 'locked'}`;
         slot.innerHTML = `
-            <div class="badge-icon">${unlocked ? b.icon : '❔'}</div>
+            <div class="badge-icon">${unlocked ? b.icon : '🔒'}</div>
             <div class="badge-name">${unlocked ? b.name : '???'}</div>
             <div class="badge-desc">${unlocked ? b.desc : 'Keep exploring to unlock!'}</div>
         `;
@@ -653,7 +792,7 @@ function mascotSpeak() {
 window.mascotSpeak = mascotSpeak;
 
 // ============================================================
-// TAB SWITCHING
+// NAVIGATION & TAB CONTROLLERS
 // ============================================================
 function switchTab(tabId, evt) {
     playSound(440);
@@ -667,7 +806,7 @@ function switchTab(tabId, evt) {
 
     const targetTab = document.getElementById(tabId);
     if (targetTab) targetTab.classList.add('active');
-    if (evt) evt.currentTarget.classList.add('active');
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
 
     if (tabId === 'games') {
         initDuoGame();
@@ -675,9 +814,45 @@ function switchTab(tabId, evt) {
 }
 window.switchTab = switchTab;
 
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pausePacmanGame();
-});
+function showGame(gameId, evt) {
+    playSound(450);
+    const tabs = document.querySelectorAll('.game-tab-btn');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+    }
+
+    if (gameId !== 'pacman-game') {
+        pausePacmanGame();
+    }
+
+    // Modern Hub Views & Legacy Views Toggle
+    const duo = document.getElementById('duo-game');
+    const math = document.getElementById('math-game');
+    const quiz = document.getElementById('quiz-game');
+    const pacman = document.getElementById('pacman-game');
+    const memory = document.getElementById('memory-match');
+    const trivia = document.getElementById('trivia-game');
+    const mauritius = document.getElementById('mauritius-game');
+
+    if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
+    if (math) math.style.display = (gameId === 'math-game') ? 'block' : 'none';
+    if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
+    if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
+    if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
+    if (trivia) trivia.style.display = (gameId === 'trivia-game') ? 'block' : 'none';
+    if (mauritius) mauritius.style.display = (gameId === 'mauritius-game') ? 'block' : 'none';
+
+    // Game initializations
+    if (gameId === 'duo-game') initDuoGame();
+    if (gameId === 'math-game') initMathGame();
+    if (gameId === 'quiz-game') initQuiz();
+    if (gameId === 'memory-match') initMemoryGame();
+    if (gameId === 'pacman-game' && !pacInterval) initPacmanGame();
+    if (gameId === 'trivia-game') initTriviaGame();
+    if (gameId === 'mauritius-game') initMauritiusGame();
+}
+window.showGame = showGame;
 
 // ============================================================
 // ENCYCLOPEDIA
@@ -742,7 +917,7 @@ window.filterEncyclopedia = filterEncyclopedia;
 function filterCategory(cat, evt) {
     playSound(520);
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    if (evt) evt.currentTarget.classList.add('active');
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
 
     const cards = document.querySelectorAll('#encyGrid .card');
     cards.forEach(card => {
@@ -853,7 +1028,7 @@ function selectStory(key, evt) {
     currentStoryKey = key;
     currentStoryPage = 0;
     document.querySelectorAll('.story-btn').forEach(btn => btn.classList.remove('active'));
-    if (evt) evt.currentTarget.classList.add('active');
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
     renderStoryPage();
 }
 window.selectStory = selectStory;
@@ -923,7 +1098,6 @@ function changePage(delta) {
     playSound(500);
     currentStoryPage += delta;
     
-    // Dynamic logic for Snow White story branches
     if (currentStoryKey === 'snowwhite') {
         if (currentStoryPage === 5 && delta === 1) currentStoryPage = 6;
         if (currentStoryPage === 12 && delta === 1) currentStoryPage = 13;
@@ -933,53 +1107,8 @@ function changePage(delta) {
 }
 window.changePage = changePage;
 
-function speakText(customText = null, lang = 'en-US') {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const text = customText || stories[currentStoryKey].pages[currentStoryPage].text;
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang;
-        utterance.pitch = 1.2;
-        utterance.rate = 0.9;
-        window.speechSynthesis.speak(utterance);
-    }
-}
-window.speakText = speakText;
-
 // ============================================================
-// GAME SELECTOR
-// ============================================================
-function showGame(gameId, evt) {
-    playSound(450);
-    document.querySelectorAll('.game-tab-btn').forEach(b => b.classList.remove('active'));
-    if (evt) evt.currentTarget.classList.add('active');
-
-    if (gameId !== 'pacman-game') {
-        pausePacmanGame();
-    }
-
-    const duo = document.getElementById('duo-game');
-    const math = document.getElementById('math-game');
-    const quiz = document.getElementById('quiz-game');
-    const pacman = document.getElementById('pacman-game');
-    const memory = document.getElementById('memory-match');
-
-    if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
-    if (math) math.style.display = (gameId === 'math-game') ? 'block' : 'none';
-    if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
-    if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
-    if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
-
-    if (gameId === 'duo-game') initDuoGame();
-    if (gameId === 'math-game') initMathGame();
-    if (gameId === 'quiz-game') initQuiz();
-    if (gameId === 'memory-match') initMemoryGame();
-    if (gameId === 'pacman-game' && !pacInterval) initPacmanGame();
-}
-window.showGame = showGame;
-
-// ============================================================
-// GAME 0: DUOLINGO DASH ENGINE
+// GAME 0: DUOLINGO DASH
 // ============================================================
 const duoQuestions = [
     { prompt: "Translate: 'Hola, ¿cómo estás?'", lang: "es-ES", options: ["Hello, how are you?", "Goodbye, my friend", "Good morning!", "Thank you very much"], answer: 0, icon: "🇪🇸" },
@@ -1088,7 +1217,7 @@ function answerDuo(choice) {
 window.answerDuo = answerDuo;
 
 // ============================================================
-// GAME 1: KIDS MATH WIZARD GAME (500 Questions)
+// GAME 1: MATH WIZARD (500 Dynamic Questions Pool)
 // ============================================================
 let mathQuestionsPool = [];
 let mathRoundQuestions = [], mathIndex = 0, mathScore = 0;
@@ -1218,7 +1347,7 @@ function answerMath(choice) {
 window.answerMath = answerMath;
 
 // ============================================================
-// GAME 2: TRIVIA QUIZ ENGINE
+// GAME 2: TRIVIA QUIZ ENGINE & GENERAL TRIVIA
 // ============================================================
 const quizTopics = [
     { cat: "Space", icon: "🪐", items: [
@@ -1236,6 +1365,88 @@ const quizTopics = [
         { q: "Which bird is famous for being unable to fly?", options: ["Eagle", "Penguin", "Parrot", "Robin"], a: 1 }
     ]}
 ];
+
+const triviaQuestions = [
+    { q: "What color do you get when you mix Red and Yellow?", options: ["Green", "Orange", "Purple", "Brown"], a: 1, icon: "🎨" },
+    { q: "How many legs does a spider have?", options: ["6", "8", "10", "4"], a: 1, icon: "🕷️" },
+    { q: "Which planet is known as the Red Planet?", options: ["Venus", "Mars", "Jupiter", "Saturn"], a: 1, icon: "🪐" },
+    { q: "What is the largest land animal?", options: ["Giraffe", "Blue Whale", "Elephant", "Hippo"], a: 2, icon: "🐘" },
+    { q: "Which animal produces milk and lays eggs?", options: ["Platypus", "Kangaroo", "Ostrich", "Bat"], a: 0, icon: "🦫" }
+];
+
+let triviaIndex = 0, triviaScore = 0;
+
+function initTriviaGame() {
+    triviaIndex = 0;
+    triviaScore = 0;
+    renderTriviaQuestion();
+}
+window.initTriviaGame = initTriviaGame;
+
+function renderTriviaQuestion() {
+    const container = document.getElementById('triviaContainer');
+    if (!container) return;
+    const total = triviaQuestions.length;
+
+    const progElem = document.getElementById('triviaProgress');
+    const scoreElem = document.getElementById('triviaScoreDisplay');
+
+    if (triviaIndex >= total) {
+        if (progElem) progElem.innerText = `${total} / ${total}`;
+        if (scoreElem) scoreElem.innerText = triviaScore;
+
+        const earnedStars = triviaScore * 5;
+        addStars(earnedStars);
+        launchConfetti(30);
+
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">🏆</div>
+                <h3>Trivia Completed!</h3>
+                <p>You scored ${triviaScore} / ${total} and won ${earnedStars} stars ⭐!</p>
+                <button class="restart-btn" onclick="initTriviaGame()">🔄 Play Again</button>
+            </div>
+        `;
+        playChime([523, 659, 784, 1046]);
+        return;
+    }
+
+    if (progElem) progElem.innerText = `${triviaIndex + 1} / ${total}`;
+    if (scoreElem) scoreElem.innerText = triviaScore;
+
+    const q = triviaQuestions[triviaIndex];
+    container.innerHTML = `
+        <div class="quiz-question">
+            <div class="quiz-question-icon">${q.icon}</div>
+            <h3>${q.q}</h3>
+            <button class="book-btn audio-btn" style="margin-bottom: 12px;" onclick="speakText('${q.q}')">🔊 Read Question</button>
+            <div class="quiz-options">
+                ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerTrivia(${i})">${opt}</button>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function answerTrivia(choice) {
+    const q = triviaQuestions[triviaIndex];
+    const buttons = document.querySelectorAll('#triviaContainer .quiz-option');
+    buttons.forEach(btn => btn.onclick = null);
+
+    if (buttons[q.a]) buttons[q.a].classList.add('correct');
+    if (choice === q.a) {
+        playSound(800, 'sine', 0.2);
+        triviaScore++;
+    } else {
+        playSound(200, 'sawtooth', 0.3);
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
+    }
+
+    setTimeout(() => {
+        triviaIndex++;
+        renderTriviaQuestion();
+    }, 1000);
+}
+window.answerTrivia = answerTrivia;
 
 function generate500TriviaQuestions() {
     const list = [];
@@ -1353,6 +1564,124 @@ function answerQuiz(choice) {
     }, 900);
 }
 window.answerQuiz = answerQuiz;
+
+// ============================================================
+// MAURITIUS LEARNING HUB ENGINE
+// ============================================================
+let currentMruLevel = 1;
+let filteredMruQuestions = [];
+let unlockedMruLevel = 1; // Tracks highest unlocked level
+let mruIndex = 0;
+let mruScore = 0;
+
+function setMruLevel(lvl) {
+    if (lvl > unlockedMruLevel) {
+        alert(`🔒 Level ${lvl} is locked! Complete Level ${lvl - 1} with at least 80% to unlock it.`);
+        return;
+    }
+    playSound(450);
+    currentMruLevel = lvl;
+    
+    document.querySelectorAll('.lvl-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`mruLvl${lvl}Btn`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    initMauritiusGame();
+}
+window.setMruLevel = setMruLevel;
+
+function initMauritiusGame() {
+    filteredMruQuestions = mauritiusQuestions.filter(q => q.level === currentMruLevel);
+    mruIndex = 0;
+    mruScore = 0;
+    renderMauritiusQuestion();
+}
+window.initMauritiusGame = initMauritiusGame;
+
+function renderMauritiusQuestion() {
+    const container = document.getElementById('mruContainer');
+    if (!container) return;
+    const total = filteredMruQuestions.length;
+
+    const progElem = document.getElementById('mruProgress');
+    const scoreElem = document.getElementById('mruScoreDisplay');
+
+    if (mruIndex >= total) {
+        if (progElem) progElem.innerText = `${total} / ${total}`;
+        if (scoreElem) scoreElem.innerText = mruScore;
+
+        const percentage = Math.round((mruScore / total) * 100);
+        const passed = percentage >= 80;
+        const earnedStars = mruScore * 2;
+        addStars(earnedStars);
+
+        if (passed && currentMruLevel === unlockedMruLevel && unlockedMruLevel < 3) {
+            unlockedMruLevel++;
+        }
+
+        if (passed) launchConfetti(30);
+
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">${passed ? '🏆' : '🔒'}</div>
+                <h3>Level ${currentMruLevel} ${passed ? 'Completed!' : 'Failed!'}</h3>
+                <p>Score: ${mruScore} / ${total} (${percentage}%)</p>
+                <p>${passed ? `Great job! You earned ${earnedStars} stars ⭐!` : 'You need at least 80% (24/30) to unlock the next level.'}</p>
+                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+                    <button class="restart-btn" onclick="initMauritiusGame()">🔄 Try Again</button>
+                    ${unlockedMruLevel > currentMruLevel ? `<button class="restart-btn" style="background: #22c55e;" onclick="setMruLevel(${currentMruLevel + 1})">🚀 Next Level</button>` : ''}
+                </div>
+            </div>
+        `;
+        playChime(passed ? [523, 659, 784, 1046] : [300, 250, 200]);
+        return;
+    }
+
+    if (progElem) progElem.innerText = `${mruIndex + 1} / ${total}`;
+    if (scoreElem) scoreElem.innerText = mruScore;
+
+    const q = filteredMruQuestions[mruIndex];
+    container.innerHTML = `
+        <div style="margin-bottom: 12px; display: flex; gap: 8px; justify-content: center;">
+            <button id="mruLvl1Btn" class="filter-btn lvl-btn ${currentMruLevel === 1 ? 'active' : ''}" onclick="setMruLevel(1)">Level 1</button>
+            <button id="mruLvl2Btn" class="filter-btn lvl-btn ${currentMruLevel === 2 ? 'active' : ''} ${unlockedMruLevel < 2 ? 'locked' : ''}" onclick="setMruLevel(2)">
+                ${unlockedMruLevel < 2 ? '🔒 ' : ''}Level 2
+            </button>
+            <button id="mruLvl3Btn" class="filter-btn lvl-btn ${currentMruLevel === 3 ? 'active' : ''} ${unlockedMruLevel < 3 ? 'locked' : ''}" onclick="setMruLevel(3)">
+                ${unlockedMruLevel < 3 ? '🔒 ' : ''}Level 3
+            </button>
+        </div>
+        <div class="quiz-question">
+            <div class="quiz-question-icon">${q.icon}</div>
+            <h3>${q.q}</h3>
+            <button class="book-btn audio-btn" style="margin-bottom: 12px;" onclick="speakText('${q.q}')">🔊 Read Question</button>
+            <div class="quiz-options">
+                ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerMauritius(${i})">${opt}</button>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function answerMauritius(choice) {
+    const q = filteredMruQuestions[mruIndex];
+    const buttons = document.querySelectorAll('#mruContainer .quiz-option');
+    buttons.forEach(btn => btn.onclick = null);
+
+    if (buttons[q.a]) buttons[q.a].classList.add('correct');
+    if (choice === q.a) {
+        playSound(800, 'sine', 0.2);
+        mruScore++;
+    } else {
+        playSound(200, 'sawtooth', 0.3);
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
+    }
+
+    setTimeout(() => {
+        mruIndex++;
+        renderMauritiusQuestion();
+    }, 1000);
+}
+window.answerMauritius = answerMauritius;
 
 function shuffleArray(arr) {
     const a = [...arr];
@@ -1709,11 +2038,20 @@ function checkExperimentComplete(card) {
     }
 }
 
+// Global expose functions for explicit window calls
+window.showGame = showGame;
+window.initTriviaGame = initTriviaGame;
+
 // ============================================================
-// INITIAL LOAD & REALTIME SUBSCRIBERS
+// INITIALIZATION ON DOM READY
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     checkLoginSession();
     renderStoryPage();
+    initTriviaGame();
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pausePacmanGame();
 });
