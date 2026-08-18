@@ -41,11 +41,11 @@
                 <button type="submit" class="login-submit-btn">Blast Off! 🚀</button>
             </form>
 
-            <!-- Admin Login Form -->
+            <!-- Admin Login Form (REMOVED PUBLIC EMAIL PLACEHOLDER) -->
             <form id="adminLoginForm" style="display: none;" onsubmit="handleAdminLogin(event)">
                 <div class="input-group">
                     <label for="adminEmail">✉️ Admin Email</label>
-                    <input type="email" id="adminEmail" placeholder="yaasin@gmail.com" required autocomplete="email">
+                    <input type="email" id="adminEmail" placeholder="Enter admin email..." required autocomplete="email">
                 </div>
                 <div class="input-group">
                     <label for="adminPassword">🔑 Password</label>
@@ -76,8 +76,9 @@
                 <span id="activeName">Explorer</span>
             </div>
 
-            <!-- Admin Only Add Kid Button -->
+            <!-- Admin Action Buttons (Visible only to Admin) -->
             <button id="addKidBtn" class="add-account-btn" style="display: none;" onclick="openCreateAccountModal()" title="Add Kid Profile">➕ Add Kid</button>
+            <button id="manageProfilesBtn" class="add-account-btn" style="display: none; background: #ff9600;" onclick="openAdminPortalModal()" title="Manage & Remove Profiles">⚙️ Manage Profiles</button>
 
             <button class="stats-btn" onclick="openBadgesModal()" title="My Badges" aria-label="View Badges">🏅 <span id="badgeCount">0</span></button>
             <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
@@ -386,6 +387,20 @@
 
                 <button type="submit" class="login-submit-btn">Create Kid Profile 🎉</button>
             </form>
+        </div>
+    </div>
+
+    <!-- NEW Modal Popup: Admin Profile Management Portal (ADMIN ONLY) -->
+    <div id="adminPortalModal" class="modal" onclick="closeAdminPortalModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="adminPortalTitle" style="display: none;">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeAdminPortalModal()" aria-label="Close portal">&times;</button>
+            <div class="modal-icon">⚙️</div>
+            <h2 id="adminPortalTitle">Admin Profile Console</h2>
+            <p class="badges-subtitle">Manage registered Kid Explorer profiles below. Deleting a profile is permanent.</p>
+            
+            <div id="adminProfilesList" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+                <!-- Dynamically Populated List with Delete Buttons -->
+            </div>
         </div>
     </div>
 
