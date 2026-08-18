@@ -1,3 +1,32 @@
+// Import Firebase Firestore SDK modules
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+    getFirestore, 
+    collection, 
+    doc, 
+    setDoc, 
+    getDoc, 
+    getDocs, 
+    onSnapshot 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// TODO: Replace with your actual Firebase Web App configuration object
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase & Firestore Database
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Keep dynamic profiles cache in memory
+let cachedKidProfiles = [];
+
 // ============================================================
 // SOUND EFFECTS ENGINE & AUDIO CONTEXT ACTIVATION
 // ============================================================
@@ -30,6 +59,10 @@ function playChime(notes, type = 'triangle') {
         setTimeout(() => playSound(freq, type, 0.25), i * 120);
     });
 }
+
+// Global expose for inline HTML event handlers
+window.playSound = playSound;
+window.playChime = playChime;
 
 // ============================================================
 // GLOBAL KEYBOARD & ACCESSIBILITY HANDLERS
@@ -71,6 +104,7 @@ function toggleLoginType(type) {
         tabAdmin.classList.add('active');
     }
 }
+window.toggleLoginType = toggleLoginType;
 
 function checkLoginSession() {
     const isLoggedIn = sessionStorage.getItem('kidzone_logged_in');
@@ -90,13 +124,26 @@ function checkLoginSession() {
     }
 }
 
+// Realtime sync from Firestore collection for mobile/cross-device profile display
+function listenToKidProfiles() {
+    onSnapshot(collection(db, "kidProfiles"), (snapshot) => {
+        cachedKidProfiles = [];
+        snapshot.forEach(docSnap => {
+            cachedKidProfiles.push(docSnap.data());
+        });
+        populateKidSelect();
+        setupUIForSession();
+    }, (error) => {
+        console.error("Firestore sync error:", error);
+    });
+}
+
 function populateKidSelect() {
     const selectElem = document.getElementById('loginKidSelect');
     if (!selectElem) return;
     selectElem.innerHTML = '<option value="" disabled selected>Choose your profile...</option>';
 
-    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
-    profiles.forEach(p => {
+    cachedKidProfiles.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.innerText = `${p.avatar} ${p.name}`;
@@ -110,8 +157,7 @@ function handleKidLogin(event) {
     const pinInput = document.getElementById('loginKidPin').value.trim();
     const errorMsg = document.getElementById('kidLoginErrorMsg');
 
-    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
-    const kid = profiles.find(p => p.id === kidId);
+    const kid = cachedKidProfiles.find(p => p.id === kidId);
 
     if (kid && kid.pin === pinInput) {
         sessionStorage.setItem('kidzone_logged_in', 'true');
@@ -137,6 +183,7 @@ function handleKidLogin(event) {
         }
     }
 }
+window.handleKidLogin = handleKidLogin;
 
 function handleAdminLogin(event) {
     if (event) event.preventDefault();
@@ -167,6 +214,7 @@ function handleAdminLogin(event) {
         }
     }
 }
+window.handleAdminLogin = handleAdminLogin;
 
 function setupUIForSession() {
     const addKidBtn = document.getElementById('addKidBtn');
@@ -179,8 +227,7 @@ function setupUIForSession() {
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
     } else {
         if (addKidBtn) addKidBtn.style.display = 'none';
-        const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
-        const kid = profiles.find(p => p.id === currentActiveId);
+        const kid = cachedKidProfiles.find(p => p.id === currentActiveId);
         if (kid) {
             if (avatarElem) avatarElem.innerText = kid.avatar;
             if (nameElem) nameElem.innerText = kid.name;
@@ -206,9 +253,10 @@ function handleLogout() {
     populateKidSelect();
     showToast('Logged out! Access locked. 👋', '🔒', 3000);
 }
+window.handleLogout = handleLogout;
 
 // ============================================================
-// ADMIN CREATES KID PROFILES
+// ADMIN CREATES KID PROFILES (CLOUD SAVE TO FIRESTORE)
 // ============================================================
 let selectedAvatar = '🚀';
 
@@ -221,16 +269,19 @@ function openCreateAccountModal() {
     const modal = document.getElementById('createAccountModal');
     if (modal) modal.style.display = 'flex';
 }
+window.openCreateAccountModal = openCreateAccountModal;
 
 function closeCreateAccountModal() {
     playSound(300);
     const modal = document.getElementById('createAccountModal');
     if (modal) modal.style.display = 'none';
 }
+window.closeCreateAccountModal = closeCreateAccountModal;
 
 function closeCreateModalOnBg(e) {
     if (e.target.id === 'createAccountModal') closeCreateAccountModal();
 }
+window.closeCreateModalOnBg = closeCreateModalOnBg;
 
 function selectAvatar(avatarEmoji, btnElem) {
     playSound(400);
@@ -238,8 +289,9 @@ function selectAvatar(avatarEmoji, btnElem) {
     document.querySelectorAll('.avatar-option').forEach(b => b.classList.remove('active'));
     if (btnElem) btnElem.classList.add('active');
 }
+window.selectAvatar = selectAvatar;
 
-function handleCreateKidAccount(event) {
+async function handleCreateKidAccount(event) {
     event.preventDefault();
     const nameInput = document.getElementById('newKidName');
     const pinInput = document.getElementById('newKidPin');
@@ -254,28 +306,34 @@ function handleCreateKidAccount(event) {
         return;
     }
 
-    const profiles = JSON.parse(localStorage.getItem('kidzone_registered_kids') || '[]');
+    const newId = `kid_${Date.now()}`;
     const newProfile = {
-        id: `kid_${Date.now()}`,
+        id: newId,
         name: kidName,
         avatar: selectedAvatar,
         pin: kidPin
     };
 
-    profiles.push(newProfile);
-    localStorage.setItem('kidzone_registered_kids', JSON.stringify(profiles));
+    try {
+        // Direct cloud sync to Firestore
+        await setDoc(doc(db, "kidProfiles", newId), newProfile);
 
-    closeCreateAccountModal();
-    nameInput.value = '';
-    pinInput.value = '';
+        closeCreateAccountModal();
+        nameInput.value = '';
+        pinInput.value = '';
 
-    playChime([523, 659, 784, 1046]);
-    launchConfetti(40);
-    showToast(`Kid profile created for ${kidName}! 🎉`, '✨', 3500);
+        playChime([523, 659, 784, 1046]);
+        launchConfetti(40);
+        showToast(`Profile created for ${kidName}! Synced to Mobile! 🎉`, '✨', 3500);
+    } catch (e) {
+        console.error("Firestore Save Error:", e);
+        showToast('Error saving profile to Firestore!', '❌', 3000);
+    }
 }
+window.handleCreateKidAccount = handleCreateKidAccount;
 
 // ============================================================
-// REWARDS & SAVE SYSTEM PER PROFILE
+// REWARDS & SAVE SYSTEM PER PROFILE (FIRESTORE SYNC)
 // ============================================================
 let stars = 0;
 let level = 1;
@@ -297,10 +355,9 @@ const BADGES = {
     superstar:    { icon: '🌟', name: 'Superstar Explorer',  desc: 'Collected 100 stars!' }
 };
 
-function saveProgress() {
+async function saveProgress() {
     if (!currentActiveId) return;
     try {
-        const saveKey = `kidzone_progress_${currentActiveId}`;
         const data = {
             stars,
             level,
@@ -309,19 +366,20 @@ function saveProgress() {
             finishedStories: [...finishedStories],
             completedExperiments: [...completedExperiments]
         };
-        localStorage.setItem(saveKey, JSON.stringify(data));
+        // Persist game state directly to Firestore cloud database
+        await setDoc(doc(db, "kidProgress", currentActiveId), data);
     } catch (e) {
-        console.error("Save error:", e);
+        console.error("Cloud Save error:", e);
     }
 }
 
-function loadProgress() {
+async function loadProgress() {
     if (!currentActiveId) return;
     try {
-        const saveKey = `kidzone_progress_${currentActiveId}`;
-        const raw = localStorage.getItem(saveKey);
+        const docRef = doc(db, "kidProgress", currentActiveId);
+        const docSnap = await getDoc(docRef);
         
-        if (!raw) {
+        if (!docSnap.exists()) {
             stars = 0;
             level = 1;
             unlockedBadges = new Set();
@@ -332,7 +390,7 @@ function loadProgress() {
             return;
         }
         
-        const d = JSON.parse(raw);
+        const d = docSnap.data();
         stars = d.stars || 0;
         level = d.level || 1;
         unlockedBadges = new Set(d.badges || []);
@@ -342,7 +400,7 @@ function loadProgress() {
 
         updateStatsDisplay();
     } catch (e) {
-        console.error("Load error:", e);
+        console.error("Cloud Load error:", e);
     }
 }
 
@@ -451,16 +509,19 @@ function openBadgesModal() {
     const modal = document.getElementById('badgesModal');
     if (modal) modal.style.display = 'flex';
 }
+window.openBadgesModal = openBadgesModal;
 
 function closeBadgesModal() {
     playSound(300);
     const modal = document.getElementById('badgesModal');
     if (modal) modal.style.display = 'none';
 }
+window.closeBadgesModal = closeBadgesModal;
 
 function closeBadgesModalOnBg(e) {
     if (e.target.id === 'badgesModal') closeBadgesModal();
 }
+window.closeBadgesModalOnBg = closeBadgesModalOnBg;
 
 // --- Mascot Buddy ---
 const MASCOT_TIPS = [
@@ -482,6 +543,7 @@ function mascotSpeak() {
     clearTimeout(window._mascotTimer);
     window._mascotTimer = setTimeout(() => bubble.classList.remove('show'), 4000);
 }
+window.mascotSpeak = mascotSpeak;
 
 // ============================================================
 // TAB SWITCHING
@@ -504,6 +566,7 @@ function switchTab(tabId, evt) {
         initDuoGame();
     }
 }
+window.switchTab = switchTab;
 
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) pausePacmanGame();
@@ -543,16 +606,19 @@ function openModal(id) {
         }
     }
 }
+window.openModal = openModal;
 
 function closeModal() {
     playSound(300);
     const modal = document.getElementById('encyModal');
     if (modal) modal.style.display = 'none';
 }
+window.closeModal = closeModal;
 
 function closeModalOnBg(e) {
     if (e.target.id === 'encyModal') closeModal();
 }
+window.closeModalOnBg = closeModalOnBg;
 
 function filterEncyclopedia() {
     const searchElem = document.getElementById('encySearch');
@@ -564,6 +630,7 @@ function filterEncyclopedia() {
         card.style.display = text.includes(query) ? 'block' : 'none';
     });
 }
+window.filterEncyclopedia = filterEncyclopedia;
 
 function filterCategory(cat, evt) {
     playSound(520);
@@ -575,6 +642,7 @@ function filterCategory(cat, evt) {
         card.style.display = (cat === 'all' || card.dataset.category === cat) ? 'block' : 'none';
     });
 }
+window.filterCategory = filterCategory;
 
 function surpriseMe() {
     playSound(660, 'triangle', 0.2);
@@ -588,6 +656,7 @@ function surpriseMe() {
     document.querySelectorAll('#encyGrid .card').forEach(card => card.style.display = 'block');
     openModal(randomId);
 }
+window.surpriseMe = surpriseMe;
 
 // ============================================================
 // STORYBOOKS
@@ -680,6 +749,7 @@ function selectStory(key, evt) {
     if (evt) evt.currentTarget.classList.add('active');
     renderStoryPage();
 }
+window.selectStory = selectStory;
 
 function renderStoryPage() {
     const storyData = stories[currentStoryKey];
@@ -754,6 +824,7 @@ function changePage(delta) {
     
     renderStoryPage();
 }
+window.changePage = changePage;
 
 function speakText(customText = null, lang = 'en-US') {
     if ('speechSynthesis' in window) {
@@ -766,6 +837,7 @@ function speakText(customText = null, lang = 'en-US') {
         window.speechSynthesis.speak(utterance);
     }
 }
+window.speakText = speakText;
 
 // ============================================================
 // GAME SELECTOR
@@ -797,6 +869,7 @@ function showGame(gameId, evt) {
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'pacman-game' && !pacInterval) initPacmanGame();
 }
+window.showGame = showGame;
 
 // ============================================================
 // GAME 0: DUOLINGO DASH ENGINE
@@ -821,6 +894,7 @@ function initDuoGame() {
     updateDuoStats();
     renderDuoQuestion();
 }
+window.initDuoGame = initDuoGame;
 
 function updateDuoStats() {
     const heartsElem = document.getElementById('duoHearts');
@@ -904,6 +978,7 @@ function answerDuo(choice) {
         renderDuoQuestion();
     }, 1000);
 }
+window.answerDuo = answerDuo;
 
 // ============================================================
 // GAME 1: KIDS MATH WIZARD GAME (500 Questions)
@@ -967,6 +1042,7 @@ function initMathGame() {
     mathScore = 0;
     renderMathQuestion();
 }
+window.initMathGame = initMathGame;
 
 function renderMathQuestion() {
     const container = document.getElementById('mathContainer');
@@ -1032,6 +1108,7 @@ function answerMath(choice) {
         renderMathQuestion();
     }, 900);
 }
+window.answerMath = answerMath;
 
 // ============================================================
 // GAME 2: TRIVIA QUIZ ENGINE
@@ -1101,6 +1178,7 @@ function initQuiz() {
     quizScore = 0;
     renderQuizQuestion();
 }
+window.initQuiz = initQuiz;
 
 function renderQuizQuestion() {
     const container = document.getElementById('quizContainer');
@@ -1167,6 +1245,7 @@ function answerQuiz(choice) {
         renderQuizQuestion();
     }, 900);
 }
+window.answerQuiz = answerQuiz;
 
 function shuffleArray(arr) {
     const a = [...arr];
@@ -1229,6 +1308,7 @@ function initPacmanGame() {
     window.removeEventListener('keydown', handlePacmanKeys);
     window.addEventListener('keydown', handlePacmanKeys);
 }
+window.initPacmanGame = initPacmanGame;
 
 function pausePacmanGame() {
     if (pacInterval) {
@@ -1254,6 +1334,7 @@ function togglePausePacman() {
     playSound(400);
     if (isPacmanPaused) resumePacmanGame(); else pausePacmanGame();
 }
+window.togglePausePacman = togglePausePacman;
 
 function handlePacmanKeys(e) {
     if (e.key === 'ArrowUp') setPacmanDir(0, -1);
@@ -1267,6 +1348,7 @@ function setPacmanDir(dx, dy) {
     pacman.nextDirX = dx;
     pacman.nextDirY = dy;
 }
+window.setPacmanDir = setPacmanDir;
 
 function updatePacmanGame() {
     if (isPacmanPaused) return;
@@ -1405,6 +1487,7 @@ function resetPacmanGame() {
     playSound(400);
     initPacmanGame();
 }
+window.resetPacmanGame = resetPacmanGame;
 
 // ============================================================
 // GAME 4: MEMORY MATCH
@@ -1440,6 +1523,7 @@ function initMemoryGame() {
         grid.appendChild(card);
     });
 }
+window.initMemoryGame = initMemoryGame;
 
 function flipMemoryCard(card) {
     if (flippedCards.length < 2 && !card.classList.contains('flipped') && !card.classList.contains('matched')) {
@@ -1495,6 +1579,7 @@ function toggleStep(el) {
     el.classList.toggle('completed');
     checkExperimentComplete(el.closest('.experiment-card'));
 }
+window.toggleStep = toggleStep;
 
 function checkExperimentComplete(card) {
     if (!card) return;
@@ -1518,9 +1603,10 @@ function checkExperimentComplete(card) {
 }
 
 // ============================================================
-// INITIAL LOAD
+// INITIAL LOAD & REALTIME SUBSCRIBERS
 // ============================================================
 window.onload = () => {
+    listenToKidProfiles();
     checkLoginSession();
     renderStoryPage();
 };
