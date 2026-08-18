@@ -41,7 +41,7 @@
                 <button type="submit" class="login-submit-btn">Blast Off! 🚀</button>
             </form>
 
-            <!-- Admin Login Form (REMOVED PUBLIC EMAIL PLACEHOLDER) -->
+            <!-- Admin Login Form -->
             <form id="adminLoginForm" style="display: none;" onsubmit="handleAdminLogin(event)">
                 <div class="input-group">
                     <label for="adminEmail">✉️ Admin Email</label>
@@ -185,6 +185,7 @@
                 <button class="game-tab-btn active" onclick="showGame('duo-game', event)">🦉 Duolingo Dash</button>
                 <button class="game-tab-btn" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
                 <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
+                <button class="game-tab-btn" onclick="showGame('mauritius-game', event)">🇲🇺 Mauritius History</button>
                 <button class="game-tab-btn" onclick="showGame('pacman-game', event)">🟡 Pac-Man Classic</button>
                 <button class="game-tab-btn" onclick="showGame('memory-match', event)">🧩 Emoji Memory Match</button>
             </div>
@@ -220,7 +221,17 @@
                 <div class="quiz-container" id="quizContainer"></div>
             </div>
 
-            <!-- Game 3: Pac-Man Game -->
+            <!-- Game 3: Mauritius History Hub -->
+            <div id="mauritius-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Question: <strong id="mruProgress">1 / 5</strong></span>
+                    <span>Score: <strong id="mruScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initMauritiusGame()">🔄 New Round</button>
+                </div>
+                <div class="quiz-container" id="mruContainer"></div>
+            </div>
+
+            <!-- Game 4: Pac-Man Game -->
             <div id="pacman-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Score: <strong id="score">0</strong></span>
@@ -246,7 +257,7 @@
                 </div>
             </div>
 
-            <!-- Game 4: Memory Match -->
+            <!-- Game 5: Memory Match -->
             <div id="memory-match" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Moves: <strong id="memoryMoves">0</strong></span>
@@ -390,7 +401,7 @@
         </div>
     </div>
 
-    <!-- REWORKED Admin Profile & Activity Management Portal (ADMIN ONLY) -->
+    <!-- Admin Profile & Activity Management Portal (ADMIN ONLY) -->
     <div id="adminPortalModal" class="modal" onclick="closeAdminPortalModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="adminPortalTitle" style="display: none;">
         <div class="modal-content" style="max-width: 550px; width: 90%;">
             <button class="close-btn" onclick="closeAdminPortalModal()" aria-label="Close portal">&times;</button>
