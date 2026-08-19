@@ -1,20 +1,26 @@
 {
-  "short_name": "Kids Zone",
-  "name": "Kids Zone App",
+  "id": "/KIDS-ZONE/",
+  "name": "KidZone Explorer",
+  "short_name": "KidZone",
+  "description": "Next Level Fun & Learning for Kids featuring games, encyclopedia, storybooks, and experiments!",
+  "start_url": "/KIDS-ZONE/index.html",
+  "scope": "/KIDS-ZONE/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#6c5ce7",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/KIDS-ZONE/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
-      "sizes": "192x192"
+      "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "/KIDS-ZONE/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "sizes": "512x512"
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": "/KIDS-ZONE/",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "display": "standalone"
+  ]
 }
