@@ -183,6 +183,7 @@
 
             <div class="game-selector" role="tablist">
                 <button class="game-tab-btn active" onclick="showGame('duo-game', event)">🦉 Duolingo Dash</button>
+                <button class="game-tab-btn" onclick="showGame('body-game', event)">🧍 Body Parts Explorer</button>
                 <button class="game-tab-btn" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
                 <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
                 <button class="game-tab-btn" onclick="showGame('mauritius-game', event)">🇲🇺 Mauritius History</button>
@@ -265,6 +266,204 @@
                     <button class="restart-btn" onclick="initMemoryGame()">🔄 Reset Match</button>
                 </div>
                 <div class="memory-grid" id="memoryGrid"></div>
+            </div>
+
+            <!-- Game 6: Body Parts Explorer -->
+            <div id="body-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Mode: <strong id="bodyModeLabel">Explore</strong></span>
+                    <span>Found: <strong id="bodyFound">0 / 13</strong></span>
+                    <span>Score: <strong id="bodyScore">0</strong></span>
+                    <button class="narration-toggle" onclick="toggleNarration()" title="Turn the talking voice on or off">🔊 Voice On</button>
+                    <button class="restart-btn" onclick="initBodyGame()">🔄 Start Over</button>
+                </div>
+
+                <div class="body-mode-selector" role="group" aria-label="Body game modes">
+                    <button class="body-mode-btn active" id="bodyModeExplore" onclick="setBodyMode('explore', event)">🔍 Explore &amp; Learn</button>
+                    <button class="body-mode-btn" id="bodyModeFind" onclick="setBodyMode('find', event)">🎯 Find the Part!</button>
+                    <button class="body-mode-btn" id="bodyModeSpell" onclick="setBodyMode('spell', event)">🔤 Label It!</button>
+                </div>
+
+                <div class="body-game-layout">
+                    <!-- Interactive character -->
+                    <div class="body-figure-panel">
+                        <div class="body-prompt" id="bodyPrompt" aria-live="polite">
+                            Tap any part of Robo-Buddy to learn about it! 🤖
+                        </div>
+
+                        <div class="body-svg-holder">
+                            <div class="body-stage" id="bodyStage">
+
+                                <!-- ============ FRONT VIEW ============ -->
+                                <svg class="body-svg body-face-front" id="bodySvgFront" viewBox="0 0 300 520" role="img" aria-label="Front view of cartoon child body" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <linearGradient id="skinGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#ffd9b3"/>
+                                            <stop offset="100%" stop-color="#f7c391"/>
+                                        </linearGradient>
+                                        <linearGradient id="shirtGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#5ac8fa"/>
+                                            <stop offset="100%" stop-color="#3a8ee6"/>
+                                        </linearGradient>
+                                        <linearGradient id="pantsGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#7b61ff"/>
+                                            <stop offset="100%" stop-color="#5b3fd6"/>
+                                        </linearGradient>
+                                    </defs>
+
+                                    <ellipse cx="150" cy="500" rx="78" ry="12" fill="rgba(0,0,0,0.10)"/>
+
+                                    <!-- base art -->
+                                    <rect x="134" y="118" width="32" height="26" rx="12" fill="#f0b784"/>
+                                    <path d="M105 142 q45 -16 90 0 l12 96 q-57 14 -114 0 z" fill="url(#shirtGrad)"/>
+                                    <path d="M105 142 l-22 16 l16 22 l20 -18 z" fill="#3a8ee6"/>
+                                    <path d="M195 142 l22 16 l-16 22 l-20 -18 z" fill="#3a8ee6"/>
+                                    <path d="M94 238 q56 14 112 0 l-6 44 q-50 10 -100 0 z" fill="url(#pantsGrad)"/>
+
+                                    <!-- interactive parts -->
+                                    <g class="body-part" data-part="head" tabindex="0" role="button" aria-label="Head">
+                                        <ellipse cx="150" cy="76" rx="54" ry="56" fill="url(#skinGrad)"/>
+                                    </g>
+                                    <g class="body-part" data-part="hair" tabindex="0" role="button" aria-label="Hair">
+                                        <path d="M96 66 q6 -46 54 -46 t54 46 q-10 -18 -54 -20 t-54 20 z" fill="#5a3a22"/>
+                                        <path d="M104 46 q18 -10 30 -4 q-16 6 -24 16 z" fill="#7d5330"/>
+                                    </g>
+                                    <g class="body-part" data-part="eyes" tabindex="0" role="button" aria-label="Eyes">
+                                        <ellipse cx="130" cy="74" rx="11" ry="12" fill="#ffffff"/>
+                                        <ellipse cx="170" cy="74" rx="11" ry="12" fill="#ffffff"/>
+                                        <circle cx="131" cy="76" r="5.5" fill="#3b2a20"/>
+                                        <circle cx="171" cy="76" r="5.5" fill="#3b2a20"/>
+                                        <circle cx="133" cy="73" r="2" fill="#fff"/>
+                                        <circle cx="173" cy="73" r="2" fill="#fff"/>
+                                    </g>
+                                    <g class="body-part" data-part="nose" tabindex="0" role="button" aria-label="Nose">
+                                        <path d="M150 80 q7 12 0 16 q-7 -4 0 -16 z" fill="#e8a878"/>
+                                    </g>
+                                    <g class="body-part" data-part="mouth" tabindex="0" role="button" aria-label="Mouth">
+                                        <path d="M133 104 q17 16 34 0 q-17 8 -34 0 z" fill="#c94f5e"/>
+                                        <path d="M136 105 q14 4 28 0" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                                    </g>
+                                    <g class="body-part" data-part="ears" tabindex="0" role="button" aria-label="Ears">
+                                        <ellipse cx="96" cy="82" rx="10" ry="14" fill="#f5bd8c"/>
+                                        <ellipse cx="204" cy="82" rx="10" ry="14" fill="#f5bd8c"/>
+                                    </g>
+                                    <g class="body-part" data-part="neck" tabindex="0" role="button" aria-label="Neck">
+                                        <rect x="136" y="120" width="28" height="22" rx="10" fill="#e8a878"/>
+                                    </g>
+                                    <g class="body-part" data-part="shoulders" tabindex="0" role="button" aria-label="Shoulders">
+                                        <path d="M103 146 q47 -18 94 0 l4 16 q-51 -16 -102 0 z" fill="#2f7fd4"/>
+                                    </g>
+                                    <g class="body-part" data-part="chest" tabindex="0" role="button" aria-label="Chest">
+                                        <rect x="118" y="166" width="64" height="34" rx="14" fill="#4aa8ef"/>
+                                    </g>
+                                    <g class="body-part" data-part="arms" tabindex="0" role="button" aria-label="Arms">
+                                        <rect x="70" y="160" width="24" height="92" rx="12" fill="url(#skinGrad)" transform="rotate(-8 82 206)"/>
+                                        <rect x="206" y="160" width="24" height="92" rx="12" fill="url(#skinGrad)" transform="rotate(8 218 206)"/>
+                                    </g>
+                                    <g class="body-part" data-part="hands" tabindex="0" role="button" aria-label="Hands">
+                                        <circle cx="75" cy="262" r="16" fill="#f5bd8c"/>
+                                        <circle cx="225" cy="262" r="16" fill="#f5bd8c"/>
+                                    </g>
+                                    <g class="body-part" data-part="tummy" tabindex="0" role="button" aria-label="Tummy">
+                                        <ellipse cx="150" cy="214" rx="32" ry="24" fill="#4aa8ef"/>
+                                        <circle cx="150" cy="216" r="4" fill="#2f7fd4"/>
+                                    </g>
+                                    <g class="body-part" data-part="knees" tabindex="0" role="button" aria-label="Knees">
+                                        <circle cx="124" cy="360" r="16" fill="#4a35b8"/>
+                                        <circle cx="176" cy="360" r="16" fill="#4a35b8"/>
+                                    </g>
+                                    <g class="body-part" data-part="legs" tabindex="0" role="button" aria-label="Legs">
+                                        <rect x="110" y="278" width="30" height="180" rx="15" fill="url(#skinGrad)"/>
+                                        <rect x="160" y="278" width="30" height="180" rx="15" fill="url(#skinGrad)"/>
+                                    </g>
+                                    <g class="body-part" data-part="feet" tabindex="0" role="button" aria-label="Feet">
+                                        <path d="M108 456 h34 v20 q0 10 -12 10 h-34 q-8 0 -8 -9 q0 -8 10 -11 q10 -3 10 -10 z" fill="#ff5a5f"/>
+                                        <path d="M192 456 h-34 v20 q0 10 12 10 h34 q8 0 8 -9 q0 -8 -10 -11 q-10 -3 -10 -10 z" fill="#ff5a5f"/>
+                                    </g>
+                                </svg>
+
+                                <!-- ============ BACK VIEW ============ -->
+                                <svg class="body-svg body-face-back" id="bodySvgBack" viewBox="0 0 300 520" role="img" aria-label="Back view of cartoon child body" xmlns="http://www.w3.org/2000/svg">
+                                    <ellipse cx="150" cy="500" rx="78" ry="12" fill="rgba(0,0,0,0.10)"/>
+
+                                    <rect x="134" y="118" width="32" height="26" rx="12" fill="#e8a878"/>
+                                    <path d="M105 142 q45 -16 90 0 l12 96 q-57 14 -114 0 z" fill="#3a8ee6"/>
+                                    <path d="M105 142 l-22 16 l16 22 l20 -18 z" fill="#3080cc"/>
+                                    <path d="M195 142 l22 16 l-16 22 l-20 -18 z" fill="#3080cc"/>
+                                    <path d="M94 238 q56 14 112 0 l-6 44 q-50 10 -100 0 z" fill="#5b3fd6"/>
+
+                                    <g class="body-part" data-part="head" tabindex="0" role="button" aria-label="Head, back">
+                                        <ellipse cx="150" cy="76" rx="54" ry="56" fill="#f2c096"/>
+                                    </g>
+                                    <g class="body-part" data-part="hair" tabindex="0" role="button" aria-label="Hair, back">
+                                        <path d="M96 74 q0 -54 54 -54 t54 54 q0 26 -8 34 q-46 12 -92 0 q-8 -8 -8 -34 z" fill="#5a3a22"/>
+                                    </g>
+                                    <g class="body-part" data-part="ears" tabindex="0" role="button" aria-label="Ears, back">
+                                        <ellipse cx="96" cy="84" rx="9" ry="13" fill="#eab188"/>
+                                        <ellipse cx="204" cy="84" rx="9" ry="13" fill="#eab188"/>
+                                    </g>
+                                    <g class="body-part" data-part="neck" tabindex="0" role="button" aria-label="Neck, back">
+                                        <rect x="136" y="120" width="28" height="22" rx="10" fill="#dd9e6e"/>
+                                    </g>
+                                    <g class="body-part" data-part="shoulders" tabindex="0" role="button" aria-label="Shoulders, back">
+                                        <path d="M103 146 q47 -18 94 0 l4 16 q-51 -16 -102 0 z" fill="#2a72bd"/>
+                                    </g>
+                                    <g class="body-part" data-part="back" tabindex="0" role="button" aria-label="Back">
+                                        <rect x="116" y="168" width="68" height="62" rx="18" fill="#2f7fd4"/>
+                                        <path d="M150 176 v46" stroke="#2668ad" stroke-width="4" stroke-linecap="round"/>
+                                    </g>
+                                    <g class="body-part" data-part="arms" tabindex="0" role="button" aria-label="Arms, back">
+                                        <rect x="70" y="160" width="24" height="92" rx="12" fill="#f2c096" transform="rotate(-8 82 206)"/>
+                                        <rect x="206" y="160" width="24" height="92" rx="12" fill="#f2c096" transform="rotate(8 218 206)"/>
+                                    </g>
+                                    <g class="body-part" data-part="elbows" tabindex="0" role="button" aria-label="Elbows">
+                                        <circle cx="80" cy="208" r="13" fill="#e3ac7c"/>
+                                        <circle cx="220" cy="208" r="13" fill="#e3ac7c"/>
+                                    </g>
+                                    <g class="body-part" data-part="hands" tabindex="0" role="button" aria-label="Hands, back">
+                                        <circle cx="75" cy="262" r="16" fill="#eab188"/>
+                                        <circle cx="225" cy="262" r="16" fill="#eab188"/>
+                                    </g>
+                                    <g class="body-part" data-part="legs" tabindex="0" role="button" aria-label="Legs, back">
+                                        <rect x="110" y="278" width="30" height="180" rx="15" fill="#f2c096"/>
+                                        <rect x="160" y="278" width="30" height="180" rx="15" fill="#f2c096"/>
+                                    </g>
+                                    <g class="body-part" data-part="heels" tabindex="0" role="button" aria-label="Heels">
+                                        <ellipse cx="125" cy="470" rx="17" ry="14" fill="#e04a4f"/>
+                                        <ellipse cx="175" cy="470" rx="17" ry="14" fill="#e04a4f"/>
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- Rotate control -->
+                        <div class="body-rotate-bar">
+                            <button class="body-rotate-btn" id="bodyRotateBtn" onclick="flipBodyView()" aria-label="Rotate the body">
+                                <span class="rotate-icon" aria-hidden="true">&#8635;</span>
+                                <span id="bodyRotateLabel">Turn Around</span>
+                            </button>
+                            <span class="body-view-pill" id="bodyViewPill">Front</span>
+                        </div>
+                    </div>
+
+                    <!-- Info / answer side panel -->
+                    <aside class="body-info-panel">
+                        <div class="body-info-card" id="bodyInfoCard">
+                            <div class="body-info-icon" id="bodyInfoIcon">👋</div>
+                            <h3 id="bodyInfoTitle">Meet Robo-Buddy!</h3>
+                            <p id="bodyInfoFact">Click or tap a body part on the picture to hear its name and learn a cool fact about it.</p>
+                            <button class="body-say-btn" id="bodySayBtn" onclick="sayBodyPart()">🔊 Read this to me</button>
+                        </div>
+
+                        <div class="body-checklist" id="bodyChecklist" aria-label="Body parts discovered"></div>
+
+                        <div class="body-choices" id="bodyChoices"></div>
+                    </aside>
+                </div>
+
+                <div class="game-controls-help">
+                    <p>🧍 <strong>How to play:</strong> Press <strong>↻ Turn Around</strong> to spin the body and find parts hiding on the other side! In <strong>Explore</strong> mode tap any part to learn a fact. In <strong>Find the Part</strong> mode tap the right spot. In <strong>Label It</strong> mode the target is ringed and glowing — just pick its name!</p>
+                </div>
             </div>
         </section>
 
@@ -446,5 +645,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2e31d807f092857',t:'MTc4NzI0NjkxNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
