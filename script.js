@@ -299,7 +299,11 @@ function splitForSpeech(text, maxLen = 180) {
 }
 
 function speakChunk(lang) {
-    if (!speechQueue.length) { stopKeepAlive(); return; }
+    if (!speechQueue.length) {
+        stopKeepAlive();
+        document.querySelectorAll('.book-text.reading').forEach(e => e.classList.remove('reading'));
+        return;
+    }
     const text = speechQueue.shift();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -356,6 +360,11 @@ function toggleNarration() {
         btn.innerHTML = speechEnabled ? '🔊 Voice On' : '🔇 Voice Off';
         btn.classList.toggle('muted', !speechEnabled);
     });
+    if (!speechEnabled) {
+        document.querySelectorAll('.book-text.reading').forEach(e => e.classList.remove('reading'));
+        const auto = document.getElementById('autoReadToggle');
+        if (auto && auto.checked) { auto.checked = false; autoReadStories = false; }
+    }
     if (speechEnabled) {
         playSound(700);
         speakText('Voice is on!');
@@ -606,17 +615,20 @@ window.handleAdminLogin = handleAdminLogin;
 function setupUIForSession() {
     const addKidBtn = document.getElementById('addKidBtn');
     const manageProfilesBtn = document.getElementById('manageProfilesBtn');
+    const reportsBtn = document.getElementById('reportsBtn');
     const avatarElem = document.getElementById('activeAvatar');
     const nameElem = document.getElementById('activeName');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
+        if (reportsBtn) reportsBtn.style.display = 'inline-block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
     } else {
         if (addKidBtn) addKidBtn.style.display = 'none';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
+        if (reportsBtn) reportsBtn.style.display = 'none';
         const kid = cachedKidProfiles.find(p => p.id === currentActiveId);
         if (kid) {
             if (avatarElem) avatarElem.innerText = kid.avatar;
@@ -828,7 +840,10 @@ const BADGES = {
     duoLingo:     { icon: '🦉', name: 'Linguist Star',       desc: 'Completed a Duolingo Dash lesson!' },
     superstar:    { icon: '🌟', name: 'Superstar Explorer',  desc: 'Collected 100 stars!' },
     bodyExplorer: { icon: '🧍', name: 'Body Explorer',       desc: 'Discovered your first body part!' },
-    bodyDoctor:   { icon: '🩺', name: 'Little Doctor',       desc: 'Found every body part on the map!' }
+    bodyDoctor:   { icon: '🩺', name: 'Little Doctor',       desc: 'Found every body part on the map!' },
+    spaceCadet:   { icon: '🚀', name: 'Space Cadet',         desc: 'Visited your first planet!' },
+    astronomer:   { icon: '🔭', name: 'Astronomer',          desc: 'Explored every planet and the Sun!' },
+    planetPro:    { icon: '🪐', name: 'Planet Pro',          desc: 'Perfect score on the Planet Quiz!' }
 };
 
 async function saveProgress() {
@@ -855,6 +870,7 @@ async function loadProgress() {
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
+            await loadQuizStats();
             userStars = 0;
             level = 1;
             unlockedBadges = new Set();
@@ -865,6 +881,8 @@ async function loadProgress() {
             return;
         }
         
+        await loadQuizStats();
+
         const d = docSnap.data();
         userStars = d.stars || 0;
         level = d.level || 1;
@@ -991,6 +1009,7 @@ window.mascotSpeak = mascotSpeak;
 // NAVIGATION & TAB CONTROLLERS
 // ============================================================
 function switchTab(tabId, evt) {
+    if (tabId === 'solar') setTimeout(buildSolarSystem, 30);
     playSound(440);
 
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -1309,7 +1328,52 @@ function renderStoryPage() {
         showToast('Story finished — great reading!', '📖', 3500);
         saveProgress();
     }
+
+    // Read the new page aloud when Auto-Read is switched on.
+    if (typeof autoReadStories !== 'undefined' && autoReadStories && speechEnabled) {
+        setTimeout(readStoryPage, 260);
+    } else {
+        stopSpeech();
+        if (bookTextElem) bookTextElem.classList.remove('reading');
+    }
 }
+
+// ---- Storybook narration controls ----
+let autoReadStories = false;
+
+function readStoryPage() {
+    const el = document.getElementById('bookText');
+    const text = el ? el.innerText : '';
+    if (!text) return;
+    if (!speechEnabled) {
+        showToast('Voice is off — turn it on to hear the story', '🔇', 2600);
+        return;
+    }
+    if (el) el.classList.add('reading');
+    speakText(text);
+}
+window.readStoryPage = readStoryPage;
+
+function stopStoryReading() {
+    stopSpeech();
+    playSound(300, 'sawtooth', 0.12);
+    document.querySelectorAll('.book-text.reading').forEach(e => e.classList.remove('reading'));
+}
+window.stopStoryReading = stopStoryReading;
+
+function toggleAutoRead(on) {
+    autoReadStories = !!on;
+    playSound(on ? 700 : 350);
+    showToast(on ? 'Auto-Read on — pages read themselves!' : 'Auto-Read off',
+              on ? '📖' : '📕', 2600);
+    if (autoReadStories) {
+        if (!speechEnabled) toggleNarration();
+        readStoryPage();
+    } else {
+        stopStoryReading();
+    }
+}
+window.toggleAutoRead = toggleAutoRead;
 
 function changePage(delta) {
     playSound(500);
@@ -1387,6 +1451,7 @@ function renderDuoQuestion() {
 
     if (duoIndex >= duoCurrentQuestions.length) {
         unlockBadge('duoLingo');
+        recordRoundScore('duo', duoScore, Math.max(duoCurrentQuestions.length * 10, 1));
         const earnedStars = duoScore * 5;
         addStars(earnedStars);
         launchConfetti(40);
@@ -1433,6 +1498,7 @@ function answerDuo(choice) {
         duoStreak = 0;
     }
 
+    recordAnswer('duo', choice === q.answer, q.prompt || '');
     updateDuoStats();
 
     setTimeout(() => {
@@ -1518,6 +1584,7 @@ function renderMathQuestion() {
         if (mathProgElem) mathProgElem.innerText = `${total} / ${total}`;
         if (mathScoreElem) mathScoreElem.innerText = mathScore;
 
+        recordRoundScore('math', mathScore, total);
         const perfect = mathScore === total;
         if (perfect) unlockBadge('mathGenius');
         const earnedStars = mathScore * 5;
@@ -1564,6 +1631,8 @@ function answerMath(choice) {
         playSound(200, 'sawtooth', 0.3);
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
+
+    recordAnswer('math', choice === q.answer, q.question || '');
 
     setTimeout(() => {
         mathIndex++;
@@ -1629,6 +1698,7 @@ function renderQuizQuestion() {
         if (quizProgElem) quizProgElem.innerText = `${total} / ${total}`;
         if (quizScoreElem) quizScoreElem.innerText = quizScore;
 
+        recordRoundScore('trivia', quizScore, total);
         const perfect = quizScore === total;
         if (perfect) unlockBadge('quizWhiz');
         const earnedStars = quizScore * 5;
@@ -1676,6 +1746,8 @@ function answerQuiz(choice) {
         playSound(200, 'sawtooth', 0.3);
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
+
+    recordAnswer('trivia', choice === q.answer, q.question || '');
 
     setTimeout(() => {
         quizIndex++;
@@ -1740,6 +1812,7 @@ function renderMauritiusQuestion() {
             if (nextBtn) nextBtn.disabled = false;
         }
 
+        recordRoundScore('mauritius', mruScore, total);
         const perfect = mruScore === total;
         const earnedStars = mruScore * 10;
         addStars(earnedStars);
@@ -1797,6 +1870,8 @@ function answerMauritius(choice) {
         playSound(200, 'sawtooth', 0.3);
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
+
+    recordAnswer('mauritius', choice === q.a, q.q || '');
 
     setTimeout(() => {
         mruIndex++;
@@ -2430,6 +2505,7 @@ function handleBodyPartClick(partId) {
             showBodyInfo(partId);
             speakText(`Yes! That is the ${part.name}. ${part.fact}`);
             bodyScore += 10;
+            recordAnswer('body', true, `Find: ${part.name}`);
             markBodyDiscovered(partId);
             addStars(3);
             setBodyPrompt(`✅ Correct! That is the ${part.name}!`);
@@ -2442,6 +2518,7 @@ function handleBodyPartClick(partId) {
                 group.classList.add('wrong-flash');
                 setTimeout(() => group.classList.remove('wrong-flash'), 520);
             }
+            recordAnswer('body', false, `Find: looking for ${getBodyPart(bodyTargetId) ? getBodyPart(bodyTargetId).name : ''}`);
             setBodyPrompt(`Oops, that is the ${part.name}. Try again! 🔍`);
             speakText(`That is the ${part.name}. Try again!`);
         }
@@ -2543,6 +2620,8 @@ function answerBodyLabel(chosenId, btn) {
 
     const target = getBodyPart(bodyTargetId);
 
+    recordAnswer('body', chosenId === bodyTargetId, `Label: ${target ? target.name : ''}`);
+
     if (chosenId === bodyTargetId) {
         playSound(900, 'sine', 0.2);
         btn.classList.add('correct');
@@ -2569,6 +2648,885 @@ function answerBodyLabel(chosenId, btn) {
     setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2400);
 }
 window.answerBodyLabel = answerBodyLabel;
+
+
+
+// ============================================================
+// QUIZ RESULT TRACKING (per kid, per activity)
+// Every answer a kid gives is recorded so the admin can see
+// exactly how many they got right in each activity.
+// ============================================================
+const ACTIVITY_LABELS = {
+    duo:      { icon: '🦉', name: 'Duolingo Dash' },
+    math:     { icon: '🔢', name: 'Math Wizard' },
+    trivia:   { icon: '🧠', name: 'Trivia Quiz' },
+    mauritius:{ icon: '🇲🇺', name: 'Mauritius History' },
+    body:     { icon: '🧍', name: 'Body Parts Explorer' },
+    planet:   { icon: '🪐', name: 'Planet Quiz' },
+    memory:   { icon: '🧩', name: 'Memory Match' }
+};
+
+// In-memory mirror of this kid's stats (also saved to Firestore).
+let quizStats = {};
+
+function blankActivityStat() {
+    return { correct: 0, wrong: 0, attempts: 0, best: 0, lastPlayed: null };
+}
+
+/**
+ * Record one answer.
+ * @param {string} activity - key from ACTIVITY_LABELS
+ * @param {boolean} isCorrect
+ * @param {string} questionText - optional, for the recent-answers log
+ */
+function recordAnswer(activity, isCorrect, questionText = '') {
+    if (!quizStats[activity]) quizStats[activity] = blankActivityStat();
+    const st = quizStats[activity];
+    st.attempts++;
+    if (isCorrect) st.correct++; else st.wrong++;
+    st.lastPlayed = Date.now();
+
+    if (!quizStats._recent) quizStats._recent = [];
+    quizStats._recent.unshift({
+        activity,
+        correct: !!isCorrect,
+        q: String(questionText).slice(0, 90),
+        at: Date.now()
+    });
+    quizStats._recent = quizStats._recent.slice(0, 40);
+
+    saveQuizStats();
+}
+window.recordAnswer = recordAnswer;
+
+/** Record a finished round's score (for "best score" tracking). */
+function recordRoundScore(activity, score, total) {
+    if (!quizStats[activity]) quizStats[activity] = blankActivityStat();
+    const st = quizStats[activity];
+    const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+    if (pct > (st.best || 0)) st.best = pct;
+    st.rounds = (st.rounds || 0) + 1;
+    st.lastPlayed = Date.now();
+    saveQuizStats();
+}
+window.recordRoundScore = recordRoundScore;
+
+let quizStatsSaveTimer = null;
+async function saveQuizStats() {
+    if (!currentActiveId || currentRole !== 'kid') return;
+    // debounce so rapid answers do not spam Firestore
+    if (quizStatsSaveTimer) clearTimeout(quizStatsSaveTimer);
+    quizStatsSaveTimer = setTimeout(async () => {
+        try {
+            await setDoc(doc(db, "kidStats", currentActiveId), {
+                stats: quizStats,
+                name: (cachedKidProfiles.find(p => p.id === currentActiveId) || {}).name || '',
+                updatedAt: Date.now()
+            });
+        } catch (e) {
+            console.error('Stats save error:', e);
+        }
+    }, 800);
+}
+
+async function loadQuizStats() {
+    quizStats = {};
+    if (!currentActiveId) return;
+    try {
+        const snap = await getDoc(doc(db, "kidStats", currentActiveId));
+        if (snap.exists()) quizStats = snap.data().stats || {};
+    } catch (e) {
+        console.error('Stats load error:', e);
+    }
+}
+
+
+// ============================================================
+// ADMIN: KID PERFORMANCE REPORTS
+// ============================================================
+let allKidStats = {};      // kidId -> stats object
+let allKidProgress = {};   // kidId -> progress object
+let adminReportKid = null; // null = overview, otherwise a kid id
+
+async function fetchAllKidData() {
+    allKidStats = {};
+    allKidProgress = {};
+    await Promise.all(cachedKidProfiles.map(async (p) => {
+        try {
+            const [statSnap, progSnap] = await Promise.all([
+                getDoc(doc(db, "kidStats", p.id)),
+                getDoc(doc(db, "kidProgress", p.id))
+            ]);
+            allKidStats[p.id] = statSnap.exists() ? (statSnap.data().stats || {}) : {};
+            allKidProgress[p.id] = progSnap.exists() ? progSnap.data() : {};
+        } catch (e) {
+            console.error('Report fetch error for', p.name, e);
+            allKidStats[p.id] = {};
+            allKidProgress[p.id] = {};
+        }
+    }));
+}
+
+function totalsFor(stats) {
+    let correct = 0, wrong = 0, attempts = 0;
+    Object.keys(stats || {}).forEach(k => {
+        if (k.startsWith('_')) return;
+        const st = stats[k] || {};
+        correct += st.correct || 0;
+        wrong += st.wrong || 0;
+        attempts += st.attempts || 0;
+    });
+    const pct = attempts > 0 ? Math.round((correct / attempts) * 100) : 0;
+    return { correct, wrong, attempts, pct };
+}
+
+function accuracyClass(pct) {
+    if (pct >= 80) return 'acc-great';
+    if (pct >= 60) return 'acc-ok';
+    if (pct > 0)   return 'acc-low';
+    return 'acc-none';
+}
+
+async function openReportsModal() {
+    if (currentRole !== 'admin') return;
+    playSound(600);
+    adminReportKid = null;
+    const modal = document.getElementById('reportsModal');
+    if (modal) modal.style.display = 'flex';
+    const body = document.getElementById('reportsBody');
+    if (body) body.innerHTML = '<p class="rep-loading">⏳ Loading results…</p>';
+    await fetchAllKidData();
+    renderReports();
+}
+window.openReportsModal = openReportsModal;
+
+function closeReportsModal() {
+    const m = document.getElementById('reportsModal');
+    if (m) m.style.display = 'none';
+    playSound(400);
+}
+window.closeReportsModal = closeReportsModal;
+
+function closeReportsModalOnBg(e) {
+    if (e.target.id === 'reportsModal') closeReportsModal();
+}
+window.closeReportsModalOnBg = closeReportsModalOnBg;
+
+function renderReports() {
+    const body = document.getElementById('reportsBody');
+    if (!body) return;
+
+    if (!cachedKidProfiles.length) {
+        body.innerHTML = '<p class="rep-loading">No kid profiles yet. Add one with ➕ Add Kid.</p>';
+        return;
+    }
+
+    if (adminReportKid) { renderKidReport(adminReportKid); return; }
+
+    // ---------- Overview: every kid, ranked ----------
+    const rows = cachedKidProfiles.map(p => {
+        const t = totalsFor(allKidStats[p.id]);
+        const prog = allKidProgress[p.id] || {};
+        return { p, t, stars: prog.stars || 0, level: prog.level || 1, badges: (prog.badges || []).length };
+    }).sort((a, b) => b.t.correct - a.t.correct);
+
+    const classCorrect = rows.reduce((s, r) => s + r.t.correct, 0);
+    const classAttempts = rows.reduce((s, r) => s + r.t.attempts, 0);
+    const classPct = classAttempts ? Math.round((classCorrect / classAttempts) * 100) : 0;
+
+    body.innerHTML = `
+        <div class="rep-summary">
+            <div class="rep-sum-card">
+                <span class="rs-num">${cachedKidProfiles.length}</span>
+                <span class="rs-lab">Explorers</span>
+            </div>
+            <div class="rep-sum-card">
+                <span class="rs-num">${classAttempts}</span>
+                <span class="rs-lab">Questions Answered</span>
+            </div>
+            <div class="rep-sum-card">
+                <span class="rs-num">${classCorrect}</span>
+                <span class="rs-lab">Correct</span>
+            </div>
+            <div class="rep-sum-card ${accuracyClass(classPct)}">
+                <span class="rs-num">${classPct}%</span>
+                <span class="rs-lab">Class Accuracy</span>
+            </div>
+        </div>
+
+        <p class="rep-hint">👇 Click a kid to see a full subject-by-subject breakdown.</p>
+
+        <div class="rep-list">
+            ${rows.map((r, i) => `
+                <button class="rep-row" onclick="showKidReport('${r.p.id}')">
+                    <span class="rep-rank">${i === 0 && r.t.correct > 0 ? '🥇' : (i === 1 && r.t.correct > 0 ? '🥈' : (i === 2 && r.t.correct > 0 ? '🥉' : '#' + (i + 1)))}</span>
+                    <span class="rep-avatar">${r.p.avatar || '🚀'}</span>
+                    <span class="rep-name">
+                        ${r.p.name}
+                        <small>Lvl ${r.level} · ⭐ ${r.stars} · 🏅 ${r.badges}</small>
+                    </span>
+                    <span class="rep-score">
+                        <strong>${r.t.correct}</strong><small>/${r.t.attempts} right</small>
+                    </span>
+                    <span class="rep-bar-wrap">
+                        <span class="rep-bar ${accuracyClass(r.t.pct)}" style="width:${r.t.pct}%"></span>
+                        <span class="rep-pct">${r.t.attempts ? r.t.pct + '%' : '—'}</span>
+                    </span>
+                </button>`).join('')}
+        </div>`;
+}
+
+function showKidReport(kidId) {
+    adminReportKid = kidId;
+    playSound(560);
+    renderKidReport(kidId);
+}
+window.showKidReport = showKidReport;
+
+function backToReportOverview() {
+    adminReportKid = null;
+    playSound(420);
+    renderReports();
+}
+window.backToReportOverview = backToReportOverview;
+
+function renderKidReport(kidId) {
+    const body = document.getElementById('reportsBody');
+    const kid = cachedKidProfiles.find(p => p.id === kidId);
+    if (!body || !kid) return;
+
+    const stats = allKidStats[kidId] || {};
+    const prog = allKidProgress[kidId] || {};
+    const t = totalsFor(stats);
+
+    const activityKeys = Object.keys(ACTIVITY_LABELS).filter(k => stats[k] && stats[k].attempts > 0);
+
+    const activityRows = activityKeys.length ? activityKeys.map(k => {
+        const st = stats[k];
+        const pct = st.attempts ? Math.round((st.correct / st.attempts) * 100) : 0;
+        const meta = ACTIVITY_LABELS[k];
+        return `
+            <div class="rep-act">
+                <span class="ra-icon">${meta.icon}</span>
+                <span class="ra-name">${meta.name}
+                    <small>${st.rounds ? st.rounds + ' rounds · ' : ''}best ${st.best || 0}%</small>
+                </span>
+                <span class="ra-nums">
+                    <strong class="ra-right">${st.correct} ✔</strong>
+                    <strong class="ra-wrong">${st.wrong} ✘</strong>
+                </span>
+                <span class="rep-bar-wrap">
+                    <span class="rep-bar ${accuracyClass(pct)}" style="width:${pct}%"></span>
+                    <span class="rep-pct">${pct}%</span>
+                </span>
+            </div>`;
+    }).join('') : '<p class="rep-loading">This explorer has not answered any quiz questions yet.</p>';
+
+    const recent = (stats._recent || []).slice(0, 12);
+    const recentRows = recent.length ? recent.map(r => {
+        const meta = ACTIVITY_LABELS[r.activity] || { icon: '❔', name: r.activity };
+        const when = new Date(r.at).toLocaleString(undefined,
+            { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return `<li class="${r.correct ? 'rr-ok' : 'rr-bad'}">
+                    <span class="rr-mark">${r.correct ? '✅' : '❌'}</span>
+                    <span class="rr-q">${meta.icon} ${r.q || meta.name}</span>
+                    <span class="rr-when">${when}</span>
+                </li>`;
+    }).join('') : '<li class="rep-loading">No answers recorded yet.</li>';
+
+    const weakest = activityKeys.map(k => {
+        const st = stats[k];
+        return { k, pct: st.attempts ? Math.round((st.correct / st.attempts) * 100) : 0 };
+    }).sort((a, b) => a.pct - b.pct)[0];
+
+    body.innerHTML = `
+        <button class="rep-back" onclick="backToReportOverview()">◀ All Explorers</button>
+
+        <div class="rep-kid-head">
+            <span class="rep-kid-avatar">${kid.avatar || '🚀'}</span>
+            <div>
+                <h3>${kid.name}</h3>
+                <p>Level ${prog.level || 1} · ⭐ ${prog.stars || 0} stars · 🏅 ${(prog.badges || []).length} badges</p>
+            </div>
+        </div>
+
+        <div class="rep-summary">
+            <div class="rep-sum-card"><span class="rs-num">${t.attempts}</span><span class="rs-lab">Answered</span></div>
+            <div class="rep-sum-card acc-great"><span class="rs-num">${t.correct}</span><span class="rs-lab">Correct</span></div>
+            <div class="rep-sum-card acc-low"><span class="rs-num">${t.wrong}</span><span class="rs-lab">Wrong</span></div>
+            <div class="rep-sum-card ${accuracyClass(t.pct)}"><span class="rs-num">${t.pct}%</span><span class="rs-lab">Accuracy</span></div>
+        </div>
+
+        ${weakest && weakest.pct < 70 ? `
+            <div class="rep-tip">💡 <strong>Needs practice:</strong>
+                ${ACTIVITY_LABELS[weakest.k].icon} ${ACTIVITY_LABELS[weakest.k].name} (${weakest.pct}% correct)</div>` : ''}
+
+        <h4 class="rep-sub">📊 Subject Breakdown</h4>
+        <div class="rep-acts">${activityRows}</div>
+
+        <h4 class="rep-sub">🕒 Recent Answers</h4>
+        <ul class="rep-recent">${recentRows}</ul>
+
+        <div class="rep-actions">
+            <button class="solar-tool-btn" onclick="exportKidCSV('${kidId}')">⬇️ Download CSV</button>
+            <button class="solar-tool-btn" onclick="resetKidStats('${kidId}')">🧹 Reset Results</button>
+        </div>`;
+}
+
+function exportKidCSV(kidId) {
+    const kid = cachedKidProfiles.find(p => p.id === kidId);
+    const stats = allKidStats[kidId] || {};
+    if (!kid) return;
+
+    let csv = 'Activity,Correct,Wrong,Total,Accuracy %,Best Score %\n';
+    Object.keys(ACTIVITY_LABELS).forEach(k => {
+        const st = stats[k];
+        if (!st || !st.attempts) return;
+        const pct = Math.round((st.correct / st.attempts) * 100);
+        csv += `"${ACTIVITY_LABELS[k].name}",${st.correct},${st.wrong},${st.attempts},${pct},${st.best || 0}\n`;
+    });
+    const t = totalsFor(stats);
+    csv += `"TOTAL",${t.correct},${t.wrong},${t.attempts},${t.pct},\n`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${kid.name}-results.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded ${kid.name}'s results`, '⬇️', 3000);
+}
+window.exportKidCSV = exportKidCSV;
+
+async function resetKidStats(kidId) {
+    const kid = cachedKidProfiles.find(p => p.id === kidId);
+    if (!kid) return;
+    if (!confirm(`Clear all quiz results for ${kid.name}? Stars and badges are kept.`)) return;
+    try {
+        await setDoc(doc(db, "kidStats", kidId), { stats: {}, name: kid.name, updatedAt: Date.now() });
+        allKidStats[kidId] = {};
+        showToast(`${kid.name}'s results were cleared`, '🧹', 3000);
+        renderKidReport(kidId);
+    } catch (e) {
+        console.error(e);
+        showToast('Could not clear results', '❌', 3000);
+    }
+}
+window.resetKidStats = resetKidStats;
+
+// ============================================================
+// SOLAR SYSTEM EXPLORER
+// ============================================================
+const PLANETS = [
+    {
+        id: 'sun', name: 'The Sun', emoji: '☀️', type: 'Star',
+        colors: ['#fff3a0', '#ffb700', '#ff7300'],
+        size: 46, orbit: 0, speed: 0, tagline: 'Our neighbourhood star!',
+        gravity: 27.01, moons: 0, dayLength: '27 Earth days', yearLength: '—',
+        temp: '5,500°C surface', distance: '0 km (the centre!)', diameter: '1,392,700 km',
+        fact: 'The Sun is so big that about 1.3 million Earths could fit inside it! It turns hydrogen into helium and gives us light and warmth.'
+    },
+    {
+        id: 'mercury', name: 'Mercury', emoji: '🪨', type: 'Rocky planet',
+        colors: ['#cfc6bd', '#9a8f86', '#6b625b'],
+        size: 12, orbit: 76, speed: 12, tagline: 'The speedy little one!',
+        gravity: 0.38, moons: 0, dayLength: '59 Earth days', yearLength: '88 Earth days',
+        temp: '-180°C to 430°C', distance: '58 million km from Sun', diameter: '4,879 km',
+        fact: 'Mercury zooms around the Sun faster than any other planet. One year there is only 88 days, so you would have birthdays super often!'
+    },
+    {
+        id: 'venus', name: 'Venus', emoji: '🌋', type: 'Rocky planet',
+        colors: ['#ffe0a3', '#e8a33d', '#b4661a'],
+        size: 18, orbit: 106, speed: 19, tagline: 'The hottest planet!',
+        gravity: 0.91, moons: 0, dayLength: '243 Earth days', yearLength: '225 Earth days',
+        temp: '465°C — hot enough to melt lead', distance: '108 million km from Sun', diameter: '12,104 km',
+        fact: 'Venus spins backwards and very slowly, so one day there lasts longer than its whole year! Thick clouds trap heat like a blanket.'
+    },
+    {
+        id: 'earth', name: 'Earth', emoji: '🌍', type: 'Our home!',
+        colors: ['#9be7ff', '#2f86d6', '#1b5a9c'],
+        size: 19, orbit: 140, speed: 26, tagline: 'The only place with life!',
+        gravity: 1, moons: 1, dayLength: '24 hours', yearLength: '365.25 days',
+        temp: '-88°C to 58°C', distance: '150 million km from Sun', diameter: '12,742 km',
+        fact: 'Earth is the only planet we know of with liquid water oceans and living things. About 71 percent of it is covered in water!'
+    },
+    {
+        id: 'moon', name: 'The Moon', emoji: '🌕', type: "Earth's only moon",
+        parent: 'earth', moonOrbit: 34, moonSpeed: 6,
+        colors: ['#f4f2ec', '#c9c5bb', '#8f8b82'],
+        size: 8, orbit: 0, speed: 0, tagline: 'Our closest neighbour in space!',
+        gravity: 0.166, moons: 0, dayLength: '29.5 Earth days', yearLength: 'Circles Earth every 27.3 days',
+        temp: '-173°C to 127°C', distance: '384,400 km from Earth', diameter: '3,475 km',
+        fact: 'The Moon has no wind or rain, so the footprints the astronauts left in 1969 are still there today — and could stay for millions of years!'
+    },
+    {
+        id: 'mars', name: 'Mars', emoji: '🔴', type: 'Rocky planet',
+        colors: ['#ffb99a', '#d1542f', '#8c2f16'],
+        size: 15, orbit: 176, speed: 35, tagline: 'The rusty red planet!',
+        gravity: 0.38, moons: 2, dayLength: '24.6 hours', yearLength: '687 Earth days',
+        temp: '-140°C to 20°C', distance: '228 million km from Sun', diameter: '6,779 km',
+        fact: 'Mars has the tallest volcano in the solar system, Olympus Mons — about three times taller than Mount Everest!'
+    },
+    {
+        id: 'jupiter', name: 'Jupiter', emoji: '🌀', type: 'Gas giant',
+        colors: ['#ffe6c4', '#d9a066', '#96603a'],
+        size: 38, orbit: 226, speed: 60, tagline: 'The giant with a storm!',
+        gravity: 2.34, moons: 95, dayLength: '10 hours', yearLength: '12 Earth years',
+        temp: '-145°C cloud tops', distance: '778 million km from Sun', diameter: '139,820 km',
+        fact: 'Jupiter has a giant storm called the Great Red Spot that has been swirling for over 300 years — and it is bigger than Earth!'
+    },
+    {
+        id: 'saturn', name: 'Saturn', emoji: '🪐', type: 'Gas giant',
+        colors: ['#fff0c9', '#e0bb72', '#a8823f'],
+        size: 33, orbit: 278, speed: 85, tagline: 'The one with beautiful rings!',
+        gravity: 0.93, moons: 146, dayLength: '10.7 hours', yearLength: '29 Earth years',
+        temp: '-178°C', distance: '1.4 billion km from Sun', diameter: '116,460 km',
+        fact: 'Saturn is so light for its size that it would float in a giant bathtub of water! Its rings are made of ice and rock chunks.',
+        hasRings: true
+    },
+    {
+        id: 'uranus', name: 'Uranus', emoji: '💠', type: 'Ice giant',
+        colors: ['#d6f7ff', '#7fd4e8', '#3f9fb8'],
+        size: 25, orbit: 322, speed: 110, tagline: 'The planet that rolls!',
+        gravity: 0.92, moons: 28, dayLength: '17 hours', yearLength: '84 Earth years',
+        temp: '-224°C — the coldest!', distance: '2.9 billion km from Sun', diameter: '50,724 km',
+        fact: 'Uranus is tipped right over on its side, so it rolls around the Sun like a ball instead of spinning like a top!',
+        hasRings: true
+    },
+    {
+        id: 'neptune', name: 'Neptune', emoji: '🔵', type: 'Ice giant',
+        colors: ['#bcd9ff', '#3f6fd8', '#22407f'],
+        size: 24, orbit: 362, speed: 135, tagline: 'The windiest world!',
+        gravity: 1.12, moons: 16, dayLength: '16 hours', yearLength: '165 Earth years',
+        temp: '-214°C', distance: '4.5 billion km from Sun', diameter: '49,244 km',
+        fact: 'Neptune has the fastest winds in the solar system — over 2,000 km per hour, faster than a jet plane!'
+    }
+];
+
+let orbitsRunning = true;
+let solarRealScale = false;
+let currentPlanetIndex = 0;
+let solarBuilt = false;
+
+function getPlanet(id) {
+    return PLANETS.find(p => p.id === id);
+}
+
+function buildStarfield() {
+    const field = document.getElementById('starfield');
+    if (!field || field.dataset.built === 'yes') return;
+    field.dataset.built = 'yes';
+    let html = '';
+    for (let i = 0; i < 90; i++) {
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        const d = (Math.random() * 2.4 + 0.8).toFixed(1);
+        const delay = (Math.random() * 4).toFixed(1);
+        html += `<span class="star" style="left:${x}%;top:${y}%;width:${d}px;height:${d}px;animation-delay:${delay}s"></span>`;
+    }
+    field.innerHTML = html;
+}
+
+function buildSolarSystem() {
+    const layer = document.getElementById('orbitLayer');
+    if (!layer) return;
+
+    buildStarfield();
+    layer.innerHTML = '';
+
+    // Hovering anywhere on the map freezes the orbits, so a moving planet
+    // is easy to aim at. Leaving the map resumes them.
+    const map = document.getElementById('solarMap');
+    if (map && map.dataset.hoverWired !== 'yes') {
+        map.dataset.hoverWired = 'yes';
+        map.addEventListener('pointerenter', () => {
+            if (orbitsRunning) layer.classList.add('hover-paused');
+        });
+        map.addEventListener('pointerleave', () => layer.classList.remove('hover-paused'));
+    }
+
+    PLANETS.filter(p => p.id !== 'sun' && !p.parent).forEach((p, i) => {
+        const ring = document.createElement('div');
+        ring.className = 'orbit-ring';
+        ring.style.width = ring.style.height = `${p.orbit * 2}px`;
+
+        const spinner = document.createElement('div');
+        spinner.className = 'orbit-spinner';
+        spinner.style.animationDuration = `${p.speed}s`;
+        spinner.style.animationDelay = `-${i * 2.3}s`;
+        spinner.dataset.planet = p.id;
+
+        const body = document.createElement('button');
+        body.className = 'planet-body';
+        body.type = 'button';
+        body.dataset.planet = p.id;
+        body.style.width = body.style.height = `${p.size}px`;
+        body.style.background =
+            `radial-gradient(circle at 32% 30%, ${p.colors[0]}, ${p.colors[1]} 58%, ${p.colors[2]} 100%)`;
+        body.setAttribute('aria-label', p.name);
+        body.title = p.name;
+
+        // A click event needs mousedown AND mouseup on the same spot. These
+        // planets are orbiting, so they slide away between the two and the
+        // click never fires. Opening on pointerdown makes them reliable to hit.
+        const grab = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPlanet(p.id);
+        };
+        body.addEventListener('pointerdown', grab);
+        body.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlanet(p.id); }
+        });
+
+        if (p.hasRings) {
+            const rings = document.createElement('span');
+            rings.className = 'planet-rings';
+            body.appendChild(rings);
+        }
+
+        // Attach any moons that orbit THIS planet
+        PLANETS.filter(m => m.parent === p.id).forEach(m => {
+            const moonOrbit = document.createElement('span');
+            moonOrbit.className = 'moon-orbit';
+            moonOrbit.style.width = moonOrbit.style.height = `${m.moonOrbit * 2}px`;
+            moonOrbit.style.animationDuration = `${m.moonSpeed}s`;
+
+            const moonBody = document.createElement('button');
+            moonBody.className = 'moon-body';
+            moonBody.type = 'button';
+            moonBody.dataset.planet = m.id;
+            moonBody.style.width = moonBody.style.height = `${m.size}px`;
+            moonBody.style.background =
+                `radial-gradient(circle at 34% 30%, ${m.colors[0]}, ${m.colors[1]} 58%, ${m.colors[2]} 100%)`;
+            moonBody.setAttribute('aria-label', m.name);
+            moonBody.title = m.name;
+            moonBody.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();   // don't open Earth as well
+                openPlanet(m.id);
+            });
+            moonBody.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault(); e.stopPropagation(); openPlanet(m.id);
+                }
+            });
+
+            const moonLabel = document.createElement('span');
+            moonLabel.className = 'planet-label moon-label';
+            moonLabel.innerText = m.name;
+            moonBody.appendChild(moonLabel);
+
+            moonOrbit.appendChild(moonBody);
+            body.appendChild(moonOrbit);
+        });
+
+        const label = document.createElement('span');
+        label.className = 'planet-label';
+        label.innerText = p.name;
+        body.appendChild(label);
+
+        spinner.appendChild(body);
+        ring.appendChild(spinner);
+        layer.appendChild(ring);
+    });
+
+    renderPlanetCards();
+    solarBuilt = true;
+}
+
+function renderPlanetCards() {
+    const grid = document.getElementById('planetGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    PLANETS.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'planet-card';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.onclick = () => openPlanet(p.id);
+        card.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlanet(p.id); }
+        };
+        card.innerHTML = `
+            <div class="pc-orb" style="background: radial-gradient(circle at 32% 30%, ${p.colors[0]}, ${p.colors[1]} 58%, ${p.colors[2]} 100%)"></div>
+            <div class="pc-body">
+                <h4>${p.emoji} ${p.name}</h4>
+                <span class="pc-type">${p.type}</span>
+                <p>${p.tagline}</p>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+
+function toggleOrbits() {
+    orbitsRunning = !orbitsRunning;
+    const layer = document.getElementById('orbitLayer');
+    if (layer) layer.classList.toggle('paused', !orbitsRunning);
+    const btn = document.getElementById('orbitToggleBtn');
+    if (btn) {
+        btn.innerHTML = orbitsRunning ? '⏸️ Pause Orbits' : '▶️ Start Orbits';
+        btn.classList.toggle('active', orbitsRunning);
+    }
+    playSound(orbitsRunning ? 620 : 320);
+}
+window.toggleOrbits = toggleOrbits;
+
+function toggleSolarScale() {
+    solarRealScale = !solarRealScale;
+    const map = document.getElementById('solarMap');
+    if (map) map.classList.toggle('real-scale', solarRealScale);
+    const btn = document.getElementById('scaleToggleBtn');
+    if (btn) {
+        btn.innerHTML = solarRealScale ? '🔍 Show Fun Sizes' : '📏 Show Real Sizes';
+        btn.classList.toggle('active', solarRealScale);
+    }
+    playSound(500);
+    showToast(solarRealScale
+        ? 'Now showing how different planet sizes really are!'
+        : 'Back to easy-to-click sizes', '📏', 2800);
+}
+window.toggleSolarScale = toggleSolarScale;
+
+// ---- Planet detail modal ----
+function openPlanet(id) {
+    const p = getPlanet(id);
+    if (!p) return;
+    currentPlanetIndex = PLANETS.findIndex(x => x.id === id);
+
+    playSound(660);
+
+    const visual = document.getElementById('planetVisual');
+    if (visual) {
+        visual.style.background =
+            `radial-gradient(circle at 32% 28%, ${p.colors[0]}, ${p.colors[1]} 55%, ${p.colors[2]} 100%)`;
+        visual.className = 'planet-visual' + (p.hasRings ? ' with-rings' : '') + (p.id === 'sun' ? ' is-sun' : '');
+    }
+
+    const setText = (elId, val) => { const e = document.getElementById(elId); if (e) e.innerText = val; };
+    setText('planetModalTitle', `${p.emoji} ${p.name}`);
+    setText('planetTagline', p.tagline);
+    setText('planetFact', p.fact);
+
+    const stats = document.getElementById('planetStats');
+    if (stats) {
+        const rows = [
+            ['🌡️', 'Temperature', p.temp],
+            ['📏', 'Width', p.diameter],
+            ['🚀', 'Distance', p.distance],
+            ['🌙', 'Moons', p.moons],
+            ['🕐', 'One day', p.dayLength],
+            ['📅', 'One year', p.yearLength]
+        ];
+        stats.innerHTML = rows.map(([icon, label, val]) =>
+            `<div class="pstat"><span class="pstat-icon">${icon}</span>
+             <span class="pstat-label">${label}</span>
+             <span class="pstat-val">${val}</span></div>`).join('');
+    }
+
+    updatePlanetWeight();
+
+    const modal = document.getElementById('planetModal');
+    if (modal) modal.style.display = 'flex';
+
+    if (!factsViewed.has('planet-' + p.id)) {
+        factsViewed.add('planet-' + p.id);
+        addStars(4);
+        const seen = PLANETS.filter(x => factsViewed.has('planet-' + x.id)).length;
+        if (seen === 1) unlockBadge('spaceCadet');
+        if (seen === PLANETS.length) {
+            unlockBadge('astronomer');
+            launchConfetti(50);
+        }
+        saveProgress();
+    }
+}
+window.openPlanet = openPlanet;
+
+function closePlanetModal() {
+    const m = document.getElementById('planetModal');
+    if (m) m.style.display = 'none';
+    stopSpeech();
+    playSound(400);
+}
+window.closePlanetModal = closePlanetModal;
+
+function closePlanetModalOnBg(e) {
+    if (e.target.id === 'planetModal') closePlanetModal();
+}
+window.closePlanetModalOnBg = closePlanetModalOnBg;
+
+function nextPlanet() {
+    currentPlanetIndex = (currentPlanetIndex + 1) % PLANETS.length;
+    openPlanet(PLANETS[currentPlanetIndex].id);
+}
+window.nextPlanet = nextPlanet;
+
+function prevPlanet() {
+    currentPlanetIndex = (currentPlanetIndex - 1 + PLANETS.length) % PLANETS.length;
+    openPlanet(PLANETS[currentPlanetIndex].id);
+}
+window.prevPlanet = prevPlanet;
+
+function speakPlanet() {
+    const p = PLANETS[currentPlanetIndex];
+    if (!p) return;
+    speakText(`${p.name}. ${p.tagline} ${p.fact}`);
+}
+window.speakPlanet = speakPlanet;
+
+function updatePlanetWeight() {
+    const input = document.getElementById('earthWeight');
+    const out = document.getElementById('weightResult');
+    const p = PLANETS[currentPlanetIndex];
+    if (!input || !out || !p) return;
+
+    const kg = parseFloat(input.value);
+    if (isNaN(kg) || kg <= 0) { out.innerText = 'Type your weight to find out!'; return; }
+
+    const there = kg * p.gravity;
+    let msg;
+    if (p.gravity > 1.5)      msg = 'Wow, you would feel super heavy!';
+    else if (p.gravity > 0.95) msg = 'Almost the same as home!';
+    else if (p.gravity > 0.5)  msg = 'You would feel a bit lighter!';
+    else                       msg = 'You could jump really high there!';
+
+    out.innerHTML = `On <strong>${p.name}</strong> you would weigh
+        <strong class="weight-num">${there.toFixed(1)} kg</strong><br>
+        <span class="weight-msg">${msg}</span>`;
+}
+window.updatePlanetWeight = updatePlanetWeight;
+
+function solarSurprise() {
+    const p = PLANETS[Math.floor(Math.random() * PLANETS.length)];
+    launchConfetti(14);
+    openPlanet(p.id);
+}
+window.solarSurprise = solarSurprise;
+
+// ---- Planet quiz ----
+let pqQuestions = [];
+let pqIndex = 0;
+let pqScore = 0;
+let pqLocked = false;
+
+function buildPlanetQuestions() {
+    const q = [
+        { q: 'Which planet is known as the Red Planet?', a: 'Mars' },
+        { q: 'Which planet has beautiful rings made of ice and rock?', a: 'Saturn' },
+        { q: 'Which planet is the hottest in our solar system?', a: 'Venus' },
+        { q: 'Which planet do we live on?', a: 'Earth' },
+        { q: 'Which is the biggest planet of them all?', a: 'Jupiter' },
+        { q: 'Which planet is closest to the Sun?', a: 'Mercury' },
+        { q: 'Which planet rolls on its side like a ball?', a: 'Uranus' },
+        { q: 'Which planet has the fastest winds?', a: 'Neptune' },
+        { q: 'What is at the centre of our solar system?', a: 'The Sun' },
+        { q: 'Which planet has the Great Red Spot storm?', a: 'Jupiter' },
+        { q: 'What goes around the Earth and lights up our night sky?', a: 'The Moon' },
+        { q: 'Where did astronauts leave footprints that are still there today?', a: 'The Moon' }
+    ];
+    return shuffleArray(q).slice(0, 8);
+}
+
+function startPlanetQuiz() {
+    pqQuestions = buildPlanetQuestions();
+    pqIndex = 0;
+    pqScore = 0;
+    pqLocked = false;
+    const box = document.getElementById('planetQuiz');
+    if (box) box.style.display = 'block';
+    playSound(700);
+    renderPlanetQuestion();
+    if (box && typeof box.scrollIntoView === 'function') {
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+window.startPlanetQuiz = startPlanetQuiz;
+
+function closePlanetQuiz() {
+    const box = document.getElementById('planetQuiz');
+    if (box) box.style.display = 'none';
+    playSound(350);
+}
+window.closePlanetQuiz = closePlanetQuiz;
+
+function renderPlanetQuestion() {
+    const qEl = document.getElementById('pqQuestion');
+    const optEl = document.getElementById('pqOptions');
+    const progEl = document.getElementById('pqProgress');
+    const scoreEl = document.getElementById('pqScore');
+    if (!qEl || !optEl) return;
+
+    if (pqIndex >= pqQuestions.length) {
+        qEl.innerText = `🎉 Quiz complete! You scored ${pqScore} out of ${pqQuestions.length}!`;
+        optEl.innerHTML = '<button class="pq-opt" onclick="startPlanetQuiz()">🔄 Play Again</button>';
+        if (progEl) progEl.innerText = 'Finished!';
+        if (pqScore === pqQuestions.length) {
+            unlockBadge('planetPro');
+            launchConfetti(50);
+        }
+        recordRoundScore('planet', pqScore, pqQuestions.length);
+        addStars(pqScore * 2);
+        speakText(`Quiz complete! You scored ${pqScore} out of ${pqQuestions.length}.`);
+        return;
+    }
+
+    const cur = pqQuestions[pqIndex];
+    qEl.innerText = cur.q;
+    if (progEl) progEl.innerText = `Question ${pqIndex + 1} / ${pqQuestions.length}`;
+    if (scoreEl) scoreEl.innerText = pqScore;
+
+    const names = PLANETS
+        .filter(p => !p.parent || cur.a === p.name)   // Moon only appears when it IS the answer
+        .map(p => p.name)
+        .filter(n => n !== cur.a);
+    const opts = shuffleArray([cur.a, ...shuffleArray(names).slice(0, 3)]);
+
+    optEl.innerHTML = '';
+    opts.forEach(name => {
+        const b = document.createElement('button');
+        b.className = 'pq-opt';
+        b.innerText = name;
+        b.onclick = () => answerPlanetQuiz(name, b, cur.a);
+        optEl.appendChild(b);
+    });
+
+    speakText(cur.q);
+    pqLocked = false;
+}
+
+function answerPlanetQuiz(choice, btn, correct) {
+    if (pqLocked) return;
+    pqLocked = true;
+
+    const all = [...document.querySelectorAll('#pqOptions .pq-opt')];
+    all.forEach(b => b.disabled = true);
+
+    if (choice === correct) {
+        btn.classList.add('correct');
+        pqScore++;
+        playSound(900, 'sine', 0.2);
+        launchConfetti(10);
+        speakText('Correct!');
+    } else {
+        btn.classList.add('wrong');
+        const right = all.find(b => b.innerText === correct);
+        if (right) right.classList.add('correct');
+        playSound(200, 'sawtooth', 0.25);
+        speakText(`The answer is ${correct}.`);
+    }
+
+    recordAnswer('planet', choice === correct, correct ? ('Answer: ' + correct) : '');
+
+    const scoreEl = document.getElementById('pqScore');
+    if (scoreEl) scoreEl.innerText = pqScore;
+
+    setTimeout(() => { pqIndex++; renderPlanetQuestion(); }, 1900);
+}
+window.answerPlanetQuiz = answerPlanetQuiz;
 
 // ============================================================
 // LAB EXPERIMENTS CONTROLLER
