@@ -189,18 +189,203 @@ function playChime(notes, type = 'triangle') {
     });
 }
 
-function speakText(customText = null, lang = 'en-US') {
-    if ('speechSynthesis' in window) {
+// ------------------------------------------------------------
+// NARRATION ENGINE (Web Speech API)
+//
+// Chrome has several well-known bugs that make speech silently
+// fail. This engine works around all of them:
+//   1. Voices load asynchronously -> wait for 'voiceschanged'.
+//   2. speak() needs a real user gesture -> prime on first tap.
+//   3. cancel() immediately followed by speak() races and dies
+//      -> always speak on the next tick.
+//   4. Utterances longer than ~15s get cut off -> keep-alive
+//      resume() ticker + split long text into sentences.
+//   5. Remote "Google" voices can hang -> prefer local voices.
+// ------------------------------------------------------------
+const speechSupported = ('speechSynthesis' in window) && (typeof SpeechSynthesisUtterance !== 'undefined');
+let speechEnabled = true;
+let speechPrimed = false;
+let cachedVoices = [];
+let preferredVoice = null;
+let speakTimer = null;
+let keepAliveTimer = null;
+let speechQueue = [];
+
+function loadSpeechVoices() {
+    if (!speechSupported) return;
+    cachedVoices = window.speechSynthesis.getVoices() || [];
+    if (!cachedVoices.length) return;
+
+    // Prefer a local (offline) English voice: they are the most reliable.
+    const en = cachedVoices.filter(v => /^en(-|_|$)/i.test(v.lang || ''));
+    preferredVoice =
+        en.find(v => v.localService && /female|zira|samantha|karen|susan/i.test(v.name)) ||
+        en.find(v => v.localService) ||
+        en[0] ||
+        cachedVoices.find(v => v.localService) ||
+        cachedVoices[0] ||
+        null;
+}
+
+if (speechSupported) {
+    loadSpeechVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadSpeechVoices);
+    // Chrome can drop the engine when a tab is hidden.
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopSpeech();
+    });
+}
+
+// Chrome refuses to speak until the user has interacted with the page.
+// Fire a silent utterance on the very first gesture to open the gate.
+function primeSpeech() {
+    if (!speechSupported || speechPrimed) return;
+    speechPrimed = true;
+    try {
         window.speechSynthesis.cancel();
-        const text = customText || (stories[currentStoryKey] ? stories[currentStoryKey].pages[currentStoryPage].text : '');
-        if (!text) return;
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang;
-        utterance.pitch = 1.2;
-        utterance.rate = 0.9;
-        window.speechSynthesis.speak(utterance);
+        const warmup = new SpeechSynthesisUtterance('hello');
+        warmup.volume = 0;      // inaudible, just unlocks the API
+        warmup.rate = 2;
+        window.speechSynthesis.speak(warmup);
+        loadSpeechVoices();
+    } catch (e) {
+        console.warn('[KidZone] speech priming failed:', e);
     }
 }
+document.addEventListener('pointerdown', primeSpeech);
+document.addEventListener('keydown', primeSpeech);
+
+function startKeepAlive() {
+    stopKeepAlive();
+    // Works around Chrome cutting speech off after ~15 seconds.
+    keepAliveTimer = setInterval(() => {
+        if (!window.speechSynthesis.speaking) { stopKeepAlive(); return; }
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+    }, 9000);
+}
+
+function stopKeepAlive() {
+    if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
+}
+
+function stopSpeech() {
+    speechQueue = [];
+    if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
+    stopKeepAlive();
+    if (speechSupported) {
+        try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    }
+}
+window.stopSpeech = stopSpeech;
+
+// Break long text into sentence-sized pieces Chrome can handle.
+function splitForSpeech(text, maxLen = 180) {
+    const sentences = String(text).match(/[^.!?]+[.!?]*/g) || [String(text)];
+    const chunks = [];
+    let buf = '';
+    sentences.forEach(sentence => {
+        const piece = sentence.trim();
+        if (!piece) return;
+        if ((buf + ' ' + piece).trim().length <= maxLen) {
+            buf = (buf ? buf + ' ' : '') + piece;
+        } else {
+            if (buf) chunks.push(buf);
+            buf = piece.length > maxLen ? piece.slice(0, maxLen) : piece;
+        }
+    });
+    if (buf) chunks.push(buf);
+    return chunks;
+}
+
+function speakChunk(lang) {
+    if (!speechQueue.length) { stopKeepAlive(); return; }
+    const text = speechQueue.shift();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.pitch = 1.15;
+    utterance.rate = 0.92;   // must stay <= 2 or Chrome jams
+    utterance.volume = 1;
+
+    // Only force a voice when it matches the requested language,
+    // otherwise let the browser choose (needed for fr/es lessons).
+    if (preferredVoice && (preferredVoice.lang || '').slice(0, 2) === lang.slice(0, 2)) {
+        utterance.voice = preferredVoice;
+    }
+
+    utterance.onend = () => speakChunk(lang);
+    utterance.onerror = (e) => {
+        if (e && e.error && e.error !== 'interrupted' && e.error !== 'canceled') {
+            console.warn('[KidZone] speech error:', e.error);
+        }
+        stopKeepAlive();
+    };
+
+    try {
+        window.speechSynthesis.speak(utterance);
+        startKeepAlive();
+    } catch (e) {
+        console.warn('[KidZone] speak() failed:', e);
+    }
+}
+
+function speakText(customText = null, lang = 'en-US') {
+    if (!speechSupported || !speechEnabled) return;
+
+    // Only fall back to the storybook when called with NO argument.
+    // speakText('') must stay silent rather than reading the story.
+    const text = (customText === null || customText === undefined)
+        ? (stories[currentStoryKey] ? stories[currentStoryKey].pages[currentStoryPage].text : '')
+        : customText;
+    if (!text || !String(text).trim()) return;   // empty string jams Chrome
+
+    primeSpeech();
+    stopSpeech();
+
+    speechQueue = splitForSpeech(text);
+    // Deferring past cancel() avoids Chrome's cancel/speak race.
+    speakTimer = setTimeout(() => speakChunk(lang), 120);
+}
+
+// Narration on/off switch
+function toggleNarration() {
+    speechEnabled = !speechEnabled;
+    if (!speechEnabled) stopSpeech();
+    document.querySelectorAll('.narration-toggle').forEach(btn => {
+        btn.innerHTML = speechEnabled ? '🔊 Voice On' : '🔇 Voice Off';
+        btn.classList.toggle('muted', !speechEnabled);
+    });
+    if (speechEnabled) {
+        playSound(700);
+        speakText('Voice is on!');
+    } else {
+        playSound(300, 'sawtooth');
+    }
+    showToast(speechEnabled ? 'Narration turned on' : 'Narration muted',
+              speechEnabled ? '🔊' : '🔇', 2000);
+}
+window.toggleNarration = toggleNarration;
+
+// Console helper: run speechDiagnostics() in DevTools if audio misbehaves.
+function speechDiagnostics() {
+    const v = speechSupported ? window.speechSynthesis.getVoices() : [];
+    const info = {
+        supported: speechSupported,
+        enabled: speechEnabled,
+        primed: speechPrimed,
+        voicesFound: v.length,
+        chosenVoice: preferredVoice ? `${preferredVoice.name} (${preferredVoice.lang})${preferredVoice.localService ? ' [local]' : ' [remote]'}` : 'none',
+        speaking: speechSupported ? window.speechSynthesis.speaking : false,
+        audioContext: audioCtx ? audioCtx.state : 'none'
+    };
+    console.table(info);
+    if (!v.length) {
+        console.warn('[KidZone] No voices installed. On Windows: Settings > Time & Language > Speech > Manage voices.');
+    }
+    return info;
+}
+window.speechDiagnostics = speechDiagnostics;
 
 // Global window exposure for inline HTML handlers
 window.playSound = playSound;
@@ -641,7 +826,9 @@ const BADGES = {
     quizWhiz:     { icon: '🏆', name: 'Quiz Whiz',           desc: 'Got a perfect score in Trivia Quiz!' },
     mathGenius:   { icon: '🔢', name: 'Math Genius',         desc: 'Aced a Math Wizard round!' },
     duoLingo:     { icon: '🦉', name: 'Linguist Star',       desc: 'Completed a Duolingo Dash lesson!' },
-    superstar:    { icon: '🌟', name: 'Superstar Explorer',  desc: 'Collected 100 stars!' }
+    superstar:    { icon: '🌟', name: 'Superstar Explorer',  desc: 'Collected 100 stars!' },
+    bodyExplorer: { icon: '🧍', name: 'Body Explorer',       desc: 'Discovered your first body part!' },
+    bodyDoctor:   { icon: '🩺', name: 'Little Doctor',       desc: 'Found every body part on the map!' }
 };
 
 async function saveProgress() {
@@ -837,6 +1024,7 @@ function showGame(gameId, evt) {
     const pacman = document.getElementById('pacman-game');
     const memory = document.getElementById('memory-match');
     const mauritius = document.getElementById('mauritius-game');
+    const body = document.getElementById('body-game');
 
     if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
     if (math) math.style.display = (gameId === 'math-game') ? 'block' : 'none';
@@ -844,6 +1032,7 @@ function showGame(gameId, evt) {
     if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
     if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
     if (mauritius) mauritius.style.display = (gameId === 'mauritius-game') ? 'block' : 'none';
+    if (body) body.style.display = (gameId === 'body-game') ? 'block' : 'none';
 
     // Game initializations
     if (gameId === 'duo-game') initDuoGame();
@@ -851,6 +1040,22 @@ function showGame(gameId, evt) {
     if (gameId === 'quiz-game') initQuiz();
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
+    if (gameId === 'body-game') {
+        // Guard: if script.js is stale/half-updated, say so instead of
+        // silently showing an empty panel.
+        if (typeof initBodyGame === 'function') {
+            initBodyGame();
+        } else {
+            console.error('[KidZone] initBodyGame() is missing — script.js looks out of date.');
+            if (body) {
+                body.innerHTML = '<div style="text-align:center;padding:40px;">' +
+                    '<div style="font-size:3rem;">\u26a0\ufe0f</div>' +
+                    '<h3 style="font-family:var(--font-heading);margin:10px 0;">Body Parts Explorer could not load</h3>' +
+                    '<p style="color:var(--text-muted);">script.js is out of date \u2014 it has no initBodyGame() function. ' +
+                    'Copy the updated script.js into your project and hard-refresh (Ctrl+Shift+R).</p></div>';
+            }
+        }
+    }
 
     // Only run the Pac-Man loop while its tab is actually visible,
     // otherwise pause it so it doesn't burn CPU/battery in the background.
@@ -1895,6 +2100,475 @@ function flipMemoryCard(card) {
         }
     }
 }
+
+// ============================================================
+// GAME 6: BODY PARTS EXPLORER
+// ============================================================
+const BODY_PARTS = [
+    { id: 'head',      name: 'Head',      icon: '🧠', fact: 'Your head protects your brain, which is the boss of your whole body! It tells you when to move, think and giggle.' },
+    { id: 'hair',      name: 'Hair',      icon: '💇', fact: 'Hair keeps your head warm and grows about 1 centimetre every month. You have around 100,000 hairs up there!' },
+    { id: 'eyes',      name: 'Eyes',      icon: '👀', fact: 'Your two eyes let you see colours and shapes. You blink about 15 times a minute to keep them clean and wet!' },
+    { id: 'ears',      name: 'Ears',      icon: '👂', fact: 'Ears catch sounds and also help you keep your balance so you do not fall over when you spin!' },
+    { id: 'nose',      name: 'Nose',      icon: '👃', fact: 'Your nose warms up the air you breathe and can remember over 1 trillion different smells!' },
+    { id: 'mouth',     name: 'Mouth',     icon: '👄', fact: 'Your mouth helps you eat, talk and smile. Kids have 20 baby teeth hiding inside!' },
+    { id: 'neck',      name: 'Neck',      icon: '🧣', fact: 'Your neck holds your head up and lets you nod yes and shake no. It has 7 bones inside!' },
+    { id: 'shoulders', name: 'Shoulders', icon: '🤷', fact: 'Shoulders are the most bendy joints in your body. They let your arms swing in a big circle!' },
+    { id: 'chest',     name: 'Chest',     icon: '❤️', fact: 'Your chest protects your heart and lungs behind a cage of 24 ribs!' },
+    { id: 'arms',      name: 'Arms',      icon: '💪', fact: 'Arms let you hug, throw and carry things. The muscle on top is called the biceps!' },
+    { id: 'hands',     name: 'Hands',     icon: '🖐️', fact: 'Each hand has 27 bones and 5 fingers. Your fingerprints are special — nobody else has the same ones!' },
+    { id: 'tummy',     name: 'Tummy',     icon: '🍎', fact: 'Your tummy holds your stomach, which turns your breakfast into energy for playing!' },
+    { id: 'knees',     name: 'Knees',     icon: '🦵', fact: 'Knees are hinges like a door. They bend so you can run, jump and sit down!' },
+    { id: 'legs',      name: 'Legs',      icon: '🏃', fact: 'Your legs have the longest bone in your body — the femur — and they carry you everywhere!' },
+    { id: 'feet',      name: 'Feet',      icon: '🦶', fact: 'Feet keep you balanced. Each foot has 26 bones and lots of tickly nerve endings!' },
+    { id: 'back',      name: 'Back',      icon: '🔙', fact: 'Your back has a bendy spine made of 33 little bones so you can twist and bend over!' },
+    { id: 'elbows',    name: 'Elbows',    icon: '💪', fact: 'Elbows let your arms fold up. The tingly funny bone spot is really a nerve!' },
+    { id: 'heels',     name: 'Heels',     icon: '🦶', fact: 'Your heel bone is the biggest bone in your foot and takes your weight when you walk!' }
+];
+
+// The figure has two faces (front / back). These helpers keep every
+// lookup view-aware so nothing has to know which SVG it is dealing with.
+function getBodySvgs() {
+    return [document.getElementById('bodySvgFront'), document.getElementById('bodySvgBack')].filter(Boolean);
+}
+
+function getActiveBodySvg() {
+    return document.getElementById(bodyView === 'front' ? 'bodySvgFront' : 'bodySvgBack');
+}
+
+// Which view(s) can show a given part
+function getViewsForPart(id) {
+    const views = [];
+    const front = document.getElementById('bodySvgFront');
+    const back  = document.getElementById('bodySvgBack');
+    if (front && front.querySelector(`.body-part[data-part="${id}"]`)) views.push('front');
+    if (back  && back.querySelector(`.body-part[data-part="${id}"]`))  views.push('back');
+    return views;
+}
+
+// Unique parts across BOTH views (a part on both faces counts once)
+function getBodyHotspotIds() {
+    const ids = new Set();
+    getBodySvgs().forEach(svg =>
+        svg.querySelectorAll('.body-part').forEach(g => ids.add(g.dataset.part)));
+    return ids.size ? [...ids] : BODY_PARTS.map(p => p.id);
+}
+
+function getBodyTotal() {
+    return getBodyHotspotIds().length;
+}
+
+let bodyMode = 'explore';
+let bodyScore = 0;
+let bodyDiscovered = new Set();
+let bodyTargetId = null;
+let bodyRoundQueue = [];
+let bodyLocked = false;
+let bodyLastSpoken = '';
+let bodyView = 'front';
+
+function getBodyPart(id) {
+    return BODY_PARTS.find(p => p.id === id);
+}
+
+function initBodyGame() {
+    const svgs = getBodySvgs();
+    if (!svgs.length) return;
+
+    bodyScore = 0;
+    bodyDiscovered = new Set();
+    bodyTargetId = null;
+    bodyLocked = false;
+
+    // Wire up hotspots once on both faces (click + keyboard for accessibility)
+    svgs.forEach(svg => {
+        svg.querySelectorAll('.body-part').forEach(group => {
+            if (group.dataset.wired === 'yes') return;
+            group.dataset.wired = 'yes';
+            group.addEventListener('click', () => handleBodyPartClick(group.dataset.part));
+            group.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleBodyPartClick(group.dataset.part);
+                }
+            });
+        });
+    });
+
+    setBodyView(bodyView, { silent: true, instant: true });
+    clearBodyHighlights();
+    renderBodyChecklist();
+    updateBodyStats();
+
+    if (bodyMode === 'explore') {
+        setBodyPrompt('Tap any part, then press Turn Around to see the back! 🔍');
+        showBodyInfo(null);
+        clearBodyChoices();
+    } else {
+        startBodyRound();
+    }
+}
+window.initBodyGame = initBodyGame;
+
+function setBodyMode(mode, evt) {
+    playSound(450);
+    bodyMode = mode;
+
+    document.querySelectorAll('.body-mode-btn').forEach(b => b.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+
+    const label = document.getElementById('bodyModeLabel');
+    if (label) {
+        label.innerText = mode === 'explore' ? 'Explore' : (mode === 'find' ? 'Find the Part' : 'Label It');
+    }
+    initBodyGame();
+
+    // Explain the mode out loud so kids who cannot read yet still know what to do.
+    const intros = {
+        explore: 'Explore mode! Tap any part of the body and I will tell you all about it.',
+        find:    'Find the part! I will name a body part, and you tap it on the picture.',
+        spell:   'Label it! Look at the glowing part, then choose its correct name.'
+    };
+    setTimeout(() => speakText(intros[mode] || ''), 220);
+}
+window.setBodyMode = setBodyMode;
+
+function updateBodyStats() {
+    const foundElem = document.getElementById('bodyFound');
+    const scoreElem = document.getElementById('bodyScore');
+    if (foundElem) foundElem.innerText = `${bodyDiscovered.size} / ${getBodyTotal()}`;
+    if (scoreElem) scoreElem.innerText = bodyScore;
+}
+
+function setBodyPrompt(text) {
+    const el = document.getElementById('bodyPrompt');
+    if (el) el.innerText = text;
+}
+
+function clearBodyChoices() {
+    const box = document.getElementById('bodyChoices');
+    if (box) box.innerHTML = '';
+}
+
+function clearBodyHighlights() {
+    getBodySvgs().forEach(svg => {
+        svg.classList.remove('has-target');
+        svg.querySelectorAll('.body-part').forEach(g => {
+            g.classList.remove('selected', 'correct-flash', 'wrong-flash', 'target-glow');
+            g.classList.toggle('found-mark', bodyDiscovered.has(g.dataset.part));
+        });
+    });
+    removeBodyTargetRing();
+}
+
+// ---- Rotation ----
+function setBodyView(view, opts = {}) {
+    if (view !== 'front' && view !== 'back') return;
+    const changed = bodyView !== view;
+    bodyView = view;
+
+    const stage = document.getElementById('bodyStage');
+    if (stage) stage.classList.toggle('flipped', view === 'back');
+
+    const pill = document.getElementById('bodyViewPill');
+    if (pill) pill.innerText = view === 'front' ? 'Front' : 'Back';
+
+    const label = document.getElementById('bodyRotateLabel');
+    if (label) label.innerText = view === 'front' ? 'Turn Around' : 'Turn Back';
+
+    // hidden face must not be reachable by keyboard
+    getBodySvgs().forEach(svg => {
+        const isActive = (svg.id === 'bodySvgFront') === (view === 'front');
+        svg.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        svg.querySelectorAll('.body-part').forEach(g =>
+            g.setAttribute('tabindex', isActive ? '0' : '-1'));
+    });
+
+    if (changed && !opts.silent) {
+        playSound(520, 'triangle', 0.18);
+        speakText(view === 'front' ? 'Now you see the front of the body.'
+                                   : 'Now you see the back of the body.');
+    }
+    // ring is positioned per-face, so redraw after the flip settles
+    if (bodyTargetId && bodyMode === 'spell') {
+        removeBodyTargetRing();
+        setTimeout(() => drawBodyTargetRing(bodyTargetId), opts.instant ? 0 : 700);
+    }
+}
+window.setBodyView = setBodyView;
+
+function flipBodyView() {
+    setBodyView(bodyView === 'front' ? 'back' : 'front');
+}
+window.flipBodyView = flipBodyView;
+
+// ---- Target ring overlay (Label It mode) ----
+function removeBodyTargetRing() {
+    document.querySelectorAll('.body-target-ring, .body-target-arrow').forEach(el => el.remove());
+}
+
+function drawBodyTargetRing(partId) {
+    removeBodyTargetRing();
+    const holder = document.querySelector('.body-svg-holder');
+    const svg = getActiveBodySvg();
+    if (!holder || !svg) return;
+
+    const group = svg.querySelector(`.body-part[data-part="${partId}"]`);
+    if (!group || typeof group.getBoundingClientRect !== 'function') return;
+
+    const gb = group.getBoundingClientRect();
+    const hb = holder.getBoundingClientRect();
+    if (!gb.width && !gb.height) return;
+
+    const pad = 14;
+    const size = Math.max(gb.width, gb.height) + pad * 2;
+    const cx = gb.left - hb.left + gb.width / 2;
+    const cy = gb.top - hb.top + gb.height / 2;
+
+    const ring = document.createElement('div');
+    ring.className = 'body-target-ring';
+    ring.style.width = `${size}px`;
+    ring.style.height = `${size}px`;
+    ring.style.left = `${cx - size / 2}px`;
+    ring.style.top = `${cy - size / 2}px`;
+    holder.appendChild(ring);
+
+    const arrow = document.createElement('div');
+    arrow.className = 'body-target-arrow';
+    arrow.innerText = '👉';
+    arrow.style.left = `${cx - size / 2 - 34}px`;
+    arrow.style.top = `${cy - 16}px`;
+    holder.appendChild(arrow);
+}
+
+function renderBodyChecklist() {
+    const box = document.getElementById('bodyChecklist');
+    if (!box) return;
+    box.innerHTML = '';
+    getBodyHotspotIds().forEach(id => {
+        const part = getBodyPart(id);
+        if (!part) return;
+        const chip = document.createElement('span');
+        chip.className = 'body-chip' + (bodyDiscovered.has(id) ? ' found' : '');
+        chip.innerText = bodyDiscovered.has(id) ? `${part.icon} ${part.name}` : `❔ ${part.name}`;
+        box.appendChild(chip);
+    });
+}
+
+function showBodyInfo(partId) {
+    const iconEl = document.getElementById('bodyInfoIcon');
+    const titleEl = document.getElementById('bodyInfoTitle');
+    const factEl = document.getElementById('bodyInfoFact');
+    if (!iconEl || !titleEl || !factEl) return;
+
+    if (!partId) {
+        iconEl.innerText = '👋';
+        titleEl.innerText = 'Meet your body!';
+        factEl.innerText = 'Click or tap a body part on the picture to hear its name and learn a cool fact about it.';
+        bodyLastSpoken = '';
+        return;
+    }
+
+    const part = getBodyPart(partId);
+    if (!part) return;
+    iconEl.innerText = part.icon;
+    titleEl.innerText = `This is the ${part.name}!`;
+    factEl.innerText = part.fact;
+    bodyLastSpoken = `${part.name}. ${part.fact}`;
+}
+
+function sayBodyPart() {
+    const text = bodyLastSpoken || 'Tap a body part to begin!';
+    speakText(text);
+}
+window.sayBodyPart = sayBodyPart;
+
+function markBodyDiscovered(partId) {
+    if (bodyDiscovered.has(partId)) return;
+    bodyDiscovered.add(partId);
+    renderBodyChecklist();
+    updateBodyStats();
+
+    if (bodyDiscovered.size === 1) {
+        unlockBadge('bodyExplorer');
+    }
+    if (bodyDiscovered.size >= getBodyTotal()) {
+        unlockBadge('bodyDoctor');
+        addStars(20);
+        launchConfetti(45);
+        playChime([523, 659, 784, 1046]);
+        showToast('You found every body part! 🧍✨', '🩺', 4200);
+        setBodyPrompt('Amazing! You know your whole body! 🎉');
+        setTimeout(() => speakText('Amazing work! You found every single body part. You are a little doctor now!'), 500);
+    }
+}
+
+function handleBodyPartClick(partId) {
+    if (bodyLocked) return;
+    const part = getBodyPart(partId);
+    if (!part) return;
+
+    const svg = getActiveBodySvg();
+    const group = svg ? svg.querySelector(`.body-part[data-part="${partId}"]`) : null;
+
+    if (bodyMode === 'explore') {
+        playSound(620);
+        getBodySvgs().forEach(s2 => s2.querySelectorAll('.body-part').forEach(g => g.classList.remove('selected')));
+        if (group) group.classList.add('selected');
+        showBodyInfo(partId);
+        const isNew = !bodyDiscovered.has(partId);
+        speakText(`${part.name}! ${part.fact}${isNew ? ' Great discovery!' : ''}`);
+        markBodyDiscovered(partId);
+        addStars(2);
+        return;
+    }
+
+    if (bodyMode === 'find') {
+        if (partId === bodyTargetId) {
+            bodyLocked = true;
+            playSound(900, 'sine', 0.2);
+            if (group) group.classList.add('correct-flash');
+            showBodyInfo(partId);
+            speakText(`Yes! That is the ${part.name}. ${part.fact}`);
+            bodyScore += 10;
+            markBodyDiscovered(partId);
+            addStars(3);
+            setBodyPrompt(`✅ Correct! That is the ${part.name}!`);
+            updateBodyStats();
+            launchConfetti(12);
+            setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2200);
+        } else {
+            playSound(200, 'sawtooth', 0.25);
+            if (group) {
+                group.classList.add('wrong-flash');
+                setTimeout(() => group.classList.remove('wrong-flash'), 520);
+            }
+            setBodyPrompt(`Oops, that is the ${part.name}. Try again! 🔍`);
+            speakText(`That is the ${part.name}. Try again!`);
+        }
+        return;
+    }
+
+    // In 'spell' (Label It) mode the picture is not the answer surface,
+    // but tapping still reads out the part for extra learning.
+    playSound(500);
+    speakText(`${part.name}. ${part.fact}`);
+}
+window.handleBodyPartClick = handleBodyPartClick;
+
+function startBodyRound() {
+    clearBodyHighlights();
+    clearBodyChoices();
+
+    const ids = getBodyHotspotIds();
+    if (!bodyRoundQueue.length) {
+        bodyRoundQueue = shuffleArray(ids);
+    }
+    // Avoid immediately repeating the same target
+    let next = bodyRoundQueue.pop();
+    if (next === bodyTargetId && bodyRoundQueue.length) {
+        bodyRoundQueue.unshift(next);
+        next = bodyRoundQueue.pop();
+    }
+    bodyTargetId = next;
+
+    const target = getBodyPart(bodyTargetId);
+    if (!target) return;
+
+    if (bodyMode === 'find') {
+        const views = getViewsForPart(bodyTargetId);
+        const hint = (views.length === 1 && views[0] !== bodyView)
+            ? ' (try turning around!)' : '';
+        setBodyPrompt(`🎯 Can you tap the ${target.name}?${hint}`);
+        speakText(`Where is the ${target.name}?`);
+        showBodyInfo(null);
+        const titleEl = document.getElementById('bodyInfoTitle');
+        const iconEl = document.getElementById('bodyInfoIcon');
+        const factEl = document.getElementById('bodyInfoFact');
+        if (titleEl) titleEl.innerText = `Find the ${target.name}!`;
+        if (iconEl) iconEl.innerText = '🎯';
+        if (factEl) factEl.innerText = 'Tap the matching part on the picture. Take your time!';
+        bodyLastSpoken = `Where is the ${target.name}?`;
+    } else {
+        // Label It: make sure the target is on the face we are showing,
+        // then glow it hard and ring it so it cannot be missed.
+        const views = getViewsForPart(bodyTargetId);
+        if (views.length && !views.includes(bodyView)) {
+            setBodyView(views[0], { silent: true });
+        }
+
+        const svg = getActiveBodySvg();
+        const group = svg ? svg.querySelector(`.body-part[data-part="${bodyTargetId}"]`) : null;
+        if (group) group.classList.add('target-glow');
+        if (svg) svg.classList.add('has-target');
+        setTimeout(() => drawBodyTargetRing(bodyTargetId), 60);
+
+        setBodyPrompt('🔤 What is the glowing part called?');
+        const iconEl = document.getElementById('bodyInfoIcon');
+        const titleEl = document.getElementById('bodyInfoTitle');
+        const factEl = document.getElementById('bodyInfoFact');
+        if (iconEl) iconEl.innerText = '❓';
+        if (titleEl) titleEl.innerText = 'Name that part!';
+        if (factEl) factEl.innerText = 'Look at the glowing spot, then pick the right name below.';
+        bodyLastSpoken = 'What is the glowing part called?';
+
+        const wrongPool = shuffleArray(ids.filter(i => i !== bodyTargetId)).slice(0, 3);
+        const choices = shuffleArray([bodyTargetId, ...wrongPool]);
+        renderBodyChoices(choices);
+    }
+}
+
+function renderBodyChoices(choiceIds) {
+    const box = document.getElementById('bodyChoices');
+    if (!box) return;
+    box.innerHTML = '';
+
+    choiceIds.forEach(id => {
+        const part = getBodyPart(id);
+        if (!part) return;
+        const btn = document.createElement('button');
+        btn.className = 'body-choice-btn';
+        btn.innerText = `${part.icon} ${part.name}`;
+        btn.onclick = () => answerBodyLabel(id, btn);
+        box.appendChild(btn);
+    });
+}
+
+function answerBodyLabel(chosenId, btn) {
+    if (bodyLocked) return;
+    bodyLocked = true;
+
+    const box = document.getElementById('bodyChoices');
+    const buttons = box ? [...box.querySelectorAll('.body-choice-btn')] : [];
+    buttons.forEach(b => b.disabled = true);
+
+    const target = getBodyPart(bodyTargetId);
+
+    if (chosenId === bodyTargetId) {
+        playSound(900, 'sine', 0.2);
+        btn.classList.add('correct');
+        bodyScore += 10;
+        markBodyDiscovered(bodyTargetId);
+        addStars(3);
+        setBodyPrompt(`✅ Yes! That is the ${target.name}!`);
+        showBodyInfo(bodyTargetId);
+        speakText(`Correct! ${target.name}. ${target.fact}`);
+        launchConfetti(12);
+    } else {
+        playSound(200, 'sawtooth', 0.25);
+        btn.classList.add('wrong');
+        const correctBtn = buttons.find(b => b.innerText.includes(target.name));
+        if (correctBtn) correctBtn.classList.add('correct');
+        setBodyPrompt(`Not quite — that was the ${target.name}. 💡`);
+        showBodyInfo(bodyTargetId);
+        speakText(`Almost! It was the ${target.name}.`);
+    }
+
+    getBodySvgs().forEach(sv => sv.classList.remove('has-target'));
+    removeBodyTargetRing();
+    updateBodyStats();
+    setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2400);
+}
+window.answerBodyLabel = answerBodyLabel;
 
 // ============================================================
 // LAB EXPERIMENTS CONTROLLER
