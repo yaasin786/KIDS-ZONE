@@ -815,6 +815,10 @@ function switchTab(tabId, evt) {
 
     if (tabId === 'games') {
         initDuoGame();
+    } else if (pacGameInterval) {
+        // Leaving the Games tab entirely - stop any running Pac-Man loop.
+        clearInterval(pacGameInterval);
+        pacGameInterval = null;
     }
 }
 window.switchTab = switchTab;
@@ -847,6 +851,15 @@ function showGame(gameId, evt) {
     if (gameId === 'quiz-game') initQuiz();
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
+
+    // Only run the Pac-Man loop while its tab is actually visible,
+    // otherwise pause it so it doesn't burn CPU/battery in the background.
+    if (gameId === 'pacman-game') {
+        resetPacmanGame();
+    } else if (pacGameInterval) {
+        clearInterval(pacGameInterval);
+        pacGameInterval = null;
+    }
 }
 window.showGame = showGame;
 
@@ -1006,7 +1019,7 @@ const stories = {
         pages: [
             { page: 1, img: '🧜‍♀️', text: "Far beneath the turquoise surface of the tropical sea lay the kingdom of Aquaria, home to Mira the mermaid. Mira possessed sparkling emerald fins and spent her days tending to the delicate ocean gardens of glowing sea anemones, giant pink clams, and vibrant coral reefs." },
             { page: 2, img: '🪸', text: "One morning, Mira swam down to the main reef and noticed a distressing change: the vibrant corals were losing their iridescent shimmer, fading into dull grey stone. Without the magic of the main coral reef, the tiny fish, sea turtles, and starfish had no place to play or build their homes." },
-            { page: 3, img: '📜', text: "The elder sea turtle, Barnaby, swam up to Mira and unrolled an ancient kelp parchment map. 'The heart of our reef can only be restored by the legendary Pearl of Lumina,' he explained, 'hidden deep inside the Sunken Sea Cave across the trench.'" },
+            { page: 3, img: '📜', text: "The wise old octopus, Barnaby, swam up to Mira and unrolled an ancient kelp parchment map. 'The heart of our reef can only be restored by the legendary Pearl of Lumina,' he explained, 'hidden deep inside the Sunken Sea Cave across the trench.'" },
             { page: 4, img: '🐬', text: "Mira knew she couldn't make the long journey alone. She whistled a high underwater tune, calling upon her two closest sea companions: Bubbles, an energetic bottle-nosed dolphin, and Barnaby the wise octopus, who knew every secret pathway in the ocean depths." },
             { page: 5, img: '🌊', text: "Together, the trio swam past swirling underwater currents, glowing jellyfish fields, and dark underwater chasms. Whenever they encountered a tricky path, Barnaby used his eight arms to move obstacles, while Bubbles used echolocation to guide them safely through murky waters." },
             { page: 6, img: '💎', text: "At last, deep within the shimmering Sunken Sea Cave, they discovered the Pearl of Lumina resting upon a bed of crystalline sand. It shone with every hue of the rainbow, illuminating the dark cavern with warm light." },
@@ -1018,11 +1031,13 @@ const stories = {
 
 let currentStoryKey = 'snowwhite';
 let currentStoryPage = 0;
+let storyHistory = [0]; // tracks the actual path taken through branches
 
 function selectStory(key, evt) {
     playSound(580);
     currentStoryKey = key;
     currentStoryPage = 0;
+    storyHistory = [0];
     document.querySelectorAll('.story-btn').forEach(btn => btn.classList.remove('active'));
     if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
     renderStoryPage();
@@ -1064,6 +1079,7 @@ function renderStoryPage() {
                 btn.onclick = () => {
                     playSound(600);
                     currentStoryPage = choice.nextPage;
+                    storyHistory.push(currentStoryPage);
                     renderStoryPage();
                 };
                 choicesContainer.appendChild(btn);
@@ -1092,13 +1108,22 @@ function renderStoryPage() {
 
 function changePage(delta) {
     playSound(500);
-    currentStoryPage += delta;
-    
-    if (currentStoryKey === 'snowwhite') {
-        if (currentStoryPage === 5 && delta === 1) currentStoryPage = 6;
-        if (currentStoryPage === 12 && delta === 1) currentStoryPage = 13;
+
+    if (delta === 1) {
+        let next = currentStoryPage + 1;
+        if (currentStoryKey === 'snowwhite') {
+            if (next === 5) next = 6;
+            if (next === 12) next = 13;
+        }
+        currentStoryPage = next;
+        storyHistory.push(currentStoryPage);
+    } else if (storyHistory.length > 1) {
+        // Step back through the pages actually visited, respecting
+        // whichever branch was chosen - not just "index minus one".
+        storyHistory.pop();
+        currentStoryPage = storyHistory[storyHistory.length - 1];
     }
-    
+
     renderStoryPage();
 }
 window.changePage = changePage;
@@ -1905,5 +1930,6 @@ window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     checkLoginSession();
     renderStoryPage();
-    resetPacmanGame();
+    // Pac-Man now starts itself (see showGame) once its tab is opened,
+    // instead of running in the background from page load.
 });
