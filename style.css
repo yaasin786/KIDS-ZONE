@@ -1008,3 +1008,372 @@ input {
         grid-template-columns: repeat(3, 1fr); 
     }
 }
+
+/* ============================================================
+   15. BODY PARTS EXPLORER GAME
+   ============================================================ */
+.body-mode-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.body-mode-btn {
+    background: var(--card-bg);
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    color: var(--text-color);
+}
+
+.body-mode-btn.active {
+    background: var(--accent-purple);
+    color: #ffffff;
+    box-shadow: 0 4px 0 #a961d6;
+}
+
+.body-game-layout {
+    display: flex;
+    gap: 25px;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.body-figure-panel {
+    flex: 1 1 320px;
+    max-width: 400px;
+    background: var(--bg-main);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+}
+
+.body-info-panel {
+    flex: 1 1 300px;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.body-prompt {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    text-align: center;
+    background: var(--card-bg);
+    color: var(--text-color);
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 15px;
+    min-height: 28px;
+}
+
+.body-svg-holder {
+    display: flex;
+    justify-content: center;
+    position: relative;
+    perspective: 1400px;
+}
+
+/* 3D flip stage (front / back) */
+.body-stage {
+    position: relative;
+    width: 100%;
+    max-width: 300px;
+    aspect-ratio: 300 / 520;
+    transform-style: preserve-3d;
+    transition: transform 0.7s cubic-bezier(0.4, 0.15, 0.2, 1);
+}
+
+.body-stage.flipped {
+    transform: rotateY(180deg);
+}
+
+.body-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.body-face-back {
+    transform: rotateY(180deg);
+}
+
+/* Rotate control */
+.body-rotate-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.body-rotate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary-blue);
+    color: #ffffff;
+    padding: 11px 22px;
+    border-radius: var(--radius-full);
+    font-size: 1rem;
+    box-shadow: 0 4px 0 var(--primary-blue-dark);
+}
+
+.body-rotate-btn .rotate-icon {
+    font-size: 1.3rem;
+    display: inline-block;
+    transition: transform var(--transition-normal);
+}
+
+.body-rotate-btn:hover .rotate-icon {
+    transform: rotate(180deg);
+}
+
+.body-view-pill {
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    background: var(--bg-main);
+    color: var(--text-muted);
+    border: 2px solid var(--border-color);
+}
+
+/* Interactive hotspots */
+.body-part {
+    cursor: pointer;
+    transform-origin: center;
+    transition: filter var(--transition-normal);
+}
+
+.body-part:hover {
+    filter: drop-shadow(0 0 10px var(--accent-yellow));
+}
+
+.body-part:focus-visible {
+    outline: none;
+    filter: drop-shadow(0 0 12px var(--primary-blue));
+}
+
+.body-part.selected {
+    filter: drop-shadow(0 0 14px var(--accent-purple));
+}
+
+.body-part.found-mark {
+    filter: drop-shadow(0 0 6px var(--primary-green));
+}
+
+.body-part.correct-flash {
+    animation: bodyCorrectPulse 0.7s ease;
+}
+
+.body-part.wrong-flash {
+    animation: bodyWrongShake 0.5s ease;
+}
+
+.body-part.target-glow {
+    animation: bodyTargetGlow 1.1s ease-in-out infinite;
+}
+
+/* Dim everything except the part being asked about, so the
+   glowing target really pops out. */
+.body-svg.has-target .body-part:not(.target-glow) {
+    opacity: 0.32;
+    filter: saturate(0.35);
+    transition: opacity var(--transition-normal), filter var(--transition-normal);
+}
+
+/* Animated ring drawn around the target part */
+.body-target-ring {
+    position: absolute;
+    border: 5px solid var(--accent-orange);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: bodyRingPulse 1.1s ease-in-out infinite;
+    box-shadow: 0 0 18px rgba(255, 150, 0, 0.9),
+                inset 0 0 14px rgba(255, 150, 0, 0.55);
+    z-index: 5;
+}
+
+.body-target-arrow {
+    position: absolute;
+    font-size: 1.9rem;
+    pointer-events: none;
+    animation: bodyArrowBounce 0.9s ease-in-out infinite;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+    z-index: 6;
+}
+
+@keyframes bodyRingPulse {
+    0%, 100% { transform: scale(1);    opacity: 1;    box-shadow: 0 0 14px rgba(255,150,0,.75), inset 0 0 10px rgba(255,150,0,.45); }
+    50%      { transform: scale(1.14); opacity: 0.85; box-shadow: 0 0 30px rgba(255,150,0,1),   inset 0 0 20px rgba(255,150,0,.7); }
+}
+
+@keyframes bodyArrowBounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-9px); }
+}
+
+@keyframes bodyCorrectPulse {
+    0%   { filter: drop-shadow(0 0 0 var(--primary-green)); }
+    40%  { filter: drop-shadow(0 0 18px var(--primary-green)); }
+    100% { filter: drop-shadow(0 0 0 var(--primary-green)); }
+}
+
+@keyframes bodyWrongShake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-5px); }
+    75%      { transform: translateX(5px); }
+}
+
+@keyframes bodyTargetGlow {
+    0%, 100% {
+        filter: drop-shadow(0 0 6px var(--accent-yellow))
+                drop-shadow(0 0 14px var(--accent-orange));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 16px var(--accent-yellow))
+                drop-shadow(0 0 34px var(--accent-orange))
+                brightness(1.35);
+        transform: scale(1.07);
+    }
+}
+
+/* Info card */
+.body-info-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+}
+
+.body-info-icon {
+    font-size: 3rem;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.body-info-card h3 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    margin-bottom: 8px;
+}
+
+.body-info-card p {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+.body-say-btn {
+    background: var(--primary-green);
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: var(--radius-full);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 0 var(--primary-green-dark);
+}
+
+/* Discovery checklist */
+.body-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.body-chip {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    background: var(--bg-main);
+    color: var(--text-muted);
+    border: 2px dashed var(--border-color);
+}
+
+.body-chip.found {
+    background: #d7ffb8;
+    color: var(--primary-green-dark);
+    border: 2px solid var(--primary-green);
+}
+
+/* Label It answer buttons */
+.body-choices {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.body-choice-btn {
+    padding: 16px 10px;
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-color);
+    text-align: center;
+    transition: background-color var(--transition-normal);
+}
+
+.body-choice-btn:hover:not(:disabled) {
+    background: var(--bg-main);
+}
+
+.body-choice-btn.correct {
+    background: #d7ffb8 !important;
+    border-color: var(--primary-green) !important;
+    color: var(--primary-green-dark) !important;
+}
+
+.body-choice-btn.wrong {
+    background: #ffdfe0 !important;
+    border-color: var(--accent-red) !important;
+    color: var(--accent-red) !important;
+}
+
+.body-choice-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+    .body-game-layout {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .body-figure-panel,
+    .body-info-panel {
+        max-width: 100%;
+    }
+}
+
+
+/* Narration on/off toggle */
+.narration-toggle {
+    background: var(--primary-green);
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 0 var(--primary-green-dark);
+}
+
+.narration-toggle.muted {
+    background: var(--text-muted);
+    box-shadow: 0 4px 0 #5c6b7a;
+}
