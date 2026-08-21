@@ -438,11 +438,130 @@ function launchConfetti(count = 20) {
     }
 }
 
+
+// ============================================================
+// SECURITY LAYER
+//
+// IMPORTANT, PLEASE READ:
+// This app runs entirely in the browser, so anything it knows,
+// the browser knows. These measures raise the bar a great deal
+// (no readable PINs, no plaintext password, lockouts, no XSS)
+// but they are NOT a substitute for server-side authentication.
+// A determined technical user can still tamper via DevTools.
+// For real protection, enable Firebase Authentication - see
+// SECURITY.md for the step-by-step guide.
+// ============================================================
+
+// ---------- 1. Escape untrusted text before it touches innerHTML ----------
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+window.escapeHtml = escapeHtml;
+
+// ---------- 2. Hash PINs (SHA-256) so they are never stored readable ----------
+const PIN_SALT = 'kidzone::v1::';
+
+async function hashPin(pin) {
+    const data = new TextEncoder().encode(PIN_SALT + String(pin));
+    if (crypto && crypto.subtle && crypto.subtle.digest) {
+        const buf = await crypto.subtle.digest('SHA-256', data);
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    // Very old browsers only: weak fallback, still better than plain text.
+    let h = 0;
+    for (const b of data) { h = ((h << 5) - h + b) | 0; }
+    return ('legacy' + Math.abs(h).toString(16)).padEnd(64, '0');
+}
+
+/**
+ * Verify a typed PIN against a stored profile.
+ * Accepts a legacy plaintext PIN once, then silently upgrades it
+ * to a hash so nobody gets locked out during the migration.
+ */
+async function verifyKidPin(kid, typedPin) {
+    if (!kid) return false;
+    const typedHash = await hashPin(typedPin);
+
+    if (kid.pinHash) return kid.pinHash === typedHash;
+
+    // Legacy profile still holding a plaintext pin.
+    if (kid.pin && String(kid.pin) === String(typedPin)) {
+        try {
+            await setDoc(doc(db, "kidProfiles", kid.id),
+                         { pinHash: typedHash, pin: null }, { merge: true });
+            console.info('[KidZone] upgraded stored PIN to a secure hash for', kid.name);
+        } catch (e) {
+            console.warn('[KidZone] could not upgrade PIN hash:', e);
+        }
+        return true;
+    }
+    return false;
+}
+
+// ---------- 3. Slow down guessing: lockout after repeated failures ----------
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCK_MS = 60 * 1000;
+
+function loginLockKey(scope) { return 'kidzone_lock_' + scope; }
+
+function getLockState(scope) {
+    try {
+        return JSON.parse(localStorage.getItem(loginLockKey(scope))) || { fails: 0, until: 0 };
+    } catch (e) { return { fails: 0, until: 0 }; }
+}
+
+function setLockState(scope, state) {
+    try { localStorage.setItem(loginLockKey(scope), JSON.stringify(state)); } catch (e) {}
+}
+
+function lockRemainingMs(scope) {
+    const st = getLockState(scope);
+    return st.until > Date.now() ? st.until - Date.now() : 0;
+}
+
+function registerFailedLogin(scope) {
+    const st = getLockState(scope);
+    st.fails = (st.fails || 0) + 1;
+    if (st.fails >= LOGIN_MAX_ATTEMPTS) {
+        st.until = Date.now() + LOGIN_LOCK_MS;
+        st.fails = 0;
+    }
+    setLockState(scope, st);
+}
+
+function clearFailedLogins(scope) { setLockState(scope, { fails: 0, until: 0 }); }
+
+// ---------- 4. Keep stored progress within believable limits ----------
+function sanitiseProgress(d) {
+    const clampInt = (v, lo, hi, dflt) => {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+    };
+    const list = (v, cap) => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, cap) : [];
+    return {
+        stars: clampInt(d.stars, 0, 1000000, 0),
+        level: clampInt(d.level, 1, 10000, 1),
+        badges: list(d.badges, 100),
+        factsViewed: list(d.factsViewed, 500),
+        finishedStories: list(d.finishedStories, 100),
+        completedExperiments: list(d.completedExperiments, 100)
+    };
+}
+
+
 // ============================================================
 // AUTHENTICATION & PROFILE SYSTEM
 // ============================================================
-const ADMIN_EMAIL = "yaasin@gmail.com";
-const ADMIN_PASS = "yaasin786";
+// Credentials are stored as SHA-256 hashes so the password is not
+// sitting in plain sight in the downloaded JavaScript.
+// (Reminder: this is obfuscation, not real auth - see SECURITY.md.)
+const ADMIN_EMAIL_HASH = "f948dec9097dbe0acc14ed74e1317f0ff4fc0fe21397d5eb10c9565a60d728cf";
+const ADMIN_PASS_HASH  = "464b28e76871277cf53fd1bcaf9e4c11d9aaf797d57f73c7dbf0f98b2b7012b5";
 
 let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
@@ -512,7 +631,7 @@ function populateKidSelect() {
     cachedKidProfiles.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
-        opt.innerText = `${p.avatar} ${p.name}`;
+        opt.innerText = `${escapeHtml(p.avatar)} ${escapeHtml(p.name)}`;
         selectElem.appendChild(opt);
     });
 }
@@ -529,7 +648,20 @@ async function handleKidLogin(event) {
 
     const kid = cachedKidProfiles.find(p => p.id === kidId);
 
-    if (kid && kid.pin === pinInput) {
+    const waitMs = lockRemainingMs('kid_' + kidId);
+    if (waitMs > 0) {
+        if (errorMsg) {
+            errorMsg.innerText = `\u23f3 Too many tries. Wait ${Math.ceil(waitMs / 1000)}s.`;
+            errorMsg.style.display = 'block';
+        }
+        playSound(150, 'sawtooth', 0.3);
+        return;
+    }
+
+    const pinOk = await verifyKidPin(kid, pinInput);
+
+    if (kid && pinOk) {
+        clearFailedLogins('kid_' + kidId);
         sessionStorage.setItem('kidzone_logged_in', 'true');
         sessionStorage.setItem('kidzone_user_role', 'kid');
         sessionStorage.setItem('kidzone_active_id', kid.id);
@@ -555,18 +687,19 @@ async function handleKidLogin(event) {
         loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Welcome back, ${kid.name}! 🚀`, '✨', 3500);
+        showToast(`Welcome back, ${escapeHtml(kid.name)}! 🚀`, '✨', 3500);
     } else {
         playSound(150, 'sawtooth', 0.3);
         if (errorMsg) {
-            errorMsg.innerText = "❌ Incorrect Explorer or 4-digit PIN!";
+            registerFailedLogin('kid_' + kidId);
+        errorMsg.innerText = "❌ Incorrect Explorer or 4-digit PIN!";
             errorMsg.style.display = "block";
         }
     }
 }
 window.handleKidLogin = handleKidLogin;
 
-function handleAdminLogin(event) {
+async function handleAdminLogin(event) {
     if (event) event.preventDefault();
     const emailElem = document.getElementById('adminEmail');
     const passElem = document.getElementById('adminPassword');
@@ -576,7 +709,21 @@ function handleAdminLogin(event) {
     const password = passElem.value.trim();
     const errorMsg = document.getElementById('adminLoginErrorMsg');
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
+    // Too many wrong guesses? Make the attacker wait.
+    const waitMs = lockRemainingMs('admin');
+    if (waitMs > 0) {
+        if (errorMsg) {
+            errorMsg.innerText = `\u23f3 Too many attempts. Try again in ${Math.ceil(waitMs / 1000)}s.`;
+            errorMsg.style.display = 'block';
+        }
+        playSound(150, 'sawtooth', 0.3);
+        return;
+    }
+
+    const [emailHash, passHash] = await Promise.all([hashPin(email), hashPin(password)]);
+
+    if (emailHash === ADMIN_EMAIL_HASH && passHash === ADMIN_PASS_HASH) {
+        clearFailedLogins('admin');
         sessionStorage.setItem('kidzone_logged_in', 'true');
         sessionStorage.setItem('kidzone_user_role', 'admin');
         sessionStorage.setItem('kidzone_active_id', 'admin_yaasin');
@@ -593,6 +740,7 @@ function handleAdminLogin(event) {
         playChime([523, 659, 784, 1046]);
         showToast(`Welcome Admin Yaasin! 🛠️`, '👑', 3500);
     } else {
+        registerFailedLogin('admin');
         playSound(150, 'sawtooth', 0.3);
         if (errorMsg) {
             errorMsg.innerText = "❌ Invalid Admin Email or Password.";
@@ -700,12 +848,22 @@ async function handleCreateKidAccount(event) {
         return;
     }
 
+    // Reject absurd names and non-numeric PINs before saving.
+    if (kidName.length > 24) {
+        showToast('That name is too long (max 24 letters).', '\u26a0\ufe0f', 3000);
+        return;
+    }
+    if (!/^[0-9]{4}$/.test(kidPin)) {
+        showToast('PIN must be exactly 4 digits.', '\u26a0\ufe0f', 3000);
+        return;
+    }
+
     const newId = `kid_${Date.now()}`;
     const newProfile = {
         id: newId,
         name: kidName,
         avatar: selectedAvatar,
-        pin: kidPin
+        pinHash: await hashPin(kidPin)   // never store the raw PIN
     };
 
     try {
@@ -717,7 +875,7 @@ async function handleCreateKidAccount(event) {
 
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Profile created for ${kidName}! Synced to Mobile! 🎉`, '✨', 3500);
+        showToast(`Profile created for ${escapeHtml(kidName)}! Synced to Mobile! 🎉`, '✨', 3500);
     } catch (e) {
         console.error("Firestore Save Error:", e);
         showToast('Error saving profile to Firestore!', '❌', 3000);
@@ -777,8 +935,8 @@ function renderAdminPortalProfiles() {
         div.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
                 <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-color);">
-                    <span style="font-size: 1.2rem; margin-right: 6px;">${p.avatar}</span> ${p.name} 
-                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">(PIN: ${p.pin})</span>
+                    <span style="font-size: 1.2rem; margin-right: 6px;">${escapeHtml(p.avatar)}</span> ${escapeHtml(p.name)} 
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${p.pinHash ? '\ud83d\udd12 PIN secured' : '\u26a0\ufe0f PIN not yet secured'}</span>
                 </div>
                 <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
                     <span>🕒 Last Login:</span>
@@ -882,13 +1040,13 @@ async function loadProgress() {
         
         await loadQuizStats();
 
-        const d = docSnap.data();
-        userStars = d.stars || 0;
-        level = d.level || 1;
-        unlockedBadges = new Set(d.badges || []);
-        factsViewed = new Set(d.factsViewed || []);
-        finishedStories = new Set(d.finishedStories || []);
-        completedExperiments = new Set(d.completedExperiments || []);
+        const clean = sanitiseProgress(docSnap.data() || {});
+        userStars = clean.stars;
+        level = clean.level;
+        unlockedBadges = new Set(clean.badges);
+        factsViewed = new Set(clean.factsViewed);
+        finishedStories = new Set(clean.finishedStories);
+        completedExperiments = new Set(clean.completedExperiments);
 
         updateStatsDisplay();
     } catch (e) {
@@ -2357,9 +2515,9 @@ function renderReports() {
             ${rows.map((r, i) => `
                 <button class="rep-row" onclick="showKidReport('${r.p.id}')">
                     <span class="rep-rank">${i === 0 && r.t.correct > 0 ? '🥇' : (i === 1 && r.t.correct > 0 ? '🥈' : (i === 2 && r.t.correct > 0 ? '🥉' : '#' + (i + 1)))}</span>
-                    <span class="rep-avatar">${r.p.avatar || '🚀'}</span>
+                    <span class="rep-avatar">${escapeHtml(r.p.avatar || '🚀')}</span>
                     <span class="rep-name">
-                        ${r.p.name}
+                        ${escapeHtml(r.p.name)}
                         <small>Lvl ${r.level} · ⭐ ${r.stars} · 🏅 ${r.badges}</small>
                     </span>
                     <span class="rep-score">
@@ -2426,7 +2584,7 @@ function renderKidReport(kidId) {
             { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         return `<li class="${r.correct ? 'rr-ok' : 'rr-bad'}">
                     <span class="rr-mark">${r.correct ? '✅' : '❌'}</span>
-                    <span class="rr-q">${meta.icon} ${r.q || meta.name}</span>
+                    <span class="rr-q">${meta.icon} ${escapeHtml(r.q || meta.name)}</span>
                     <span class="rr-when">${when}</span>
                 </li>`;
     }).join('') : '<li class="rep-loading">No answers recorded yet.</li>';
@@ -2440,9 +2598,9 @@ function renderKidReport(kidId) {
         <button class="rep-back" onclick="backToReportOverview()">◀ All Explorers</button>
 
         <div class="rep-kid-head">
-            <span class="rep-kid-avatar">${kid.avatar || '🚀'}</span>
+            <span class="rep-kid-avatar">${escapeHtml(kid.avatar || '🚀')}</span>
             <div>
-                <h3>${kid.name}</h3>
+                <h3>${escapeHtml(kid.name)}</h3>
                 <p>Level ${prog.level || 1} · ⭐ ${prog.stars || 0} stars · 🏅 ${(prog.badges || []).length} badges</p>
             </div>
         </div>
