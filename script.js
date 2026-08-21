@@ -588,6 +588,21 @@ let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
 let adminLoginInProgress = false; // true only after the admin submits the password form
 
+function getActiveKidProfile() {
+    return cachedKidProfiles.find(k => k && k.id === currentActiveId) || null;
+}
+
+function updateSafeZoneIdentity() {
+    const composerAvatar = document.getElementById('safeComposerAvatar');
+    if (!composerAvatar) return;
+    if (currentRole === 'admin') {
+        composerAvatar.innerText = '🛠️';
+        return;
+    }
+    const kid = getActiveKidProfile();
+    composerAvatar.innerText = (kid && kid.avatar) ? kid.avatar : '🚀';
+}
+
 function toggleLoginType(type) {
     playSound(400);
     const kidForm = document.getElementById('kidLoginForm');
@@ -648,6 +663,7 @@ function listenToKidProfiles() {
         // Keep Safe Zone friend lists live when Admin creates a new kid profile.
         if (typeof populateSafeAudience === 'function') populateSafeAudience();
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
+        if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
         if (typeof renderSafeZone === 'function') renderSafeZone();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
@@ -903,6 +919,7 @@ function setupUIForSession() {
             if (nameElem) nameElem.innerText = kid.name;
         }
     }
+    updateSafeZoneIdentity();
 }
 
 function handleLogout() {
@@ -2885,6 +2902,7 @@ function buildSafeZone() {
     renderSafeChat();
 }
 window.buildSafeZone = buildSafeZone;
+window.updateSafeZoneIdentity = updateSafeZoneIdentity;
 
 function populateSafeAudience() {
     const sel = document.getElementById('safePostAudience');
@@ -2928,9 +2946,7 @@ function renderSafeZone() {
     if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
     document.querySelectorAll('.admin-only-filter').forEach(el => el.style.display = currentRole === 'admin' ? 'inline-block' : 'none');
 
-    const avatar = document.getElementById('safeComposerAvatar');
-    const activeKid = cachedKidProfiles.find(k => k.id === currentActiveId);
-    if (avatar) avatar.innerText = currentRole === 'admin' ? '🛠️' : (activeKid ? activeKid.avatar : '🚀');
+    updateSafeZoneIdentity();
 
     const composer = document.getElementById('safezoneComposer');
     if (composer) composer.style.display = currentRole === 'admin' || currentRole === 'kid' ? 'flex' : 'none';
@@ -3126,7 +3142,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     const text = String(forcedText || input?.value || '').trim();
     if (!text) return;
     if (safeZoneContainsBadWords(text)) { showToast('Kind chat only please.', '🛡️', 3000); return; }
-    const me = cachedKidProfiles.find(k => k.id === currentActiveId) || {};
+    const me = getActiveKidProfile() || {};
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend) || {};
     const id = 'chat_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const data = {
@@ -3172,7 +3188,7 @@ async function submitSafePost() {
     const audienceId = document.getElementById('safePostAudience')?.value || 'everyone';
     if (!text) { showToast('Write something kind first.', '✍️', 2500); return; }
     if (safeZoneContainsBadWords(text)) { showToast('Please use kind words only. Ask an adult if unsure.', '🛡️', 4000); return; }
-    const kid = cachedKidProfiles.find(k => k.id === currentActiveId) || {};
+    const kid = getActiveKidProfile() || {};
     const id = 'safe_' + Date.now();
     const data = {
         id, text, mood, audienceId, createdAt: Date.now(),
