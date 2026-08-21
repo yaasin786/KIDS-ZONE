@@ -655,8 +655,14 @@ function checkLoginSession() {
 function listenToKidProfiles() {
     onSnapshot(collection(db, "kidProfiles"), (snapshot) => {
         cachedKidProfiles = [];
+        safeZoneProfileChats = [];
         snapshot.forEach(docSnap => {
-            cachedKidProfiles.push(docSnap.data());
+            const data = docSnap.data() || {};
+            if (data.kind === 'safeChat') {
+                safeZoneProfileChats.push(data);
+            } else if (data.id && (data.pinHash || data.pin || String(data.id).startsWith('kid_'))) {
+                cachedKidProfiles.push(data);
+            }
         });
         populateKidSelect();
         setupUIForSession();
@@ -665,6 +671,7 @@ function listenToKidProfiles() {
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
         if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
         if (typeof renderSafeZone === 'function') renderSafeZone();
+        if (typeof renderSafeChat === 'function') renderSafeChat();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
             renderAdminPortalProfiles();
@@ -2852,6 +2859,7 @@ window.resetKidStats = resetKidStats;
 // ============================================================
 let safeZonePosts = [];
 let safeZoneChats = [];
+let safeZoneProfileChats = []; // chat fallback stored in kidProfiles so it syncs across devices
 let selectedSafeChatFriend = '';
 let safeZoneFilter = 'all';
 
@@ -2873,7 +2881,7 @@ function upsertLocalSafeChat(msg) {
 }
 function getAllSafeZoneChats() {
     const map = new Map();
-    [...getLocalSafeChats(), ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
+    [...getLocalSafeChats(), ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
     return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 let safeZoneBuilt = false;
@@ -2922,6 +2930,7 @@ function buildSafeZone() {
     populateSafeChatFriends();
     renderSafeZone();
     renderSafeChat();
+    syncLocalSafeChatsToCloud();
 }
 window.buildSafeZone = buildSafeZone;
 window.updateSafeZoneIdentity = updateSafeZoneIdentity;
@@ -3157,6 +3166,29 @@ async function sendSafeQuickMessage(text) {
 }
 window.sendSafeQuickMessage = sendSafeQuickMessage;
 
+
+async function saveSafeChatToProfileFallback(data) {
+    const profileChat = { ...data, kind: 'safeChat', profileFallback: true };
+    await setDoc(doc(db, 'kidProfiles', 'safechat_' + data.id), profileChat);
+}
+
+async function syncLocalSafeChatsToCloud() {
+    const local = getLocalSafeChats();
+    const unsynced = local.filter(m => m && m.localOnly && m.fromId === currentActiveId && m.status !== 'deleted');
+    if (!unsynced.length) return;
+    for (const msg of unsynced) {
+        try {
+            await saveSafeChatToProfileFallback({ ...msg, localOnly: false });
+            msg.localOnly = false;
+            msg.profileFallback = true;
+        } catch (e) {
+            // If this still fails, keep it local and try again next time.
+            break;
+        }
+    }
+    saveLocalSafeChats(local);
+}
+
 async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 2500); return; }
     if (safeZonePaused && currentRole !== 'admin') { showToast('Chat is paused by Admin right now.', '⏸️', 3000); return; }
@@ -3184,13 +3216,21 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         showToast(data.status === 'approved' ? 'Safe message sent!' : 'Safe message sent!', '💬', 2600);
         if (currentRole === 'kid') unlockBadge('safeFriend');
     } catch (e) {
-        console.warn('[KidZone] Cloud chat failed, saving on this device:', e && (e.code || e.message || e));
-        upsertLocalSafeChat({ ...data, localOnly: true });
-        if (input && !forcedText) input.value = '';
-        renderSafeChat();
-        renderSafeAdminPanel();
-        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Safe message saved on this device.', '💬', 3200);
-        if (currentRole === 'kid') unlockBadge('safeFriend');
+        console.warn('[KidZone] safeZoneChats blocked; trying kidProfiles sync fallback:', e && (e.code || e.message || e));
+        try {
+            await saveSafeChatToProfileFallback(data);
+            if (input && !forcedText) input.value = '';
+            showToast('Safe message sent!', '💬', 2600);
+            if (currentRole === 'kid') unlockBadge('safeFriend');
+        } catch (e2) {
+            console.warn('[KidZone] Profile chat fallback failed, saving on this device:', e2 && (e2.code || e2.message || e2));
+            upsertLocalSafeChat({ ...data, localOnly: true });
+            if (input && !forcedText) input.value = '';
+            renderSafeChat();
+            renderSafeAdminPanel();
+            showToast('Message saved on this device only. Ask Admin to enable chat sync.', '💬', 4200);
+            if (currentRole === 'kid') unlockBadge('safeFriend');
+        }
     }
 }
 window.sendSafeChatMessage = sendSafeChatMessage;
@@ -3222,7 +3262,9 @@ async function safeDeleteChat(chatId) {
     try {
         await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'deleted', deletedAt: Date.now() }, { merge: true });
     } catch (e) {
-        console.warn('[KidZone] Cloud delete chat failed, deleting local copy:', e && (e.code || e.message || e));
+        console.warn('[KidZone] Cloud delete chat failed; trying profile fallback:', e && (e.code || e.message || e));
+        try { await setDoc(doc(db, 'kidProfiles', 'safechat_' + chatId), { status: 'deleted', deletedAt: Date.now() }, { merge: true }); }
+        catch (e2) { console.warn('[KidZone] Profile fallback delete failed:', e2 && (e2.code || e2.message || e2)); }
     }
     if (localMsg) {
         localMsg.status = 'deleted';
