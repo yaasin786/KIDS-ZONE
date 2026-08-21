@@ -3182,9 +3182,33 @@ function wireSafeChatAttachmentPreview() {
     input.addEventListener('change', () => {
         const box = document.getElementById('safeChatAttachmentPreview');
         const f = input.files && input.files[0];
-        if (box) box.innerText = f ? `📎 Attached: ${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+        if (!box) return;
+        if (!f) { box.innerHTML = ''; return; }
+        const sizeKb = Math.round(f.size / 1024);
+        if ((f.type || '').startsWith('image/')) {
+            const url = URL.createObjectURL(f);
+            box.innerHTML = `<div class="safe-attachment-preview-card">
+                <img src="${url}" alt="Attachment preview">
+                <div><strong>📎 ${escapeHtml(f.name)}</strong><small>${sizeKb} KB · image preview</small></div>
+                <button type="button" class="safe-remove-attachment" onclick="clearSafeChatAttachment()">✖</button>
+            </div>`;
+        } else {
+            box.innerHTML = `<div class="safe-attachment-preview-card file">
+                <span class="safe-file-big">📎</span>
+                <div><strong>${escapeHtml(f.name)}</strong><small>${sizeKb} KB · will be downloadable</small></div>
+                <button type="button" class="safe-remove-attachment" onclick="clearSafeChatAttachment()">✖</button>
+            </div>`;
+        }
     });
 }
+
+function clearSafeChatAttachment() {
+    const input = document.getElementById('safeChatAttachment');
+    const box = document.getElementById('safeChatAttachmentPreview');
+    if (input) input.value = '';
+    if (box) box.innerHTML = '';
+}
+window.clearSafeChatAttachment = clearSafeChatAttachment;
 
 function addSafeChatEmoji(emoji) {
     const input = document.getElementById('safeChatInput');
@@ -3203,9 +3227,15 @@ function renderSafeChatAttachment(att) {
     const name = escapeHtml(att.name || 'attachment');
     const url = escapeHtml(att.dataUrl);
     if ((att.type || '').startsWith('image/')) {
-        return `<span class="safe-chat-attachment"><img src="${url}" alt="${name}"></span>`;
+        return `<span class="safe-chat-attachment">
+            <a href="${url}" target="_blank" rel="noopener" title="Open image preview"><img src="${url}" alt="${name}"></a>
+            <a class="safe-chat-download" href="${url}" download="${name}">⬇️ Download image</a>
+        </span>`;
     }
-    return `<a class="safe-chat-file-link" href="${url}" download="${name}" target="_blank" rel="noopener">📎 ${name}</a>`;
+    return `<span class="safe-chat-attachment">
+        <a class="safe-chat-file-link" href="${url}" target="_blank" rel="noopener">👁️ Preview ${name}</a>
+        <a class="safe-chat-download" href="${url}" download="${name}">⬇️ Download file</a>
+    </span>`;
 }
 async function safeChatFileToDataUrl(file) {
     if (!file) return null;
@@ -3395,7 +3425,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (input && !forcedText) input.value = '';
     if (attachmentInput && !forcedText) attachmentInput.value = '';
     const attPreview = document.getElementById('safeChatAttachmentPreview');
-    if (attPreview && !forcedText) attPreview.innerText = '';
+    if (attPreview && !forcedText) attPreview.innerHTML = '';
     renderSafeChat();
     playSound(720, 'triangle', 0.12);
 
