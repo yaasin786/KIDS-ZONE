@@ -68,6 +68,7 @@
             <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
             <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
             <button class="nav-btn" onclick="switchTab('geo', event)">🏔️ Mountains & Rivers</button>
+            <button class="nav-btn" onclick="switchTab('homework', event)">📝 Homework</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
@@ -336,6 +337,90 @@
                 <p class="geo-help">Tap a place card, then tap the correct continent/home. On desktop you can also drag and drop!</p>
                 <div class="geo-match-pool" id="geoMatchPool"></div>
                 <div class="geo-match-zones" id="geoMatchZones"></div>
+            </div>
+        </section>
+
+
+        <!-- HOMEWORK & TEST PAPERS TAB -->
+        <section id="homework" class="tab-content" aria-label="Homework and Test Papers Section">
+            <div class="hero-banner homework-hero">
+                <h1>📝 Homework & Test Paper Hub</h1>
+                <p>Admin can upload homework, worksheets, and test papers. Kids can open them, answer, submit, and earn stars!</p>
+            </div>
+
+            <div id="homeworkAdminPanel" class="homework-admin-panel" style="display:none;">
+                <div class="hw-admin-head">
+                    <div>
+                        <span class="hw-kicker">🛠️ Admin Teacher Tools</span>
+                        <h2>Create a Homework or Test Paper</h2>
+                        <p>Upload a PDF/image/worksheet, write instructions, set a due date, and it will appear for all children.</p>
+                    </div>
+                    <button class="solar-tool-btn active" onclick="toggleHomeworkForm()">➕ New Assignment</button>
+                </div>
+
+                <form id="homeworkUploadForm" class="homework-form" onsubmit="handleHomeworkUpload(event)" style="display:none;">
+                    <div class="hw-form-grid">
+                        <div class="input-group">
+                            <label for="hwTitle">📌 Title</label>
+                            <input type="text" id="hwTitle" placeholder="e.g. Rivers of the World Worksheet" required maxlength="80">
+                        </div>
+                        <div class="input-group">
+                            <label for="hwType">📚 Type</label>
+                            <select id="hwType" required>
+                                <option value="Homework">Homework</option>
+                                <option value="Test Paper">Test Paper</option>
+                                <option value="Worksheet">Worksheet</option>
+                                <option value="Reading Task">Reading Task</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="hwDueDate">📅 Due Date</label>
+                            <input type="date" id="hwDueDate">
+                        </div>
+                        <div class="input-group">
+                            <label for="hwPoints">⭐ Stars Reward</label>
+                            <input type="number" id="hwPoints" value="10" min="0" max="100">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="hwInstructions">✍️ Instructions for kids</label>
+                        <textarea id="hwInstructions" placeholder="Explain what the child should do..." rows="4" required maxlength="1200"></textarea>
+                    </div>
+                    <div class="hw-upload-box">
+                        <label for="hwFile">📎 Upload paper / worksheet</label>
+                        <input type="file" id="hwFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx">
+                        <small>Best: PDF or image. Max recommended size: 750 KB so it syncs safely.</small>
+                        <div id="hwFilePreview" class="hw-file-preview"></div>
+                    </div>
+                    <div class="hw-form-actions">
+                        <button type="submit" class="login-submit-btn">Publish to Children 🚀</button>
+                        <button type="button" class="book-btn" onclick="toggleHomeworkForm(false)">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="homework-toolbar">
+                <input type="text" id="homeworkSearch" placeholder="Search homework or tests..." onkeyup="renderHomeworkHub()" aria-label="Search homework">
+                <div class="homework-filter-buttons">
+                    <button class="homework-chip active" onclick="filterHomeworkStatus('all', event)">📚 All</button>
+                    <button class="homework-chip" onclick="filterHomeworkStatus('todo', event)">🟡 To Do</button>
+                    <button class="homework-chip" onclick="filterHomeworkStatus('done', event)">✅ Submitted</button>
+                </div>
+            </div>
+
+            <div class="homework-stats" id="homeworkStats"></div>
+            <div class="homework-grid" id="homeworkGrid"></div>
+
+            <div id="homeworkReviewPanel" class="homework-review-panel" style="display:none;">
+                <div class="hw-admin-head">
+                    <div>
+                        <span class="hw-kicker">📊 Admin Review</span>
+                        <h2>Submissions</h2>
+                        <p>Review children’s answers and give feedback.</p>
+                    </div>
+                    <button class="book-btn" onclick="closeHomeworkReview()">✖ Close Review</button>
+                </div>
+                <div id="homeworkReviewBody" class="homework-review-body"></div>
             </div>
         </section>
 
@@ -993,6 +1078,35 @@
 
 
 
+
+    <!-- Modal Popup: Homework Detail -->
+    <div id="homeworkModal" class="modal" onclick="closeHomeworkModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="homeworkModalTitle">
+        <div class="modal-content homework-modal-content">
+            <button class="close-btn" onclick="closeHomeworkModal()" aria-label="Close homework dialog">&times;</button>
+            <div class="homework-modal-hero">
+                <span id="homeworkModalIcon" class="homework-modal-icon">📝</span>
+                <div>
+                    <span id="homeworkModalType" class="homework-type-pill">Homework</span>
+                    <h2 id="homeworkModalTitle">Assignment</h2>
+                    <p id="homeworkModalDue" class="homework-due">No due date</p>
+                </div>
+            </div>
+            <div class="homework-instructions" id="homeworkModalInstructions"></div>
+            <div id="homeworkModalFile" class="homework-modal-file"></div>
+            <div id="homeworkKidSubmitBox" class="homework-submit-box">
+                <label for="homeworkAnswerText">✍️ Your answer / notes</label>
+                <textarea id="homeworkAnswerText" rows="5" placeholder="Type your answer here..."></textarea>
+                <label for="homeworkAnswerFile">📎 Optional answer photo/file</label>
+                <input type="file" id="homeworkAnswerFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx">
+                <button class="login-submit-btn" onclick="submitHomeworkAnswer()">Submit My Work ✅</button>
+            </div>
+            <div id="homeworkAdminModalActions" class="homework-admin-actions" style="display:none;">
+                <button class="book-btn" onclick="openHomeworkReviewForCurrent()">📊 Review Answers</button>
+                <button class="book-btn danger" onclick="deleteCurrentHomework()">🗑️ Delete Assignment</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Mountains & Rivers Detail -->
     <div id="geoModal" class="modal" onclick="closeGeoModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="geoModalTitle">
         <div class="modal-content geo-modal-content">
@@ -1157,5 +1271,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb2b606f468e6d',t:'MTc4NzMzMTM2OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb36feefe05ec4',t:'MTc4NzMzMTg0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
