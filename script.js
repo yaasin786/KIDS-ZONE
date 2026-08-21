@@ -645,6 +645,10 @@ function listenToKidProfiles() {
         });
         populateKidSelect();
         setupUIForSession();
+        // Keep Safe Zone friend lists live when Admin creates a new kid profile.
+        if (typeof populateSafeAudience === 'function') populateSafeAudience();
+        if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
+        if (typeof renderSafeZone === 'function') renderSafeZone();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
             renderAdminPortalProfiles();
@@ -2887,13 +2891,20 @@ function populateSafeAudience() {
     if (!sel) return;
     const oldVal = sel.value || 'everyone';
     sel.innerHTML = '<option value="everyone">🌍 Everyone in KidZone</option>';
-    cachedKidProfiles.forEach(k => {
-        if (k.id === currentActiveId) return;
+    const buddies = cachedKidProfiles.filter(k => k.id !== currentActiveId);
+    buddies.forEach(k => {
         const opt = document.createElement('option');
         opt.value = k.id;
         opt.innerText = `💌 Buddy note to ${k.avatar || '🚀'} ${k.name || 'Explorer'} (Admin can see)`;
         sel.appendChild(opt);
     });
+    if (!buddies.length && currentRole === 'kid') {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.innerText = 'No buddies yet — ask Admin to add another kid';
+        sel.appendChild(opt);
+    }
     if ([...sel.options].some(o => o.value === oldVal)) sel.value = oldVal;
 }
 
@@ -3018,18 +3029,39 @@ window.focusSafeComment = focusSafeComment;
 function populateSafeChatFriends() {
     const sel = document.getElementById('safeChatFriendSelect');
     if (!sel) return;
+
     const old = selectedSafeChatFriend || sel.value;
     sel.innerHTML = '<option value="">Choose a friend...</option>';
-    cachedKidProfiles.forEach(k => {
-        if (k.id === currentActiveId && currentRole !== 'admin') return;
+
+    // Use the live profile cache. Kids see every other kid profile.
+    // Admin sees all kid profiles for monitoring/testing chat.
+    const friends = (cachedKidProfiles || [])
+        .filter(k => k && k.id)
+        .filter(k => currentRole === 'admin' || k.id !== currentActiveId)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+    friends.forEach(k => {
         const opt = document.createElement('option');
         opt.value = k.id;
         opt.innerText = `${k.avatar || '🚀'} ${k.name || 'Explorer'}`;
         sel.appendChild(opt);
     });
-    if ([...sel.options].some(o => o.value === old)) {
+
+    if (!friends.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.innerText = currentRole === 'admin'
+            ? 'No kid profiles yet — create kids first'
+            : 'No friends yet — ask Admin to add another kid';
+        sel.appendChild(opt);
+    }
+
+    if ([...sel.options].some(o => o.value === old && old)) {
         sel.value = old;
         selectedSafeChatFriend = old;
+    } else if (selectedSafeChatFriend && !friends.some(k => k.id === selectedSafeChatFriend)) {
+        selectedSafeChatFriend = '';
     }
 }
 
