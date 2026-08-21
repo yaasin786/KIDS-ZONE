@@ -417,6 +417,7 @@ window.addEventListener('keydown', (e) => {
         closeCreateAccountModal();
         closeAdminPortalModal();
         if (typeof closeHistoryModal === 'function') closeHistoryModal();
+        if (typeof closeGeoModal === 'function') closeGeoModal();
     }
 });
 
@@ -1135,7 +1136,11 @@ const BADGES = {
     historyStarter: { icon: '🕰️', name: 'Time Traveller',     desc: 'Explored your first world history topic!' },
     historyExplorer:{ icon: '🌍', name: 'World Historian',     desc: 'Explored 8 world history topics!' },
     historyMaster:  { icon: '🏛️', name: 'History Master',     desc: 'Explored every world history topic!' },
-    historyQuizAce: { icon: '🧠', name: 'History Quiz Ace',    desc: 'Perfect score on the World History Quiz!' }
+    historyQuizAce: { icon: '🧠', name: 'History Quiz Ace',    desc: 'Perfect score on the World History Quiz!' },
+    geoExplorer:   { icon: '🏔️', name: 'Geography Explorer', desc: 'Explored your first mountain or river!' },
+    geoMaster:     { icon: '🗺️', name: 'World Map Master',   desc: 'Explored every mountain and river topic!' },
+    geoQuizAce:    { icon: '🌊', name: 'Geo Quiz Ace',       desc: 'Perfect score on the Mountains & Rivers Quiz!' },
+    geoMatcher:    { icon: '🧭', name: 'Map Matcher',        desc: 'Matched every place to its correct continent!' }
 };
 
 async function saveProgress() {
@@ -1305,6 +1310,7 @@ function switchTab(tabId, evt) {
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
     if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
+    if (tabId === 'geo') setTimeout(buildGeoExplorer, 30);
     if (tabId !== 'docs' && typeof closeDocModal === 'function') {
         const dp = document.getElementById('docPlayer');
         if (dp && dp.innerHTML) dp.innerHTML = '';
@@ -2472,7 +2478,9 @@ const ACTIVITY_LABELS = {
     animalsound: { icon: '👂', name: 'Guess the Sound' },
     habitat:     { icon: '🏞️', name: 'Habitat Match' },
     animalquiz:  { icon: '🦁', name: 'Animal Quiz' },
-    historyquiz: { icon: '🌍', name: 'World History Quiz' }
+    historyquiz: { icon: '🌍', name: 'World History Quiz' },
+    geoquiz:    { icon: '🏔️', name: 'Mountains & Rivers Quiz' },
+    geomatch:   { icon: '🗺️', name: 'Mountains & Rivers Map Match' }
 };
 
 let quizStats = {};
@@ -2808,6 +2816,231 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+
+
+// ============================================================
+// MOUNTAINS & RIVERS OF THE WORLD
+// ============================================================
+const GEO_TYPES = {
+    mountain: { icon: '🏔️', label: 'Mountain', color: '#0f766e' },
+    river:    { icon: '🌊', label: 'River', color: '#2563eb' },
+    range:    { icon: '⛰️', label: 'Mountain Range', color: '#7c3aed' }
+};
+
+const GEO_TOPICS = [
+    { id:'everest', type:'mountain', name:'Mount Everest', icon:'🏔️', place:'Asia • Himalayas • Nepal/China', continent:'Asia', stat1:'8,849 m', stat1Label:'Height', stat2:'Highest mountain on Earth', stat2Label:'Famous for', videoId:'8MUTVxLnXa8',
+      short:'The tallest mountain above sea level.', fact:'Mount Everest is the highest mountain on Earth above sea level. It is part of the Himalayas, a huge mountain range formed when tectonic plates pushed land upward over millions of years.' },
+    { id:'kilimanjaro', type:'mountain', name:'Mount Kilimanjaro', icon:'🌋', place:'Africa • Tanzania', continent:'Africa', stat1:'5,895 m', stat1Label:'Height', stat2:'Free-standing volcano', stat2Label:'Famous for', videoId:'ZgvAaTZdpLo',
+      short:'Africa’s highest mountain and a giant volcano.', fact:'Mount Kilimanjaro is the highest mountain in Africa. It is a volcanic mountain with different climate zones, from warm forests near the bottom to icy areas near the top.' },
+    { id:'denali', type:'mountain', name:'Denali', icon:'❄️', place:'North America • Alaska', continent:'North America', stat1:'6,190 m', stat1Label:'Height', stat2:'North America’s highest peak', stat2Label:'Famous for', videoId:'ZgvAaTZdpLo',
+      short:'The tallest mountain in North America.', fact:'Denali rises high in Alaska and has extremely cold, windy weather. Its name means “the high one” in the Koyukon language.' },
+    { id:'andes', type:'range', name:'Andes Mountains', icon:'⛰️', place:'South America • West coast', continent:'South America', stat1:'About 7,000 km', stat1Label:'Length', stat2:'Longest continental mountain range', stat2Label:'Famous for', videoId:'01qzgULTduQ',
+      short:'A huge mountain chain along South America.', fact:'The Andes stretch along the western side of South America. They include volcanoes, high plateaus, glaciers, and the source areas of many rivers.' },
+    { id:'himalayas', type:'range', name:'Himalayas', icon:'🏔️', place:'Asia • India/Nepal/Bhutan/China/Pakistan', continent:'Asia', stat1:'Over 2,400 km', stat1Label:'Length', stat2:'Home of Everest', stat2Label:'Famous for', videoId:'8MUTVxLnXa8',
+      short:'The world’s highest mountain range.', fact:'The Himalayas contain many of Earth’s tallest peaks. Snow and glaciers from these mountains feed major rivers that millions of people depend on.' },
+    { id:'alps', type:'range', name:'The Alps', icon:'🏔️', place:'Europe • Several countries', continent:'Europe', stat1:'About 1,200 km', stat1Label:'Length', stat2:'Snowy peaks and valleys', stat2Label:'Famous for', videoId:'01qzgULTduQ',
+      short:'Europe’s famous snowy mountain range.', fact:'The Alps cross countries such as France, Switzerland, Italy, Austria, and Germany. They are important for tourism, water, wildlife, and winter sports.' },
+    { id:'nile', type:'river', name:'Nile River', icon:'🐊', place:'Africa • Flows north to Mediterranean Sea', continent:'Africa', stat1:'About 6,650 km', stat1Label:'Length', stat2:'One of the world’s longest rivers', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'A river that helped Ancient Egypt grow.', fact:'The Nile flows through northeastern Africa. Its water and fertile soil helped Ancient Egyptian civilization farm, travel, and build cities in a desert region.' },
+    { id:'amazon', type:'river', name:'Amazon River', icon:'🐬', place:'South America • Andes to Atlantic Ocean', continent:'South America', stat1:'About 6,400 km', stat1Label:'Length', stat2:'Carries the most water', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'The river with the greatest water flow.', fact:'The Amazon River carries more water than any other river. It flows through the Amazon rainforest, one of the most biodiverse places on Earth.' },
+    { id:'yangtze', type:'river', name:'Yangtze River', icon:'🐉', place:'Asia • China', continent:'Asia', stat1:'About 6,300 km', stat1Label:'Length', stat2:'Longest river in Asia', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'Asia’s longest river.', fact:'The Yangtze is the longest river in Asia. It supports farming, transport, cities, and wildlife across China before reaching the East China Sea.' },
+    { id:'mississippi', type:'river', name:'Mississippi River', icon:'🛶', place:'North America • United States', continent:'North America', stat1:'About 3,730 km', stat1Label:'System length', stat2:'Major transport river', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'A huge river system in North America.', fact:'The Mississippi River system drains water from a large part of the United States. It has been important for travel, trade, farms, music, and wildlife.' },
+    { id:'ganges', type:'river', name:'Ganges River', icon:'🪷', place:'Asia • India/Bangladesh', continent:'Asia', stat1:'About 2,525 km', stat1Label:'Length', stat2:'Sacred and life-giving river', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'A sacred river starting in the Himalayas.', fact:'The Ganges begins in the Himalayas and flows across northern India and Bangladesh. It is very important for farming, culture, cities, and religious traditions.' },
+    { id:'danube', type:'river', name:'Danube River', icon:'🏰', place:'Europe • Many countries', continent:'Europe', stat1:'About 2,850 km', stat1Label:'Length', stat2:'Flows through/crosses 10 countries', stat2Label:'Famous for', videoId:'T5H3UyNBGMg',
+      short:'A river connecting many European countries.', fact:'The Danube flows through or along many countries in Europe. It has helped connect cities, cultures, trade routes, and wildlife habitats for centuries.' }
+];
+
+let geoFilter = 'all';
+let currentGeoIndex = 0;
+let geoBuilt = false;
+let geoQuizRounds = [], geoQuizIndex = 0, geoQuizScore = 0, geoQuizLocked = false;
+let geoMatchRound = [], geoMatchDone = 0, geoPicked = null;
+
+function buildGeoExplorer() { renderGeoExplorer(); geoBuilt = true; }
+window.buildGeoExplorer = buildGeoExplorer;
+
+function getGeoTopic(id) { return GEO_TOPICS.find(g => g.id === id); }
+
+function renderGeoExplorer() {
+    const grid = document.getElementById('geoGrid');
+    if (!grid) return;
+    const term = (document.getElementById('geoSearch') || {}).value || '';
+    const q = term.trim().toLowerCase();
+    const list = GEO_TOPICS.filter(g => {
+        const typeOk = q ? true : (geoFilter === 'all' || g.type === geoFilter);
+        const textOk = !q || g.name.toLowerCase().includes(q) || g.place.toLowerCase().includes(q) || g.fact.toLowerCase().includes(q) || g.continent.toLowerCase().includes(q);
+        return typeOk && textOk;
+    });
+    const count = document.getElementById('geoCount');
+    if (count) count.innerText = list.length ? `${list.length} geography topic${list.length === 1 ? '' : 's'} ready — tap one to learn!` : 'No places found — try another search.';
+    grid.innerHTML = list.map(g => {
+        const t = GEO_TYPES[g.type];
+        return `<div class="geo-card" role="button" tabindex="0" onclick="openGeoTopic('${g.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGeoTopic('${g.id}');}">
+            <div class="card-badge">${t.icon} ${t.label}</div>
+            <div class="geo-card-icon">${g.icon}</div>
+            <h3>${escapeHtml(g.name)}</h3>
+            <p>${escapeHtml(g.short)}</p>
+            <span class="geo-type-tag">📍 ${escapeHtml(g.continent)}</span>
+        </div>`;
+    }).join('');
+}
+window.renderGeoExplorer = renderGeoExplorer;
+
+function filterGeoType(type, evt) {
+    geoFilter = type;
+    playSound(480);
+    document.querySelectorAll('.geo-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderGeoExplorer();
+}
+window.filterGeoType = filterGeoType;
+
+function openGeoTopic(id) {
+    const g = getGeoTopic(id);
+    if (!g) return;
+    currentGeoIndex = GEO_TOPICS.findIndex(x => x.id === id);
+    const t = GEO_TYPES[g.type];
+    playSound(660);
+    stopSpeech();
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+    set('geoModalIcon', g.icon);
+    set('geoModalTitle', g.name);
+    set('geoModalSub', `${t.icon} ${t.label} · ${g.place}`);
+    set('geoModalFact', g.fact);
+    const hero = document.getElementById('geoModalHero');
+    if (hero) hero.style.background = g.type === 'river' ? 'linear-gradient(135deg,#dbeafe,#67e8f9)' : 'linear-gradient(135deg,#dcfce7,#d1d5db)';
+    const stats = document.getElementById('geoStatsGrid');
+    if (stats) stats.innerHTML = [
+        ['📍', 'Continent/Home', g.continent], ['📏', g.stat1Label, g.stat1], ['⭐', g.stat2Label, g.stat2], ['🎬', 'Video', 'Tap Watch Video']
+    ].map(([i,l,v]) => `<div class="geo-stat"><span class="geo-stat-icon">${i}</span><span class="geo-stat-label">${l}</span><span class="geo-stat-value">${escapeHtml(v)}</span></div>`).join('');
+    const box = document.getElementById('geoVideoBox');
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    const modal = document.getElementById('geoModal');
+    if (modal) modal.style.display = 'flex';
+    if (!factsViewed.has('geo-' + g.id)) {
+        factsViewed.add('geo-' + g.id);
+        addStars(4);
+        const seen = GEO_TOPICS.filter(x => factsViewed.has('geo-' + x.id)).length;
+        if (seen === 1) unlockBadge('geoExplorer');
+        if (seen === GEO_TOPICS.length) { unlockBadge('geoMaster'); launchConfetti(50); }
+        saveProgress();
+    }
+}
+window.openGeoTopic = openGeoTopic;
+
+function closeGeoModal() {
+    const m = document.getElementById('geoModal');
+    if (m) m.style.display = 'none';
+    const box = document.getElementById('geoVideoBox');
+    if (box) box.innerHTML = '';
+    stopSpeech();
+    playSound(400);
+}
+window.closeGeoModal = closeGeoModal;
+function closeGeoModalOnBg(e) { if (e.target.id === 'geoModal') closeGeoModal(); }
+window.closeGeoModalOnBg = closeGeoModalOnBg;
+function nextGeoTopic() { currentGeoIndex = (currentGeoIndex + 1) % GEO_TOPICS.length; openGeoTopic(GEO_TOPICS[currentGeoIndex].id); }
+function prevGeoTopic() { currentGeoIndex = (currentGeoIndex - 1 + GEO_TOPICS.length) % GEO_TOPICS.length; openGeoTopic(GEO_TOPICS[currentGeoIndex].id); }
+window.nextGeoTopic = nextGeoTopic; window.prevGeoTopic = prevGeoTopic;
+function speakGeoTopic() { const g = GEO_TOPICS[currentGeoIndex]; if (g) speakText(`${g.name}. ${g.place}. ${g.short} ${g.fact}`); }
+window.speakGeoTopic = speakGeoTopic;
+function loadGeoVideo() {
+    const g = GEO_TOPICS[currentGeoIndex]; const box = document.getElementById('geoVideoBox');
+    if (!g || !box) return;
+    stopSpeech(); box.style.display = 'block';
+    box.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${g.videoId}?rel=0&modestbranding=1&playsinline=1&autoplay=1" title="${escapeHtml(g.name)} video" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`;
+}
+window.loadGeoVideo = loadGeoVideo;
+function geoSurprise() { const g = GEO_TOPICS[Math.floor(Math.random() * GEO_TOPICS.length)]; launchConfetti(12); openGeoTopic(g.id); }
+window.geoSurprise = geoSurprise;
+
+function startGeoQuiz() {
+    geoQuizRounds = shuffleArray(GEO_TOPICS).slice(0, 8).map(g => {
+        if (Math.random() < 0.5) {
+            const wrong = shuffleArray(GEO_TOPICS.filter(x => x.continent !== g.continent)).map(x => x.continent).filter((v,i,a)=>a.indexOf(v)===i).slice(0,3);
+            return { q:`Where is ${g.name} found?`, icon:g.icon, correct:g.continent, options:shuffleArray([g.continent, ...wrong]) };
+        }
+        const correct = GEO_TYPES[g.type].label;
+        const wrong = shuffleArray(Object.keys(GEO_TYPES).filter(k => GEO_TYPES[k].label !== correct)).map(k => GEO_TYPES[k].label).slice(0,2);
+        return { q:`Is ${g.name} a mountain, river, or mountain range?`, icon:g.icon, correct, options:shuffleArray([correct, ...wrong]) };
+    });
+    geoQuizIndex = 0; geoQuizScore = 0; geoQuizLocked = false;
+    const box = document.getElementById('geoQuiz'); if (box) box.style.display = 'block';
+    renderGeoQuizQuestion();
+    if (box) box.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+window.startGeoQuiz = startGeoQuiz;
+function closeGeoQuiz() { const box = document.getElementById('geoQuiz'); if (box) box.style.display = 'none'; playSound(350); }
+window.closeGeoQuiz = closeGeoQuiz;
+function renderGeoQuizQuestion() {
+    const qEl = document.getElementById('geoQuizQuestion'), optEl = document.getElementById('geoQuizOptions'), prog = document.getElementById('geoQuizProgress'), score = document.getElementById('geoQuizScore');
+    if (!qEl || !optEl) return;
+    if (geoQuizIndex >= geoQuizRounds.length) {
+        qEl.innerText = `🎉 Geography quiz complete! You scored ${geoQuizScore} out of ${geoQuizRounds.length}!`;
+        optEl.innerHTML = '<button class="pq-opt" onclick="startGeoQuiz()">🔄 Play Again</button>';
+        if (prog) prog.innerText = 'Finished!'; if (score) score.innerText = geoQuizScore;
+        recordRoundScore('geoquiz', geoQuizScore, geoQuizRounds.length); addStars(geoQuizScore * 3);
+        if (geoQuizScore === geoQuizRounds.length) { unlockBadge('geoQuizAce'); launchConfetti(50); }
+        speakText(`Geography quiz complete! You scored ${geoQuizScore} out of ${geoQuizRounds.length}.`);
+        return;
+    }
+    const cur = geoQuizRounds[geoQuizIndex]; qEl.innerText = `${cur.icon} ${cur.q}`;
+    if (prog) prog.innerText = `Question ${geoQuizIndex + 1} / ${geoQuizRounds.length}`; if (score) score.innerText = geoQuizScore;
+    optEl.innerHTML = ''; cur.options.forEach(opt => { const b=document.createElement('button'); b.className='pq-opt'; b.innerText=opt; b.onclick=()=>answerGeoQuiz(opt,b,cur.correct,cur.q); optEl.appendChild(b); });
+    geoQuizLocked = false; speakText(cur.q);
+}
+function answerGeoQuiz(choice, btn, correct, questionText) {
+    if (geoQuizLocked) return; geoQuizLocked = true;
+    const all = [...document.querySelectorAll('#geoQuizOptions .pq-opt')]; all.forEach(b => b.disabled = true);
+    const ok = choice === correct; recordAnswer('geoquiz', ok, questionText || 'Geography question');
+    if (ok) { btn.classList.add('correct'); geoQuizScore++; playSound(900,'sine',.2); launchConfetti(8); }
+    else { btn.classList.add('wrong'); const right=all.find(b=>b.innerText===correct); if(right) right.classList.add('correct'); playSound(200,'sawtooth',.25); speakText(`The answer is ${correct}.`); }
+    const score = document.getElementById('geoQuizScore'); if (score) score.innerText = geoQuizScore;
+    setTimeout(()=>{ geoQuizIndex++; renderGeoQuizQuestion(); }, 1700);
+}
+window.answerGeoQuiz = answerGeoQuiz;
+
+function startGeoMatch() {
+    geoMatchDone = 0; geoPicked = null;
+    geoMatchRound = shuffleArray(GEO_TOPICS).filter((g,i,a)=>a.findIndex(x=>x.continent===g.continent)===i).slice(0,6);
+    const pool = document.getElementById('geoMatchPool'), zones = document.getElementById('geoMatchZones'), box = document.getElementById('geoMatch');
+    if (box) box.style.display = 'block'; if (!pool || !zones) return;
+    const score = document.getElementById('geoMatchScore'); if (score) score.innerText = `0 / ${geoMatchRound.length}`;
+    pool.innerHTML = ''; zones.innerHTML = '';
+    shuffleArray(geoMatchRound).forEach(g => {
+        const chip = document.createElement('button'); chip.className='geo-place-chip'; chip.type='button'; chip.draggable=true; chip.dataset.place=g.id; chip.innerHTML=`${g.icon} ${g.name}`;
+        chip.addEventListener('dragstart', e => { geoPicked = g.id; chip.classList.add('selected'); if(e.dataTransfer) e.dataTransfer.setData('text/plain', g.id); });
+        chip.addEventListener('dragend', () => chip.classList.remove('selected'));
+        chip.onclick = () => { geoPicked = g.id; document.querySelectorAll('.geo-place-chip.selected').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); playSound(520); };
+        pool.appendChild(chip);
+    });
+    geoMatchRound.forEach(g => {
+        const z = document.createElement('div'); z.className='geo-zone'; z.dataset.continent=g.continent; z.innerHTML=`<h4>📍 ${g.continent}</h4><div class="geo-zone-drop"></div>`;
+        z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('over'); }); z.addEventListener('dragleave', ()=>z.classList.remove('over'));
+        z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('over'); dropGeoPlace(g.continent, z); }); z.onclick=()=>dropGeoPlace(g.continent,z);
+        zones.appendChild(z);
+    });
+    if (box) box.scrollIntoView({behavior:'smooth', block:'center'});
+}
+window.startGeoMatch = startGeoMatch;
+function closeGeoMatch() { const box = document.getElementById('geoMatch'); if (box) box.style.display='none'; }
+window.closeGeoMatch = closeGeoMatch;
+function dropGeoPlace(continent, zone) {
+    if (!geoPicked) return; const g = getGeoTopic(geoPicked); const chip = document.querySelector(`.geo-place-chip[data-place="${geoPicked}"]`); if (!g || !chip || chip.classList.contains('placed')) return;
+    const ok = g.continent === continent; recordAnswer('geomatch', ok, `${g.name} → ${continent}`);
+    if (ok) {
+        chip.classList.add('placed'); chip.classList.remove('selected'); chip.draggable=false; geoMatchDone++;
+        const drop = zone.querySelector('.geo-zone-drop'); if (drop) { const t=document.createElement('span'); t.className='geo-zone-token'; t.innerText=g.icon; t.title=g.name; drop.appendChild(t); }
+        playSound(880,'sine',.2); launchConfetti(7); speakText(`Correct! ${g.name} is in ${continent}.`);
+        const score = document.getElementById('geoMatchScore'); if (score) score.innerText = `${geoMatchDone} / ${geoMatchRound.length}`;
+        if (geoMatchDone === geoMatchRound.length) { unlockBadge('geoMatcher'); addStars(15); recordRoundScore('geomatch', geoMatchDone, geoMatchRound.length); launchConfetti(45); showToast('All places matched! 🗺️', '🎉', 3500); }
+    } else { zone.classList.add('shake'); setTimeout(()=>zone.classList.remove('shake'),500); playSound(200,'sawtooth',.25); speakText(`Try again. ${g.name} is not in ${continent}.`); }
+    geoPicked = null; document.querySelectorAll('.geo-place-chip.selected').forEach(c=>c.classList.remove('selected'));
+}
 
 
 // ============================================================
