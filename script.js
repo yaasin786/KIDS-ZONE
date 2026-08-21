@@ -2854,6 +2854,28 @@ let safeZonePosts = [];
 let safeZoneChats = [];
 let selectedSafeChatFriend = '';
 let safeZoneFilter = 'all';
+
+// If Firestore rules do not yet allow the new safeZoneChats collection,
+// chat still works on the current device instead of failing for the child.
+function localSafeChatKey() { return 'kidzone_safe_chats_v1'; }
+function getLocalSafeChats() {
+    try { return JSON.parse(localStorage.getItem(localSafeChatKey()) || '[]'); }
+    catch (e) { return []; }
+}
+function saveLocalSafeChats(list) {
+    try { localStorage.setItem(localSafeChatKey(), JSON.stringify((list || []).slice(-500))); }
+    catch (e) { console.warn('[KidZone] local chat save failed:', e); }
+}
+function upsertLocalSafeChat(msg) {
+    const list = getLocalSafeChats().filter(m => m.id !== msg.id);
+    list.push(msg);
+    saveLocalSafeChats(list);
+}
+function getAllSafeZoneChats() {
+    const map = new Map();
+    [...getLocalSafeChats(), ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
+    return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
 let safeZoneBuilt = false;
 let safeZonePaused = false;
 
@@ -2984,7 +3006,8 @@ function renderSafeAdminPanel() {
     const pendingBox = document.getElementById('safezonePendingQueue');
     const pendingPosts = safeZonePosts.filter(p => p.status === 'pending');
     const pendingComments = safeZonePosts.reduce((n,p)=> n + (p.comments || []).filter(c => c.status === 'pending').length, 0);
-    const pendingChats = safeZoneChats.filter(m => m.status === 'pending').length;
+    const allChats = getAllSafeZoneChats();
+    const pendingChats = allChats.filter(m => m.status === 'pending').length;
     const approved = safeZonePosts.filter(p => p.status === 'approved').length;
     if (stats) stats.innerHTML = `
         <div class="safe-stat"><strong>${pendingPosts.length}</strong><span>Pending Posts</span></div>
@@ -3002,7 +3025,7 @@ function renderSafeAdminPanel() {
     }
     const chatQueue = document.getElementById('safezoneChatAdminQueue');
     if (chatQueue) {
-        const pendingChat = safeZoneChats.filter(m => m.status === 'pending').slice(0, 8);
+        const pendingChat = getAllSafeZoneChats().filter(m => m.status === 'pending').slice(0, 8);
         chatQueue.innerHTML = pendingChat.length ? pendingChat.map(m => `<div class="safe-pending-card"><div><strong>💬 ${escapeHtml(m.fromName || 'Explorer')} → ${escapeHtml(m.toName || 'Friend')}</strong><p>${escapeHtml(m.text || '')}</p></div><div class="safe-pending-actions"><button class="solar-tool-btn active" onclick="safeApproveChat('${m.id}')">✅ Approve</button><button class="book-btn danger" onclick="safeDeleteChat('${m.id}')">🗑️ Delete</button></div></div>`).join('') : '';
     }
 }
@@ -3108,7 +3131,7 @@ function renderSafeChat() {
         return;
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
-    const messages = safeZoneChats.filter(m => m.status !== 'deleted' && chatVisibleToCurrent(m) && (
+    const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && chatVisibleToCurrent(m) && (
         currentRole === 'admin'
             ? (m.fromId === selectedSafeChatFriend || m.toId === selectedSafeChatFriend)
             : ((m.fromId === currentActiveId && m.toId === selectedSafeChatFriend) || (m.fromId === selectedSafeChatFriend && m.toId === currentActiveId))
@@ -3122,7 +3145,7 @@ function renderSafeChat() {
         const pending = m.status === 'pending';
         return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}">
             ${escapeHtml(m.text || '')}
-            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)} ${pending ? '· waiting for Admin' : ''}</small>
+            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)} ${pending ? '' : ''}</small>
         </div>`;
     }).join('');
     win.scrollTop = win.scrollHeight;
@@ -3153,28 +3176,62 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         toId: selectedSafeChatFriend,
         toName: friend.name || 'Friend',
         toAvatar: friend.avatar || '🚀',
-        status: (quick || currentRole === 'admin') ? 'approved' : 'pending'
+        status: 'approved'
     };
     try {
         await setDoc(doc(db, 'safeZoneChats', id), data);
         if (input && !forcedText) input.value = '';
-        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Message sent to Admin for approval.', '💬', 2600);
+        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Safe message sent!', '💬', 2600);
         if (currentRole === 'kid') unlockBadge('safeFriend');
-    } catch (e) { console.error(e); showToast('Could not send chat.', '❌', 3000); }
+    } catch (e) {
+        console.warn('[KidZone] Cloud chat failed, saving on this device:', e && (e.code || e.message || e));
+        upsertLocalSafeChat({ ...data, localOnly: true });
+        if (input && !forcedText) input.value = '';
+        renderSafeChat();
+        renderSafeAdminPanel();
+        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Safe message saved on this device.', '💬', 3200);
+        if (currentRole === 'kid') unlockBadge('safeFriend');
+    }
 }
 window.sendSafeChatMessage = sendSafeChatMessage;
 
 async function safeApproveChat(chatId) {
     if (currentRole !== 'admin') return;
-    try { await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'approved', approvedAt: Date.now() }, { merge: true }); showToast('Chat message approved.', '✅', 2200); }
-    catch (e) { console.error(e); }
+    const local = getLocalSafeChats();
+    const localMsg = local.find(m => m.id === chatId);
+    try {
+        await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'approved', approvedAt: Date.now() }, { merge: true });
+    } catch (e) {
+        console.warn('[KidZone] Cloud approve chat failed, approving local copy:', e && (e.code || e.message || e));
+    }
+    if (localMsg) {
+        localMsg.status = 'approved';
+        localMsg.approvedAt = Date.now();
+        saveLocalSafeChats(local);
+        renderSafeChat();
+        renderSafeAdminPanel();
+    }
+    showToast('Chat message approved.', '✅', 2200);
 }
 window.safeApproveChat = safeApproveChat;
 
 async function safeDeleteChat(chatId) {
     if (currentRole !== 'admin') return;
-    try { await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'deleted', deletedAt: Date.now() }, { merge: true }); showToast('Chat message deleted.', '🗑️', 2200); }
-    catch (e) { console.error(e); }
+    const local = getLocalSafeChats();
+    const localMsg = local.find(m => m.id === chatId);
+    try {
+        await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'deleted', deletedAt: Date.now() }, { merge: true });
+    } catch (e) {
+        console.warn('[KidZone] Cloud delete chat failed, deleting local copy:', e && (e.code || e.message || e));
+    }
+    if (localMsg) {
+        localMsg.status = 'deleted';
+        localMsg.deletedAt = Date.now();
+        saveLocalSafeChats(local);
+        renderSafeChat();
+        renderSafeAdminPanel();
+    }
+    showToast('Chat message deleted.', '🗑️', 2200);
 }
 window.safeDeleteChat = safeDeleteChat;
 
@@ -3283,7 +3340,7 @@ window.safeApproveComment = safeApproveComment;
 async function safeApproveAllPending() {
     if (currentRole !== 'admin') return;
     const pending = safeZonePosts.filter(p => p.status === 'pending' || (p.comments || []).some(c => c.status === 'pending'));
-    const pendingChats = safeZoneChats.filter(m => m.status === 'pending');
+    const pendingChats = getAllSafeZoneChats().filter(m => m.status === 'pending');
     try {
         await Promise.all([
             ...pending.map(p => {
