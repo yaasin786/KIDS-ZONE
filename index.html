@@ -473,29 +473,29 @@
                     <div class="safe-empty">👋 Choose a friend to start a safe chat.</div>
                 </div>
                 <div class="safe-quick-messages" id="safeQuickMessages">
-                    <button onclick="sendSafeQuickMessage('Hi! 👋')">Hi! 👋</button>
-                    <button onclick="sendSafeQuickMessage('Great job today! 🌟')">Great job! 🌟</button>
-                    <button onclick="sendSafeQuickMessage('Want to play a quiz? 🧠')">Quiz? 🧠</button>
-                    <button onclick="sendSafeQuickMessage('I liked your post! ❤️')">Liked your post ❤️</button>
-                    <button onclick="sendSafeQuickMessage('Let’s learn together! 📚')">Learn together 📚</button>
+                    <button type="button" onclick="sendSafeQuickMessage('Hi! 👋')">Hi! 👋</button>
+                    <button type="button" onclick="sendSafeQuickMessage('Great job today! 🌟')">Great job! 🌟</button>
+                    <button type="button" onclick="sendSafeQuickMessage('Want to play a quiz? 🧠')">Quiz? 🧠</button>
+                    <button type="button" onclick="sendSafeQuickMessage('I liked your post! ❤️')">Liked your post ❤️</button>
+                    <button type="button" onclick="sendSafeQuickMessage('Let’s learn together! 📚')">Learn together 📚</button>
                 </div>
                 <div class="safe-emoji-row" aria-label="Emoji picker">
-                    <button onclick="addSafeChatEmoji('😀')">😀</button>
-                    <button onclick="addSafeChatEmoji('😂')">😂</button>
-                    <button onclick="addSafeChatEmoji('😍')">😍</button>
-                    <button onclick="addSafeChatEmoji('😎')">😎</button>
-                    <button onclick="addSafeChatEmoji('🥳')">🥳</button>
-                    <button onclick="addSafeChatEmoji('👍')">👍</button>
-                    <button onclick="addSafeChatEmoji('❤️')">❤️</button>
-                    <button onclick="addSafeChatEmoji('🌟')">🌟</button>
-                    <button onclick="addSafeChatEmoji('📚')">📚</button>
-                    <button onclick="addSafeChatEmoji('🎮')">🎮</button>
+                    <button type="button" onclick="addSafeChatEmoji('😀')">😀</button>
+                    <button type="button" onclick="addSafeChatEmoji('😂')">😂</button>
+                    <button type="button" onclick="addSafeChatEmoji('😍')">😍</button>
+                    <button type="button" onclick="addSafeChatEmoji('😎')">😎</button>
+                    <button type="button" onclick="addSafeChatEmoji('🥳')">🥳</button>
+                    <button type="button" onclick="addSafeChatEmoji('👍')">👍</button>
+                    <button type="button" onclick="addSafeChatEmoji('❤️')">❤️</button>
+                    <button type="button" onclick="addSafeChatEmoji('🌟')">🌟</button>
+                    <button type="button" onclick="addSafeChatEmoji('📚')">📚</button>
+                    <button type="button" onclick="addSafeChatEmoji('🎮')">🎮</button>
                 </div>
                 <div class="safe-chat-input-row">
                     <input id="safeChatInput" maxlength="220" placeholder="Type a kind message to your friend..." onkeydown="if(event.key==='Enter'){sendSafeChatMessage();}">
                     <label class="safe-attach-btn" for="safeChatAttachment" title="Attach a picture or file">📎</label>
                     <input type="file" id="safeChatAttachment" class="safe-chat-file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt">
-                    <button class="book-btn" onclick="sendSafeChatMessage()">Send 💬</button>
+                    <button type="button" class="book-btn" onclick="sendSafeChatMessage()">Send 💬</button>
                 </div>
                 <div id="safeChatAttachmentPreview" class="safe-chat-attachment-preview"></div>
             </div>
@@ -1383,5 +1383,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ebd0b4fed33876',t:'MTc4NzMzODE0MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ebda743c555ec4',t:'MTc4NzMzODU0MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
