@@ -66,6 +66,7 @@
         </div>
         <nav class="nav-links" aria-label="Main Navigation">
             <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
+            <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
@@ -176,6 +177,71 @@
                     <p>Are corals rocks, plants, or animals?</p>
                     <button class="card-btn" tabindex="-1">Explore Fact ➔</button>
                 </div>
+            </div>
+        </section>
+
+
+        <!-- WORLD HISTORY TAB -->
+        <section id="history" class="tab-content" aria-label="World History Section">
+            <div class="hero-banner history-hero">
+                <h1>🌍 World History Time Machine</h1>
+                <p>Travel from early humans to the modern world with videos, timelines, quick facts, and games made for curious kids!</p>
+            </div>
+
+            <div class="history-dashboard">
+                <div class="history-mission-card">
+                    <span class="history-mission-icon" aria-hidden="true">🕰️</span>
+                    <div>
+                        <h3>Your Mission</h3>
+                        <p>Explore the big ideas that changed the world: farming, writing, empires, inventions, trade, rights, technology, and how people worked together.</p>
+                    </div>
+                </div>
+                <div class="history-mission-card gold">
+                    <span class="history-mission-icon" aria-hidden="true">🎯</span>
+                    <div>
+                        <h3>Learn by Doing</h3>
+                        <p>Tap a timeline card, watch a kid-friendly video, hear the fact aloud, then try the mini quiz to earn stars.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="history-toolbar">
+                <input type="text" id="historySearch" placeholder="Search history (e.g. pyramids, printing, space race)..." onkeyup="renderHistory()" aria-label="Search world history">
+                <div class="history-era-buttons" role="group" aria-label="History era filters">
+                    <button class="history-chip active" onclick="filterHistoryEra('all', event)">🌍 All</button>
+                    <button class="history-chip" onclick="filterHistoryEra('ancient', event)">🏺 Ancient</button>
+                    <button class="history-chip" onclick="filterHistoryEra('classical', event)">🏛️ Classical</button>
+                    <button class="history-chip" onclick="filterHistoryEra('medieval', event)">🏰 Medieval</button>
+                    <button class="history-chip" onclick="filterHistoryEra('earlymodern', event)">🧭 Early Modern</button>
+                    <button class="history-chip" onclick="filterHistoryEra('modern', event)">🚂 Modern</button>
+                    <button class="history-chip" onclick="filterHistoryEra('contemporary', event)">💻 Today</button>
+                </div>
+                <div class="history-actions">
+                    <button class="surprise-btn" onclick="historySurprise()">🎲 Time Jump!</button>
+                    <button class="solar-tool-btn" onclick="startHistoryQuiz()">🧠 Start History Quiz</button>
+                </div>
+            </div>
+
+            <div class="history-timeline-wrap" aria-label="World history timeline">
+                <div class="history-timeline" id="historyTimeline"></div>
+            </div>
+
+            <p class="history-count" id="historyCount"></p>
+            <div class="history-grid" id="historyGrid"></div>
+
+            <div class="history-quiz" id="historyQuiz" style="display:none;">
+                <div class="pq-head">
+                    <span>Score: <strong id="historyQuizScore">0</strong></span>
+                    <span id="historyQuizProgress">Question 1 / 8</span>
+                    <button class="restart-btn" onclick="closeHistoryQuiz()">✖ Close Quiz</button>
+                </div>
+                <h3 id="historyQuizQuestion">Ready?</h3>
+                <div class="pq-options" id="historyQuizOptions"></div>
+            </div>
+
+            <div class="history-note">
+                <span aria-hidden="true">💡</span>
+                <p><strong>Kid-safe history:</strong> some world history includes wars and hard times. This section focuses on big ideas, inventions, cultures, problem-solving, fairness, and lessons people learned.</p>
             </div>
         </section>
 
@@ -787,6 +853,34 @@
         </div>
     </div>
 
+
+    <!-- Modal Popup: World History Detail -->
+    <div id="historyModal" class="modal" onclick="closeHistoryModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <div class="modal-content history-modal-content">
+            <button class="close-btn" onclick="closeHistoryModal()" aria-label="Close history dialog">&times;</button>
+            <div class="history-modal-top" id="historyModalTop">
+                <span class="history-big-icon" id="historyModalIcon" aria-hidden="true">🏺</span>
+                <div>
+                    <span class="history-era-pill" id="historyModalEra">Era</span>
+                    <h2 id="historyModalTitle">History Topic</h2>
+                    <p id="historyModalYear" class="history-year">Year</p>
+                </div>
+            </div>
+            <p id="historyModalBody" class="history-modal-body">Fact details...</p>
+            <div class="history-why-box">
+                <strong>Why it matters:</strong>
+                <span id="historyModalWhy">It changed the world.</span>
+            </div>
+            <div class="history-video-box" id="historyVideoBox" style="display:none;"></div>
+            <div class="history-modal-actions">
+                <button class="book-btn" onclick="prevHistoryTopic()">◀ Previous</button>
+                <button class="book-btn audio-btn" onclick="speakHistoryTopic()">🔊 Read Aloud</button>
+                <button class="book-btn" onclick="loadHistoryVideo()">▶️ Watch Video</button>
+                <button class="book-btn" onclick="nextHistoryTopic()">Next ▶</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Admin Kid Reports (ADMIN ONLY) -->
     <div id="reportsModal" class="modal" onclick="closeReportsModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="reportsTitle">
         <div class="modal-content reports-modal-content">
@@ -903,5 +997,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2e915af88ea3111',t:'MTc4NzMwOTUwOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
