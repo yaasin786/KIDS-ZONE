@@ -663,6 +663,11 @@ function listenToKidProfiles() {
                 safeZoneProfileChats.push(data);
             } else if (data.id && (data.pinHash || data.pin || String(data.id).startsWith('kid_'))) {
                 cachedKidProfiles.push(data);
+                // Chat fallback: each kid can usually write to their OWN profile,
+                // and everyone already reads kidProfiles for login/friend lists.
+                if (Array.isArray(data.safeOutbox)) {
+                    data.safeOutbox.forEach(m => { if (m && m.id) safeZoneProfileChats.push(m); });
+                }
             }
         });
         populateKidSelect();
@@ -3202,6 +3207,13 @@ async function saveSafeChatToProfileFallback(data) {
     const profileChat = { ...data, kind: 'safeChat', profileFallback: true };
     await setDoc(doc(db, 'kidProfiles', 'safechat_' + data.id), profileChat);
 }
+async function saveSafeChatToOwnProfileOutbox(data) {
+    // Most Firestore rule sets for this app already allow a kid to update
+    // their own kidProfiles document (used for lastLogin). Store the chat
+    // message there so friends can receive it through the existing profile feed.
+    const outboxMsg = { ...data, ownProfileOutbox: true };
+    await setDoc(doc(db, 'kidProfiles', data.fromId), { safeOutbox: arrayUnion(outboxMsg) }, { merge: true });
+}
 async function saveSafeChatToProgressFallback(data) {
     const progressChat = { ...data, progressFallback: true };
     // Put a copy in both children's progress docs so both devices can receive it.
@@ -3232,12 +3244,18 @@ async function syncLocalSafeChatsToCloud() {
     if (!unsynced.length) return;
     for (const msg of unsynced) {
         try {
-            await saveSafeChatToProfileFallback({ ...msg, localOnly: false });
+            await saveSafeChatToOwnProfileOutbox({ ...msg, localOnly: false });
             msg.localOnly = false;
-            msg.profileFallback = true;
+            msg.ownProfileOutbox = true;
         } catch (e) {
-            // If this still fails, keep it local and try again next time.
-            break;
+            try {
+                await saveSafeChatToProfileFallback({ ...msg, localOnly: false });
+                msg.localOnly = false;
+                msg.profileFallback = true;
+            } catch (e2) {
+                // If this still fails, keep it local and try again next time.
+                break;
+            }
         }
     }
     saveLocalSafeChats(local);
@@ -3271,6 +3289,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         await setDoc(doc(db, 'safeZoneChats', id), data);
         saveSafeChatToProfileFallback(data).catch(e => console.warn('[KidZone] profile chat mirror failed:', e && (e.code || e.message || e)));
         saveSafeChatToProgressFallback(data).catch(e => console.warn('[KidZone] progress chat mirror failed:', e && (e.code || e.message || e)));
+        saveSafeChatToOwnProfileOutbox(data).catch(e => console.warn('[KidZone] own profile chat mirror failed:', e && (e.code || e.message || e)));
         if (input && !forcedText) input.value = '';
         showToast('Safe message sent!', '💬', 2600);
         if (currentRole === 'kid') unlockBadge('safeFriend');
@@ -3282,20 +3301,28 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
             showToast('Safe message sent!', '💬', 2600);
             if (currentRole === 'kid') unlockBadge('safeFriend');
         } catch (e2) {
-            console.warn('[KidZone] Profile chat fallback failed; trying kidProgress sync fallback:', e2 && (e2.code || e2.message || e2));
+            console.warn('[KidZone] Profile chat document fallback failed; trying own profile outbox:', e2 && (e2.code || e2.message || e2));
             try {
-                await saveSafeChatToProgressFallback(data);
+                await saveSafeChatToOwnProfileOutbox(data);
                 if (input && !forcedText) input.value = '';
                 showToast('Safe message sent!', '💬', 2600);
                 if (currentRole === 'kid') unlockBadge('safeFriend');
             } catch (e3) {
-                console.warn('[KidZone] Progress chat fallback failed, saving on this device:', e3 && (e3.code || e3.message || e3));
-                upsertLocalSafeChat({ ...data, localOnly: true });
-                if (input && !forcedText) input.value = '';
-                renderSafeChat();
-                renderSafeAdminPanel();
-                showToast('Message saved only on this device. Cloud chat sync is blocked in Firebase rules.', '💬', 5200);
-                if (currentRole === 'kid') unlockBadge('safeFriend');
+                console.warn('[KidZone] Own profile outbox failed; trying kidProgress sync fallback:', e3 && (e3.code || e3.message || e3));
+                try {
+                    await saveSafeChatToProgressFallback(data);
+                    if (input && !forcedText) input.value = '';
+                    showToast('Safe message sent!', '💬', 2600);
+                    if (currentRole === 'kid') unlockBadge('safeFriend');
+                } catch (e4) {
+                    console.warn('[KidZone] All cloud chat fallbacks failed, saving on this device:', e4 && (e4.code || e4.message || e4));
+                    upsertLocalSafeChat({ ...data, localOnly: true });
+                    if (input && !forcedText) input.value = '';
+                    renderSafeChat();
+                    renderSafeAdminPanel();
+                    showToast('Message saved only on this device. Firebase rules are blocking chat sync.', '💬', 5200);
+                    if (currentRole === 'kid') unlockBadge('safeFriend');
+                }
             }
         }
     }
