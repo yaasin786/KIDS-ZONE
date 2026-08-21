@@ -116,6 +116,13 @@ import {
     deleteDoc, 
     onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+    getAuth,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+    sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // ============================================================
 // FIREBASE CONFIGURATION & INITIALIZATION
@@ -132,6 +139,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 // Helper function to shuffle questions
 function shuffleArray(array) {
@@ -560,8 +568,10 @@ function sanitiseProgress(d) {
 // Credentials are stored as SHA-256 hashes so the password is not
 // sitting in plain sight in the downloaded JavaScript.
 // (Reminder: this is obfuscation, not real auth - see SECURITY.md.)
-const ADMIN_EMAIL_HASH = "f948dec9097dbe0acc14ed74e1317f0ff4fc0fe21397d5eb10c9565a60d728cf";
-const ADMIN_PASS_HASH  = "464b28e76871277cf53fd1bcaf9e4c11d9aaf797d57f73c7dbf0f98b2b7012b5";
+// Real authentication is handled by Firebase on Google's servers.
+// This UID identifies which signed-in account is the admin. It is
+// NOT a secret - Firestore rules enforce it server-side.
+const ADMIN_UID = "TIAxJ935MzZ4lrm45fgOobJmPcS2";
 
 let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
@@ -593,6 +603,15 @@ function checkLoginSession() {
     const role = sessionStorage.getItem('kidzone_user_role');
     const activeId = sessionStorage.getItem('kidzone_active_id');
     const loginOverlay = document.getElementById('loginScreen');
+
+    // Admin sessions are NOT restored from sessionStorage - that flag can be
+    // forged in DevTools. Firebase's onAuthStateChanged is the only thing
+    // allowed to grant admin, and it re-checks the real token.
+    if (role === 'admin') {
+        if (loginOverlay) loginOverlay.classList.remove('hidden');
+        populateKidSelect();
+        return;
+    }
 
     if (isLoggedIn === 'true' && activeId) {
         currentRole = role;
@@ -706,10 +725,10 @@ async function handleAdminLogin(event) {
     if (!emailElem || !passElem) return;
 
     const email = emailElem.value.trim().toLowerCase();
-    const password = passElem.value.trim();
+    const password = passElem.value;
     const errorMsg = document.getElementById('adminLoginErrorMsg');
 
-    // Too many wrong guesses? Make the attacker wait.
+    // Local lockout on top of Google's own rate limiting.
     const waitMs = lockRemainingMs('admin');
     if (waitMs > 0) {
         if (errorMsg) {
@@ -720,35 +739,97 @@ async function handleAdminLogin(event) {
         return;
     }
 
-    const [emailHash, passHash] = await Promise.all([hashPin(email), hashPin(password)]);
+    const submitBtn = document.querySelector('#adminLoginForm .login-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Signing in\u2026'; }
 
-    if (emailHash === ADMIN_EMAIL_HASH && passHash === ADMIN_PASS_HASH) {
+    try {
+        // The password is verified by Google, NOT in this browser.
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+
+        // Signed in - but is this account actually the admin?
+        if (cred.user.uid !== ADMIN_UID) {
+            await signOut(auth);
+            registerFailedLogin('admin');
+            if (errorMsg) {
+                errorMsg.innerText = "\u274c That account is not an administrator.";
+                errorMsg.style.display = 'block';
+            }
+            playSound(150, 'sawtooth', 0.3);
+            return;
+        }
+
         clearFailedLogins('admin');
-        sessionStorage.setItem('kidzone_logged_in', 'true');
-        sessionStorage.setItem('kidzone_user_role', 'admin');
-        sessionStorage.setItem('kidzone_active_id', 'admin_yaasin');
-
-        currentRole = 'admin';
-        currentActiveId = 'admin_yaasin';
-
-        if (errorMsg) errorMsg.style.display = "none";
-        const loginOverlay = document.getElementById('loginScreen');
-        if (loginOverlay) loginOverlay.classList.add('hidden');
-
-        setupUIForSession();
-        loadProgress();
-        playChime([523, 659, 784, 1046]);
-        showToast(`Welcome Admin Yaasin! 🛠️`, '👑', 3500);
-    } else {
+        // onAuthStateChanged() completes the sign-in and shows the app.
+        if (errorMsg) errorMsg.style.display = 'none';
+        passElem.value = '';
+    } catch (err) {
         registerFailedLogin('admin');
         playSound(150, 'sawtooth', 0.3);
-        if (errorMsg) {
-            errorMsg.innerText = "❌ Invalid Admin Email or Password.";
-            errorMsg.style.display = "block";
+        const code = (err && err.code) || '';
+        let msg = "\u274c Invalid Admin Email or Password.";
+        if (code === 'auth/too-many-requests') {
+            msg = "\u23f3 Google has temporarily blocked sign-in after too many attempts. Wait a few minutes.";
+        } else if (code === 'auth/network-request-failed') {
+            msg = "\ud83d\udcf6 No internet connection.";
+        } else if (code === 'auth/invalid-email') {
+            msg = "\u274c That email address is not valid.";
         }
+        if (errorMsg) { errorMsg.innerText = msg; errorMsg.style.display = 'block'; }
+        console.warn('[KidZone] admin sign-in failed:', code || err);
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Admin Log In \ud83d\udee0\ufe0f'; }
     }
 }
 window.handleAdminLogin = handleAdminLogin;
+
+/**
+ * Firebase tells us whenever the signed-in admin appears or disappears
+ * (including automatically on page refresh, so the session survives).
+ */
+function watchAdminAuth() {
+    onAuthStateChanged(auth, (user) => {
+        if (user && user.uid === ADMIN_UID) {
+            currentRole = 'admin';
+            currentActiveId = 'admin_' + user.uid.slice(0, 8);
+            sessionStorage.setItem('kidzone_logged_in', 'true');
+            sessionStorage.setItem('kidzone_user_role', 'admin');
+            sessionStorage.setItem('kidzone_active_id', currentActiveId);
+
+            const overlay = document.getElementById('loginScreen');
+            if (overlay) overlay.classList.add('hidden');
+            setupUIForSession();
+            loadProgress();
+            playChime([523, 659, 784, 1046]);
+            showToast('Welcome Admin! \ud83d\udee0\ufe0f', '\ud83d\udc51', 3500);
+        } else if (currentRole === 'admin') {
+            // Admin signed out or the token expired.
+            currentRole = null;
+            currentActiveId = null;
+            sessionStorage.clear();
+            const overlay = document.getElementById('loginScreen');
+            if (overlay) overlay.classList.remove('hidden');
+            setupUIForSession();
+        }
+    });
+}
+
+/** Emails a reset link - no more editing source code to change the password. */
+async function sendAdminReset() {
+    const emailElem = document.getElementById('adminEmail');
+    const email = emailElem ? emailElem.value.trim() : '';
+    if (!email) {
+        showToast('Type your admin email first, then tap Reset.', '\u2709\ufe0f', 3000);
+        return;
+    }
+    try {
+        await sendPasswordResetEmail(auth, email);
+        showToast('Password reset email sent \u2014 check your inbox.', '\u2709\ufe0f', 4000);
+    } catch (err) {
+        showToast('Could not send reset email.', '\u274c', 3000);
+        console.warn('[KidZone] reset failed:', err && err.code);
+    }
+}
+window.sendAdminReset = sendAdminReset;
 
 function setupUIForSession() {
     const addKidBtn = document.getElementById('addKidBtn');
@@ -777,6 +858,15 @@ function setupUIForSession() {
 
 function handleLogout() {
     playSound(300);
+
+    // If the admin is signed in with Firebase, end that session too -
+    // otherwise the token would still authorise database writes.
+    const wasAdmin = currentRole === 'admin';
+    currentRole = null;                       // stop watchAdminAuth double-firing
+    if (wasAdmin) {
+        signOut(auth).catch(e => console.warn('[KidZone] signOut failed:', e));
+    }
+
     sessionStorage.removeItem('kidzone_logged_in');
     sessionStorage.removeItem('kidzone_user_role');
     sessionStorage.removeItem('kidzone_active_id');
@@ -4944,6 +5034,7 @@ window.toggleStep = toggleStep;
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
+    watchAdminAuth();      // restores an admin session if the token is still valid
     checkLoginSession();
     renderStoryPage();
     // Pac-Man now starts itself (see showGame) once its tab is opened,
