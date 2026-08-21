@@ -571,7 +571,7 @@ function sanitiseProgress(d) {
 // Real authentication is handled by Firebase on Google's servers.
 // This UID identifies which signed-in account is the admin. It is
 // NOT a secret - Firestore rules enforce it server-side.
-const ADMIN_UID = "TIAxJ935MzZ4lrm45fgOobJmPcS2";
+const ADMIN_UID = "l9skt6UUdcdMrmR1jKLRXQyhv4c2";
 
 let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
