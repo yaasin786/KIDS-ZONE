@@ -2884,6 +2884,15 @@ function getAllSafeZoneChats() {
     [...getLocalSafeChats(), ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
     return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
+function getLatestSafeChatFriendId() {
+    if (!currentActiveId) return '';
+    const mine = getAllSafeZoneChats()
+        .filter(m => m && m.status !== 'deleted' && (m.fromId === currentActiveId || m.toId === currentActiveId))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (!mine.length) return '';
+    const latest = mine[0];
+    return latest.fromId === currentActiveId ? latest.toId : latest.fromId;
+}
 let safeZoneBuilt = false;
 let safeZonePaused = false;
 
@@ -3088,10 +3097,12 @@ function populateSafeChatFriends() {
         .filter(k => currentRole === 'admin' || k.id !== currentActiveId)
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
+    const latestFriendId = (!old && currentRole !== 'admin') ? getLatestSafeChatFriendId() : '';
     friends.forEach(k => {
         const opt = document.createElement('option');
         opt.value = k.id;
-        opt.innerText = `${k.avatar || '🚀'} ${k.name || 'Explorer'}`;
+        const hasMessages = getAllSafeZoneChats().some(m => m.status !== 'deleted' && ((m.fromId === currentActiveId && m.toId === k.id) || (m.fromId === k.id && m.toId === currentActiveId)));
+        opt.innerText = `${k.avatar || '🚀'} ${k.name || 'Explorer'}${hasMessages ? ' 💬' : ''}`;
         sel.appendChild(opt);
     });
 
@@ -3108,6 +3119,9 @@ function populateSafeChatFriends() {
     if ([...sel.options].some(o => o.value === old && old)) {
         sel.value = old;
         selectedSafeChatFriend = old;
+    } else if (latestFriendId && friends.some(k => k.id === latestFriendId)) {
+        sel.value = latestFriendId;
+        selectedSafeChatFriend = latestFriendId;
     } else if (selectedSafeChatFriend && !friends.some(k => k.id === selectedSafeChatFriend)) {
         selectedSafeChatFriend = '';
     }
@@ -3136,7 +3150,18 @@ function renderSafeChat() {
     if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
     populateSafeChatFriends();
     if (!selectedSafeChatFriend) {
-        win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
+        const recentIds = [...new Set(getAllSafeZoneChats()
+            .filter(m => m.status !== 'deleted' && (m.fromId === currentActiveId || m.toId === currentActiveId))
+            .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .map(m => m.fromId === currentActiveId ? m.toId : m.fromId))];
+        if (recentIds.length) {
+            win.innerHTML = `<div class="safe-empty">💬 Recent chats:<br>${recentIds.map(id => {
+                const k = cachedKidProfiles.find(x => x.id === id) || {};
+                return `<button class="book-btn" style="margin:6px;" onclick="selectSafeChatFriend('${id}')">${escapeHtml(k.avatar || '🚀')} ${escapeHtml(k.name || 'Friend')}</button>`;
+            }).join('')}</div>`;
+        } else {
+            win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
+        }
         return;
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
@@ -3211,9 +3236,13 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         status: 'approved'
     };
     try {
+        // Write to the dedicated chat collection AND to the profile-backed sync channel.
+        // The second write makes chat work on sites whose Firebase rules have not yet
+        // opened the new safeZoneChats collection for all devices.
         await setDoc(doc(db, 'safeZoneChats', id), data);
+        saveSafeChatToProfileFallback(data).catch(e => console.warn('[KidZone] profile chat mirror failed:', e && (e.code || e.message || e)));
         if (input && !forcedText) input.value = '';
-        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Safe message sent!', '💬', 2600);
+        showToast('Safe message sent!', '💬', 2600);
         if (currentRole === 'kid') unlockBadge('safeFriend');
     } catch (e) {
         console.warn('[KidZone] safeZoneChats blocked; trying kidProfiles sync fallback:', e && (e.code || e.message || e));
