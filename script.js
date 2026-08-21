@@ -3269,6 +3269,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     const text = String(forcedText || input?.value || '').trim();
     if (!text) return;
     if (safeZoneContainsBadWords(text)) { showToast('Kind chat only please.', '🛡️', 3000); return; }
+
     const me = getActiveKidProfile() || {};
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend) || {};
     const id = 'chat_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
@@ -3282,47 +3283,41 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         toAvatar: friend.avatar || '🚀',
         status: 'approved'
     };
+
+    // Show it immediately for the sender, without waiting for Firebase.
+    upsertLocalSafeChat({ ...data, instantLocal: true });
+    if (input && !forcedText) input.value = '';
+    renderSafeChat();
+    playSound(720, 'triangle', 0.12);
+
     try {
-        // Write to the dedicated chat collection AND to the profile-backed sync channel.
-        // The second write makes chat work on sites whose Firebase rules have not yet
-        // opened the new safeZoneChats collection for all devices.
-        await setDoc(doc(db, 'safeZoneChats', id), data);
+        // Fastest reliable sync for your current app: write to sender's own kid profile.
+        // All devices already listen to kidProfiles, so the receiver sees this quickly.
+        await saveSafeChatToOwnProfileOutbox(data);
+        showToast('Safe message sent!', '💬', 1800);
+        if (currentRole === 'kid') unlockBadge('safeFriend');
+
+        // Background mirrors. Do not wait for these because some Firebase rules block them.
+        setDoc(doc(db, 'safeZoneChats', id), data).catch(e => console.warn('[KidZone] chat collection mirror failed:', e && (e.code || e.message || e)));
         saveSafeChatToProfileFallback(data).catch(e => console.warn('[KidZone] profile chat mirror failed:', e && (e.code || e.message || e)));
         saveSafeChatToProgressFallback(data).catch(e => console.warn('[KidZone] progress chat mirror failed:', e && (e.code || e.message || e)));
-        saveSafeChatToOwnProfileOutbox(data).catch(e => console.warn('[KidZone] own profile chat mirror failed:', e && (e.code || e.message || e)));
-        if (input && !forcedText) input.value = '';
-        showToast('Safe message sent!', '💬', 2600);
-        if (currentRole === 'kid') unlockBadge('safeFriend');
     } catch (e) {
-        console.warn('[KidZone] safeZoneChats blocked; trying kidProfiles sync fallback:', e && (e.code || e.message || e));
+        console.warn('[KidZone] Own profile outbox failed; trying other sync fallbacks:', e && (e.code || e.message || e));
         try {
             await saveSafeChatToProfileFallback(data);
-            if (input && !forcedText) input.value = '';
-            showToast('Safe message sent!', '💬', 2600);
+            showToast('Safe message sent!', '💬', 1800);
             if (currentRole === 'kid') unlockBadge('safeFriend');
         } catch (e2) {
-            console.warn('[KidZone] Profile chat document fallback failed; trying own profile outbox:', e2 && (e2.code || e2.message || e2));
             try {
-                await saveSafeChatToOwnProfileOutbox(data);
-                if (input && !forcedText) input.value = '';
-                showToast('Safe message sent!', '💬', 2600);
+                await saveSafeChatToProgressFallback(data);
+                showToast('Safe message sent!', '💬', 1800);
                 if (currentRole === 'kid') unlockBadge('safeFriend');
             } catch (e3) {
-                console.warn('[KidZone] Own profile outbox failed; trying kidProgress sync fallback:', e3 && (e3.code || e3.message || e3));
-                try {
-                    await saveSafeChatToProgressFallback(data);
-                    if (input && !forcedText) input.value = '';
-                    showToast('Safe message sent!', '💬', 2600);
-                    if (currentRole === 'kid') unlockBadge('safeFriend');
-                } catch (e4) {
-                    console.warn('[KidZone] All cloud chat fallbacks failed, saving on this device:', e4 && (e4.code || e4.message || e4));
-                    upsertLocalSafeChat({ ...data, localOnly: true });
-                    if (input && !forcedText) input.value = '';
-                    renderSafeChat();
-                    renderSafeAdminPanel();
-                    showToast('Message saved only on this device. Firebase rules are blocking chat sync.', '💬', 5200);
-                    if (currentRole === 'kid') unlockBadge('safeFriend');
-                }
+                // It is already visible to the sender locally, but cannot sync to the other device.
+                upsertLocalSafeChat({ ...data, localOnly: true });
+                renderSafeChat();
+                showToast('Message saved here, but Firebase is blocking instant sync.', '💬', 4200);
+                if (currentRole === 'kid') unlockBadge('safeFriend');
             }
         }
     }
