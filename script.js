@@ -3172,11 +3172,12 @@ function wireSafeChatAttachmentPreview() {
 function addSafeChatEmoji(emoji) {
     const input = document.getElementById('safeChatInput');
     if (!input) return;
-    const start = input.selectionStart || input.value.length;
-    const end = input.selectionEnd || input.value.length;
+    const start = (typeof input.selectionStart === 'number') ? input.selectionStart : input.value.length;
+    const end = (typeof input.selectionEnd === 'number') ? input.selectionEnd : input.value.length;
     input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
-    input.focus();
-    input.selectionStart = input.selectionEnd = start + emoji.length;
+    // Do not force focus on mobile; focusing opens the keyboard and makes the page jump.
+    try { input.selectionStart = input.selectionEnd = start + emoji.length; } catch (e) {}
+    input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 window.addSafeChatEmoji = addSafeChatEmoji;
 
@@ -3189,6 +3190,38 @@ function renderSafeChatAttachment(att) {
     }
     return `<a class="safe-chat-file-link" href="${url}" download="${name}" target="_blank" rel="noopener">📎 ${name}</a>`;
 }
+async function safeChatFileToDataUrl(file) {
+    if (!file) return null;
+    const type = file.type || '';
+    // Compress photos so they can sync through Firestore array fields.
+    if (type.startsWith('image/')) {
+        if (file.size > 7 * 1024 * 1024) throw new Error('Image is too large. Please choose a smaller picture.');
+        const raw = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error('Could not read image.'));
+            r.readAsDataURL(file);
+        });
+        const img = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.onload = () => resolve(im);
+            im.onerror = () => reject(new Error('Could not load image.'));
+            im.src = raw;
+        });
+        const maxSide = 720;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.68);
+        // If still big, reduce once more.
+        if (dataUrl.length > 650000) dataUrl = canvas.toDataURL('image/jpeg', 0.48);
+        return { name: (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', type: 'image/jpeg', size: Math.round(dataUrl.length * 0.75), dataUrl };
+    }
+    return fileToDataUrl(file, 520 * 1024);
+}
 
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
@@ -3198,7 +3231,7 @@ function renderSafeChat() {
     populateSafeChatFriends();
 
     const previousScrollTop = win.scrollTop;
-    const wasNearBottom = (win.scrollHeight - win.scrollTop - win.clientHeight) < 80;
+    const wasNearBottom = false; // prevent realtime snapshots from making the chat jump up/down
 
     if (!selectedSafeChatFriend) {
         const recentIds = [...new Set(getAllSafeZoneChats()
@@ -3208,7 +3241,7 @@ function renderSafeChat() {
         if (recentIds.length) {
             win.innerHTML = `<div class="safe-empty">💬 Recent chats:<br>${recentIds.map(id => {
                 const k = cachedKidProfiles.find(x => x.id === id) || {};
-                return `<button class="book-btn" style="margin:6px;" onclick="selectSafeChatFriend('${id}')">${escapeHtml(k.avatar || '🚀')} ${escapeHtml(k.name || 'Friend')}</button>`;
+                return `<button type="button" class="book-btn" style="margin:6px;" onclick="selectSafeChatFriend('${id}')">${escapeHtml(k.avatar || '🚀')} ${escapeHtml(k.name || 'Friend')}</button>`;
             }).join('')}</div>`;
         } else {
             win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
@@ -3322,7 +3355,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (safeZoneContainsBadWords(text)) { showToast('Kind chat only please.', '🛡️', 3000); return; }
     let attachment = null;
     try {
-        attachment = attachmentFile ? await fileToDataUrl(attachmentFile, 650 * 1024) : null;
+        attachment = attachmentFile ? await safeChatFileToDataUrl(attachmentFile) : null;
     } catch (e) {
         showToast(e.message || 'Attachment is too large.', '📎', 3600);
         return;
