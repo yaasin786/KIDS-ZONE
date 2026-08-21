@@ -67,6 +67,7 @@
         <nav class="nav-links" aria-label="Main Navigation">
             <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
             <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
+            <button class="nav-btn" onclick="switchTab('geo', event)">🏔️ Mountains & Rivers</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
@@ -242,6 +243,99 @@
             <div class="history-note">
                 <span aria-hidden="true">💡</span>
                 <p><strong>Kid-safe history:</strong> some world history includes wars and hard times. This section focuses on big ideas, inventions, cultures, problem-solving, fairness, and lessons people learned.</p>
+            </div>
+        </section>
+
+
+        <!-- MOUNTAINS & RIVERS TAB -->
+        <section id="geo" class="tab-content" aria-label="Mountains and Rivers Section">
+            <div class="hero-banner geo-hero">
+                <h1>🏔️ Mountains & Rivers of the World</h1>
+                <p>Explore famous peaks, mighty rivers, world maps, videos, and fun challenges for general knowledge!</p>
+            </div>
+
+            <div class="geo-map-panel">
+                <div class="geo-map-copy">
+                    <span class="geo-kicker">🌍 Geography Explorer</span>
+                    <h2>Land goes up, water flows down!</h2>
+                    <p>Mountains affect weather and create river sources. Rivers carry fresh water, food, transport, and life to millions of people.</p>
+                    <div class="geo-facts-mini">
+                        <span>⛰️ Highest: <strong>Mount Everest</strong></span>
+                        <span>🌊 Longest: <strong>Nile River</strong></span>
+                        <span>💧 Most water: <strong>Amazon River</strong></span>
+                    </div>
+                </div>
+                <div class="geo-world-illustration geo-interactive-map" role="img" aria-label="Interactive cartoon world map with clickable mountains and rivers">
+                    <svg viewBox="0 0 560 300" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="geoOcean" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+                            <linearGradient id="geoLand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#86efac"/><stop offset="1" stop-color="#16a34a"/></linearGradient>
+                            <filter id="geoGlow"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        <rect width="560" height="300" rx="24" fill="url(#geoOcean)"/>
+                        <circle cx="470" cy="48" r="26" fill="#fde68a" opacity=".9" filter="url(#geoGlow)"/>
+                        <path class="geo-cloud" d="M58 47 q14 -20 32 0 q20 -10 32 8 q-4 19 -28 15 h-47 q-17 -3 -12 -17 q8 -12 23 -6z" fill="rgba(255,255,255,.8)"/>
+                        <path class="geo-cloud two" d="M392 86 q12 -16 28 0 q20 -9 30 8 q-4 17 -27 14 h-42 q-16 -3 -11 -15 q8 -10 22 -7z" fill="rgba(255,255,255,.72)"/>
+                        <path d="M72 90 q55 -50 115 -18 q42 23 14 64 q-20 30 20 55 q-55 23 -103 -7 q-50 -30 -46 -94z" fill="url(#geoLand)" opacity=".95"/>
+                        <path d="M260 72 q86 -42 146 6 q36 29 10 65 q-19 26 34 45 q-72 34 -139 5 q-55 -24 -51 -121z" fill="url(#geoLand)" opacity=".95"/>
+                        <path d="M390 178 q52 -15 96 15 q25 18 10 47 q-48 19 -87 -2 q-27 -16 -19 -60z" fill="url(#geoLand)" opacity=".95"/>
+                        <path class="geo-river-svg" d="M120 134 C160 110 190 142 214 118" stroke="#1d4ed8" stroke-width="7" fill="none" stroke-linecap="round"/>
+                        <path class="geo-river-svg two" d="M300 136 C345 120 353 164 402 154" stroke="#1d4ed8" stroke-width="7" fill="none" stroke-linecap="round"/>
+                        <path class="geo-mountain-svg" d="M82 102 l28 -46 l30 54 l22 -34 l34 62" fill="#6b7280" stroke="#374151" stroke-width="3"/>
+                        <path d="M105 62 l5 -6 l4 8 l-9 -2zm36 19 l4 -5 l4 7 l-8 -2z" fill="#fff"/>
+                        <path class="geo-mountain-svg two" d="M302 108 l38 -66 l42 74 l25 -42 l45 82" fill="#6b7280" stroke="#374151" stroke-width="3"/>
+                        <path d="M334 52 l6 -10 l8 12 l-14 -2zm45 31 l4 -9 l8 12 l-12 -3z" fill="#fff"/>
+                        <path d="M34 240 q95 -22 160 0 t160 0 t170 5" stroke="rgba(255,255,255,.55)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                    </svg>
+                    <button class="geo-map-pin mountain" style="left:61%;top:29%;" onclick="openGeoTopic('everest')" aria-label="Open Mount Everest"><span>🏔️</span><strong>Everest</strong></button>
+                    <button class="geo-map-pin range" style="left:65%;top:42%;" onclick="openGeoTopic('himalayas')" aria-label="Open Himalayas"><span>⛰️</span><strong>Himalayas</strong></button>
+                    <button class="geo-map-pin river" style="left:56%;top:49%;" onclick="openGeoTopic('ganges')" aria-label="Open Ganges River"><span>🌊</span><strong>Ganges</strong></button>
+                    <button class="geo-map-pin river" style="left:31%;top:44%;" onclick="openGeoTopic('amazon')" aria-label="Open Amazon River"><span>🐬</span><strong>Amazon</strong></button>
+                    <button class="geo-map-pin range" style="left:23%;top:54%;" onclick="openGeoTopic('andes')" aria-label="Open Andes Mountains"><span>⛰️</span><strong>Andes</strong></button>
+                    <button class="geo-map-pin river" style="left:50%;top:40%;" onclick="openGeoTopic('nile')" aria-label="Open Nile River"><span>🐊</span><strong>Nile</strong></button>
+                    <button class="geo-map-pin mountain" style="left:49%;top:58%;" onclick="openGeoTopic('kilimanjaro')" aria-label="Open Mount Kilimanjaro"><span>🌋</span><strong>Kilimanjaro</strong></button>
+                    <button class="geo-map-pin river" style="left:71%;top:45%;" onclick="openGeoTopic('yangtze')" aria-label="Open Yangtze River"><span>🐉</span><strong>Yangtze</strong></button>
+                    <div class="geo-map-hint">👆 Tap a marker on the map!</div>
+                </div>
+            </div>
+
+            <div class="geo-toolbar">
+                <input type="text" id="geoSearch" placeholder="Search mountains or rivers (Everest, Nile, Amazon...)" onkeyup="renderGeoExplorer()" aria-label="Search mountains and rivers">
+                <div class="geo-buttons" role="group" aria-label="Geography filters">
+                    <button class="geo-chip active" onclick="filterGeoType('all', event)">🌍 All</button>
+                    <button class="geo-chip" onclick="filterGeoType('mountain', event)">🏔️ Mountains</button>
+                    <button class="geo-chip" onclick="filterGeoType('river', event)">🌊 Rivers</button>
+                    <button class="geo-chip" onclick="filterGeoType('range', event)">⛰️ Ranges</button>
+                </div>
+                <div class="geo-actions">
+                    <button class="surprise-btn" onclick="geoSurprise()">🎲 Explore Random</button>
+                    <button class="solar-tool-btn" onclick="startGeoQuiz()">🧠 Geography Quiz</button>
+                    <button class="solar-tool-btn" onclick="startGeoMatch()">🗺️ Map Match Game</button>
+                </div>
+            </div>
+
+            <p class="geo-count" id="geoCount"></p>
+            <div class="geo-grid" id="geoGrid"></div>
+
+            <div class="geo-quiz" id="geoQuiz" style="display:none;">
+                <div class="pq-head">
+                    <span>Score: <strong id="geoQuizScore">0</strong></span>
+                    <span id="geoQuizProgress">Question 1 / 8</span>
+                    <button class="restart-btn" onclick="closeGeoQuiz()">✖ Close Quiz</button>
+                </div>
+                <h3 id="geoQuizQuestion">Ready?</h3>
+                <div class="pq-options" id="geoQuizOptions"></div>
+            </div>
+
+            <div class="geo-match" id="geoMatch" style="display:none;">
+                <div class="game-stats">
+                    <span>Matched: <strong id="geoMatchScore">0 / 6</strong></span>
+                    <button class="restart-btn" onclick="startGeoMatch()">🔄 New Match</button>
+                    <button class="restart-btn" onclick="closeGeoMatch()">✖ Close</button>
+                </div>
+                <p class="geo-help">Tap a place card, then tap the correct continent/home. On desktop you can also drag and drop!</p>
+                <div class="geo-match-pool" id="geoMatchPool"></div>
+                <div class="geo-match-zones" id="geoMatchZones"></div>
             </div>
         </section>
 
@@ -898,6 +992,28 @@
     </div>
 
 
+
+    <!-- Modal Popup: Mountains & Rivers Detail -->
+    <div id="geoModal" class="modal" onclick="closeGeoModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="geoModalTitle">
+        <div class="modal-content geo-modal-content">
+            <button class="close-btn" onclick="closeGeoModal()" aria-label="Close geography dialog">&times;</button>
+            <div class="geo-modal-hero" id="geoModalHero">
+                <span class="geo-modal-icon" id="geoModalIcon">🏔️</span>
+            </div>
+            <h2 id="geoModalTitle">Geography Topic</h2>
+            <p class="geo-modal-sub" id="geoModalSub">Location</p>
+            <div class="geo-stats-grid" id="geoStatsGrid"></div>
+            <div class="geo-fact-box"><span aria-hidden="true">✨</span><p id="geoModalFact"></p></div>
+            <div class="geo-video-box" id="geoVideoBox" style="display:none;"></div>
+            <div class="geo-modal-actions">
+                <button class="book-btn" onclick="prevGeoTopic()">◀ Previous</button>
+                <button class="book-btn audio-btn" onclick="speakGeoTopic()">🔊 Read Aloud</button>
+                <button class="book-btn" onclick="loadGeoVideo()">▶️ Watch Video</button>
+                <button class="book-btn" onclick="nextGeoTopic()">Next ▶</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Popup: World History Detail -->
     <div id="historyModal" class="modal" onclick="closeHistoryModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
         <div class="modal-content history-modal-content">
@@ -1041,5 +1157,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb0eac1c1e3872',t:'MTc4NzMzMDE5Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb2b606f468e6d',t:'MTc4NzMzMTM2OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
