@@ -2895,6 +2895,20 @@ function getAllSafeZoneChats() {
     [...getLocalSafeChats(), ...safeZoneProgressChats, ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
     return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
+function preserveSafeZoneScroll(pageY, chatY) {
+    // Mobile browsers try to keep focused/changed elements visible after every
+    // realtime update. Force the page and chat panel back to where the child was.
+    const restore = () => {
+        try { window.scrollTo(0, pageY); } catch (e) {}
+        const win = document.getElementById('safeChatWindow');
+        if (win && typeof chatY === 'number') win.scrollTop = chatY;
+    };
+    restore();
+    requestAnimationFrame(restore);
+    setTimeout(restore, 80);
+    setTimeout(restore, 220);
+}
+
 function getLatestSafeChatFriendId() {
     if (!currentActiveId) return '';
     const mine = getAllSafeZoneChats()
@@ -2990,6 +3004,9 @@ window.filterSafeZone = filterSafeZone;
 function renderSafeZone() {
     const feed = document.getElementById('safezoneFeed');
     if (!feed) return;
+    const _safePageY = window.scrollY || document.documentElement.scrollTop || 0;
+    const _safeChatWin = document.getElementById('safeChatWindow');
+    const _safeChatY = _safeChatWin ? _safeChatWin.scrollTop : 0;
     populateSafeAudience();
     populateSafeChatFriends();
 
@@ -3023,9 +3040,11 @@ function renderSafeZone() {
 
     if (!list.length) {
         feed.innerHTML = '<div class="safe-empty">📭 No safe posts here yet. Share something kind or clever!</div>';
+        preserveSafeZoneScroll(_safePageY, _safeChatY);
         return;
     }
     feed.innerHTML = list.map(renderSafePostCard).join('');
+    preserveSafeZoneScroll(_safePageY, _safeChatY);
 }
 window.renderSafeZone = renderSafeZone;
 
@@ -3224,6 +3243,8 @@ async function safeChatFileToDataUrl(file) {
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
     if (!win) return;
+    const _safePageY = window.scrollY || document.documentElement.scrollTop || 0;
+    const _safeChatY = win.scrollTop || 0;
     const panel = document.getElementById('safezoneChatPanel');
     if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
     populateSafeChatFriends();
@@ -3242,6 +3263,7 @@ function renderSafeChat() {
         } else {
             win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
         }
+        preserveSafeZoneScroll(_safePageY, _safeChatY);
         return;
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
@@ -3252,6 +3274,7 @@ function renderSafeChat() {
     ));
     if (!messages.length) {
         win.innerHTML = `<div class="safe-empty">💬 No messages yet with ${escapeHtml(friend ? friend.name : 'this friend')}. Send a quick kind message!</div>`;
+        preserveSafeZoneScroll(_safePageY, _safeChatY);
         return;
     }
     win.innerHTML = messages.map(m => {
@@ -3267,6 +3290,7 @@ function renderSafeChat() {
     // Do NOT change scrollTop here. Realtime Firebase/profile updates can arrive
     // many times per second and moving scrollTop causes the up/down jumping on phones.
     safeChatStickBottom = false;
+    preserveSafeZoneScroll(_safePageY, _safeChatY);
 }
 window.renderSafeChat = renderSafeChat;
 
