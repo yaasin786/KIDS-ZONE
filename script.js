@@ -1301,7 +1301,7 @@ window.mascotSpeak = mascotSpeak;
 // NAVIGATION & TAB CONTROLLERS
 // ============================================================
 function switchTab(tabId, evt) {
-    if (tabId === 'solar') setTimeout(buildSolarSystem, 30);
+    if (tabId === 'solar') { setTimeout(buildSolarSystem, 30); setTimeout(buildMoonDance, 30); }
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
     if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
@@ -4477,6 +4477,100 @@ window.answerAnimalQuiz = answerAnimalQuiz;
 
 
 // ============================================================
+// EARTH & MOON PHASE SIMULATOR
+// ============================================================
+const MOON_PHASES = [
+    { emoji: '🌑', name: 'New Moon', hint: 'The Moon is between Earth and the Sun, so the bright side faces away from us.', lightX: '92%' },
+    { emoji: '🌒', name: 'Waxing Crescent', hint: 'A small bright slice appears. Waxing means the lit part is growing.', lightX: '75%' },
+    { emoji: '🌓', name: 'First Quarter', hint: 'We see half of the Moon lit up from Earth.', lightX: '62%' },
+    { emoji: '🌔', name: 'Waxing Gibbous', hint: 'More than half is bright, and it is still growing toward full moon.', lightX: '42%' },
+    { emoji: '🌕', name: 'Full Moon', hint: 'Earth is between the Sun and Moon, so we see the whole bright face.', lightX: '12%' },
+    { emoji: '🌖', name: 'Waning Gibbous', hint: 'The bright part starts shrinking. Waning means getting smaller.', lightX: '28%' },
+    { emoji: '🌗', name: 'Last Quarter', hint: 'Again we see half lit, but the opposite side is bright.', lightX: '38%' },
+    { emoji: '🌘', name: 'Waning Crescent', hint: 'Only a thin bright slice remains before the next new moon.', lightX: '55%' }
+];
+
+let moonDanceBuilt = false;
+let moonDanceRunning = true;
+let moonPhaseIndex = 0;
+let moonDanceTimer = null;
+
+function buildMoonDance() {
+    if (moonDanceBuilt) return;
+    moonDanceBuilt = true;
+    updateMoonPhaseUI();
+    startMoonDanceTimer();
+}
+window.buildMoonDance = buildMoonDance;
+
+function startMoonDanceTimer() {
+    if (moonDanceTimer) clearInterval(moonDanceTimer);
+    moonDanceTimer = setInterval(() => {
+        if (!moonDanceRunning) return;
+        moonPhaseIndex = (moonPhaseIndex + 1) % MOON_PHASES.length;
+        updateMoonPhaseUI();
+    }, 2300);
+}
+
+function updateMoonPhaseUI() {
+    const phase = MOON_PHASES[moonPhaseIndex];
+    const emoji = document.getElementById('moonPhaseEmoji');
+    const name = document.getElementById('moonPhaseName');
+    const hint = document.getElementById('moonPhaseHint');
+    const moon = document.getElementById('moonDemoBody');
+    const spinner = document.getElementById('moonDemoSpinner');
+    if (emoji) emoji.innerText = phase.emoji;
+    if (name) name.innerText = phase.name;
+    if (hint) hint.innerText = phase.hint;
+    if (moon) moon.style.setProperty('--phase-light-x', phase.lightX);
+
+    document.querySelectorAll('.phase-label').forEach(el => el.classList.remove('active'));
+    const activeClasses = ['phase-new','phase-waxcres','phase-first','phase-waxgib','phase-full','phase-wangib','phase-last','phase-wancres'];
+    const active = document.querySelector('.' + activeClasses[moonPhaseIndex]);
+    if (active) active.classList.add('active');
+
+    // When paused or stepping, place the moon exactly beside the matching phase label.
+    if (spinner && !moonDanceRunning) {
+        spinner.style.animation = 'none';
+        spinner.style.transform = `rotate(${moonPhaseIndex * 45}deg)`;
+    }
+}
+
+function toggleMoonDance() {
+    moonDanceRunning = !moonDanceRunning;
+    const panel = document.getElementById('moonDancePanel');
+    const btn = document.getElementById('moonOrbitToggleBtn');
+    const spinner = document.getElementById('moonDemoSpinner');
+    if (panel) panel.classList.toggle('paused', !moonDanceRunning);
+    if (btn) {
+        btn.innerHTML = moonDanceRunning ? '⏸️ Pause Moon' : '▶️ Start Moon';
+        btn.classList.toggle('active', moonDanceRunning);
+    }
+    if (spinner && moonDanceRunning) {
+        spinner.style.animation = '';
+        spinner.style.transform = '';
+    }
+    playSound(moonDanceRunning ? 620 : 320);
+    updateMoonPhaseUI();
+}
+window.toggleMoonDance = toggleMoonDance;
+
+function stepMoonPhase() {
+    if (moonDanceRunning) toggleMoonDance();
+    moonPhaseIndex = (moonPhaseIndex + 1) % MOON_PHASES.length;
+    updateMoonPhaseUI();
+    playSound(560, 'triangle', 0.18);
+}
+window.stepMoonPhase = stepMoonPhase;
+
+function speakMoonPhase() {
+    const phase = MOON_PHASES[moonPhaseIndex];
+    speakText(`${phase.name}. ${phase.hint} The Moon does not make its own light. It reflects sunlight as it orbits around Earth.`);
+}
+window.speakMoonPhase = speakMoonPhase;
+
+
+// ============================================================
 // SOLAR SYSTEM EXPLORER
 // ============================================================
 const PLANETS = [
@@ -4514,9 +4608,9 @@ const PLANETS = [
     },
     {
         id: 'moon', name: 'The Moon', emoji: '🌕', type: "Earth's only moon",
-        parent: 'earth', moonOrbit: 34, moonSpeed: 6,
-        colors: ['#f4f2ec', '#c9c5bb', '#8f8b82'],
-        size: 8, orbit: 0, speed: 0, tagline: 'Our closest neighbour in space!',
+        parent: 'earth', moonOrbit: 62, moonSpeed: 7,
+        colors: ['#f8f7f2', '#c9c6bc', '#77736b'],
+        size: 24, orbit: 0, speed: 0, tagline: 'Our closest neighbour in space!',
         gravity: 0.166, moons: 0, dayLength: '29.5 Earth days', yearLength: 'Circles Earth every 27.3 days',
         temp: '-173°C to 127°C', distance: '384,400 km from Earth', diameter: '3,475 km',
         fact: 'The Moon has no wind or rain, so the footprints the astronauts left in 1969 are still there today — and could stay for millions of years!'
