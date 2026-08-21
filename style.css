@@ -2553,3 +2553,204 @@ input {
     cursor: pointer;
 }
 .link-btn:hover { color: var(--accent-purple); }
+
+
+/* ============================================================
+   20. WORLD HISTORY TIME MACHINE
+   ============================================================ */
+.history-hero {
+    background: linear-gradient(135deg, #7c3aed, #2563eb 55%, #06b6d4);
+    color: #ffffff;
+}
+
+.history-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.history-mission-card {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    box-shadow: var(--shadow-sm);
+}
+
+.history-mission-card.gold { background: #fff8dc; border-color: var(--accent-yellow); }
+.history-mission-icon { font-size: 2.4rem; line-height: 1; }
+.history-mission-card h3 { font-family: var(--font-heading); margin-bottom: 4px; }
+.history-mission-card p { font-size: 0.9rem; color: var(--text-muted); }
+
+.history-toolbar { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+.history-toolbar input {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 13px 18px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-full);
+    width: 100%;
+}
+.history-toolbar input:focus { outline: none; border-color: #7c3aed; }
+
+.history-era-buttons, .history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-chip {
+    background: var(--card-bg);
+    color: var(--text-color);
+    padding: 9px 16px;
+    border-radius: var(--radius-full);
+    font-size: 0.9rem;
+    box-shadow: var(--shadow-sm);
+}
+.history-chip.active { background: #7c3aed; color: #fff; box-shadow: 0 4px 0 #5b21b6; }
+
+.history-timeline-wrap {
+    overflow-x: auto;
+    padding: 14px 4px 22px;
+    margin-bottom: 8px;
+}
+.history-timeline {
+    min-width: 880px;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    position: relative;
+}
+.history-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 33px;
+    height: 6px;
+    background: linear-gradient(90deg, #7c3aed, #1cb0f6, #58cc02, #ffc800);
+    border-radius: var(--radius-full);
+    opacity: 0.45;
+}
+.history-node {
+    position: relative;
+    z-index: 1;
+    min-width: 126px;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 8px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+    color: var(--text-color);
+}
+.history-node:hover, .history-node:focus-visible { transform: translateY(-4px); border-color: #7c3aed; outline: none; }
+.hn-icon { display: block; font-size: 1.8rem; }
+.hn-year { display: block; font-size: 0.72rem; color: #7c3aed; font-weight: 700; }
+.hn-title { display: block; font-family: var(--font-heading); font-size: 0.78rem; line-height: 1.25; }
+
+.history-count { font-size: 0.88rem; color: var(--text-muted); font-weight: 700; margin-bottom: 14px; }
+.history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+}
+.history-card {
+    position: relative;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px 16px 16px;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-bounce), border-color var(--transition-normal);
+}
+.history-card:hover, .history-card:focus-visible {
+    transform: translateY(-6px) scale(1.02);
+    border-color: #7c3aed;
+    outline: none;
+}
+.history-card-icon { font-size: 3rem; margin-bottom: 8px; }
+.history-card h3 { font-family: var(--font-heading); font-size: 1.08rem; line-height: 1.2; margin-bottom: 4px; }
+.history-card p { font-size: 0.86rem; color: var(--text-muted); margin-bottom: 10px; }
+.history-card .card-badge { color: #7c3aed; }
+.history-year-tag {
+    display: inline-block;
+    font-size: 0.76rem;
+    font-weight: 700;
+    background: #ede9fe;
+    color: #5b21b6;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+}
+
+.history-quiz {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin: 24px 0;
+    box-shadow: var(--shadow-md);
+    text-align: center;
+}
+.history-quiz h3 { font-family: var(--font-heading); margin-bottom: 18px; }
+
+.history-note {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-top: 26px;
+    padding: 16px 18px;
+    background: #eef8ff;
+    border: 2px dashed var(--primary-blue);
+    border-radius: var(--radius-md);
+}
+.history-note span { font-size: 1.5rem; }
+.history-note p { font-size: 0.88rem; line-height: 1.5; }
+
+.history-modal-content { max-width: 820px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto; }
+.history-modal-top {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    padding: 18px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #ede9fe, #e0f2fe);
+    border-radius: var(--radius-md);
+}
+.history-big-icon { font-size: 4.2rem; line-height: 1; }
+.history-era-pill {
+    display: inline-block;
+    background: #7c3aed;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    margin-bottom: 6px;
+}
+.history-modal-top h2 { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1.2; }
+.history-year { color: var(--text-muted); font-weight: 700; }
+.history-modal-body { font-size: 1rem; line-height: 1.65; margin-bottom: 14px; }
+.history-why-box {
+    background: #fff8e7;
+    border: 2px dashed var(--accent-yellow);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 14px;
+}
+.history-video-box {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.history-video-box iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.history-modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+@media (max-width: 768px) {
+    .history-modal-top { flex-direction: column; text-align: center; }
+    .history-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+}
