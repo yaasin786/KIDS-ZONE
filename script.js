@@ -839,7 +839,10 @@ const BADGES = {
     zoologist:    { icon: '🔬', name: 'Zoologist',           desc: 'Met every animal in the kingdom!' },
     soundMaster:  { icon: '👂', name: 'Sound Master',        desc: 'Perfect score in Guess the Sound!' },
     habitatHero:  { icon: '🏞️', name: 'Habitat Hero',        desc: 'Sent every animal to the right home!' },
-    animalExpert: { icon: '🦁', name: 'Animal Expert',       desc: 'Perfect score on the Animal Quiz!' }
+    animalExpert: { icon: '🦁', name: 'Animal Expert',       desc: 'Perfect score on the Animal Quiz!' },
+    firstFilm:    { icon: '🎬', name: 'First Screening',     desc: 'Watched your first documentary!' },
+    filmFan:      { icon: '🍿', name: 'Film Fan',            desc: 'Watched 8 documentaries!' },
+    documentarian:{ icon: '🏆', name: 'Documentarian',       desc: 'Watched every documentary!' }
 };
 
 async function saveProgress() {
@@ -1007,6 +1010,11 @@ window.mascotSpeak = mascotSpeak;
 function switchTab(tabId, evt) {
     if (tabId === 'solar') setTimeout(buildSolarSystem, 30);
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
+    if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
+    if (tabId !== 'docs' && typeof closeDocModal === 'function') {
+        const dp = document.getElementById('docPlayer');
+        if (dp && dp.innerHTML) dp.innerHTML = '';
+    }
     playSound(440);
 
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -2505,6 +2513,341 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+
+
+
+// ============================================================
+// KIDS DOCUMENTARY CINEMA
+// Every video ID below was verified live via YouTube oEmbed and
+// confirmed embeddable. Players use youtube-nocookie.com and only
+// load after the child taps play (no tracking before that).
+// ============================================================
+const DOC_CATS = {
+    "animals": {
+        "icon": "🦁",
+        "name": "Animals"
+    },
+    "space": {
+        "icon": "🪐",
+        "name": "Space"
+    },
+    "ocean": {
+        "icon": "🌊",
+        "name": "Ocean"
+    },
+    "dinos": {
+        "icon": "🦖",
+        "name": "Dinosaurs"
+    },
+    "earth": {
+        "icon": "🌋",
+        "name": "Our Earth"
+    },
+    "body": {
+        "icon": "🧍",
+        "name": "Human Body"
+    }
+};
+
+const DOCUMENTARIES = [
+    {
+        "id": "eUunYTYia3I",
+        "title": "AMAZING ANIMALS!",
+        "fullTitle": "AMAZING ANIMALS! | 1 Hour | Nat Geo Kids Compilation | Nat Geo Kids",
+        "channel": "Nat Geo Kids",
+        "cat": "animals",
+        "desc": "A whole hour of amazing animals from around the world - tree kangaroos, blue whales, sloths, tigers and dozens more!",
+        "age": "4+"
+    },
+    {
+        "id": "rHhSCO5-3Pg",
+        "title": "Gorilla",
+        "fullTitle": "Gorilla | Amazing Animals",
+        "channel": "Nat Geo Kids",
+        "cat": "animals",
+        "desc": "Meet the mighty gorilla! Discover what they eat, how families live together, and why they thump their chests.",
+        "age": "4+"
+    },
+    {
+        "id": "8qdYCpSW2eY",
+        "title": "The Biggest Volcano Ever is in Space!",
+        "fullTitle": "The Biggest Volcano Ever is in Space! | SciShow Kids",
+        "channel": "SciShow Kids",
+        "cat": "space",
+        "desc": "Olympus Mons on Mars is the biggest volcano we know of anywhere - about three times taller than Mount Everest!",
+        "age": "5+"
+    },
+    {
+        "id": "YR4wtGWK7eE",
+        "title": "Hawai’i: Land of Volcanoes",
+        "fullTitle": "Hawai’i: Land of Volcanoes | SciShow Kids",
+        "channel": "SciShow Kids",
+        "cat": "earth",
+        "desc": "Hawaii is made of volcanoes! Find out how hot lava built a whole chain of islands in the middle of the ocean.",
+        "age": "5+"
+    },
+    {
+        "id": "0jKoOUZ1GBM",
+        "title": "Every Kind of Volcano",
+        "fullTitle": "Every Kind of Volcano | SciShow Kids",
+        "channel": "SciShow Kids",
+        "cat": "earth",
+        "desc": "Not all volcanoes are the same. Some blow their tops, some ooze slowly, and some have been asleep for ages.",
+        "age": "5+"
+    },
+    {
+        "id": "libKVRa01L8",
+        "title": "Solar System 101",
+        "fullTitle": "Solar System 101 | National Geographic",
+        "channel": "National Geographic",
+        "cat": "space",
+        "desc": "A tour of all eight planets, the Sun, and how our whole solar system came to be.",
+        "age": "7+"
+    },
+    {
+        "id": "GoW8Tf7hTGA",
+        "title": "Star Size Comparison 2",
+        "fullTitle": "Star Size Comparison 2",
+        "channel": "morn1415",
+        "cat": "space",
+        "desc": "See how tiny Earth is next to Jupiter, the Sun, and the truly gigantic stars out in the galaxy.",
+        "age": "7+"
+    },
+    {
+        "id": "hFZFjoX2cGg",
+        "title": "Backyard Squirrel Maze 1.0- Ninja Warrior Course",
+        "fullTitle": "Backyard Squirrel Maze 1.0- Ninja Warrior Course",
+        "channel": "Mark Rober",
+        "cat": "animals",
+        "desc": "An engineer builds a hilarious ninja obstacle course to test just how clever backyard squirrels really are.",
+        "age": "6+"
+    },
+    {
+        "id": "Qd6nLM2QlWw",
+        "title": "Exploring Our Solar System: Planets and Space for Kids - FreeSchool",
+        "fullTitle": "Exploring Our Solar System: Planets and Space for Kids - FreeSchool",
+        "channel": "Free School",
+        "cat": "space",
+        "desc": "A friendly guided tour of every planet, with clear explanations made just for kids.",
+        "age": "5+"
+    },
+    {
+        "id": "65E1S2lFK44",
+        "title": "Coral Kingdom",
+        "fullTitle": "Coral Kingdom | What Sam Sees | Nat Geo Kids",
+        "channel": "Nat Geo Kids",
+        "cat": "ocean",
+        "desc": "Dive into a coral reef and meet the colourful fish, turtles and tiny creatures that call it home.",
+        "age": "4+"
+    },
+    {
+        "id": "hGAi96LJQ0w",
+        "title": "Everything you wanted to learn about sharks!",
+        "fullTitle": "Everything you wanted to learn about sharks! | National Geographic Kids",
+        "channel": "Nat Geo Kids",
+        "cat": "ocean",
+        "desc": "Everything you ever wanted to know about sharks - and why these ocean hunters need our protection.",
+        "age": "6+"
+    },
+    {
+        "id": "ly8K257P2BI",
+        "title": "5 Famous Dinosaurs That Aren't Actually Dinosaurs",
+        "fullTitle": "5 Famous Dinosaurs That Aren't Actually Dinosaurs",
+        "channel": "SciShow",
+        "cat": "dinos",
+        "desc": "Surprise! Some of the most famous \"dinosaurs\" were not dinosaurs at all. Find out which ones.",
+        "age": "8+"
+    },
+    {
+        "id": "Y5QGMSC869w",
+        "title": "The Human Body",
+        "fullTitle": "The Human Body | Science for Kids",
+        "channel": "Little School",
+        "cat": "body",
+        "desc": "A colourful tour of the human body - your heart, lungs, brain, bones and how they all work together.",
+        "age": "4+"
+    },
+    {
+        "id": "A9n0Nfh-G2c",
+        "title": "How the Human Body Works - Kids Animation Learn Series",
+        "fullTitle": "How the Human Body Works - Kids Animation Learn Series",
+        "channel": "APPUSERIES",
+        "cat": "body",
+        "desc": "Animated guide to how your body works, from breathing and digestion to how blood travels around.",
+        "age": "5+"
+    },
+    {
+        "id": "3MN-M4gsDX0",
+        "title": "Bones for Kids",
+        "fullTitle": "Bones for Kids | Learn about the Skeletal System for Kids",
+        "channel": "Learn Bright",
+        "cat": "body",
+        "desc": "All about your skeleton! Learn what bones are made of and why you have 206 of them.",
+        "age": "5+"
+    },
+    {
+        "id": "tQ8lpaY8Cgc",
+        "title": "Dinosaurs and the Food Chain",
+        "fullTitle": "Dinosaurs and the Food Chain | Full Episodes | Science for Kids | The Magic School Bus",
+        "channel": "The Magic School Bus",
+        "cat": "dinos",
+        "desc": "Ride the Magic School Bus back to the age of dinosaurs and learn about the prehistoric food chain.",
+        "age": "4+"
+    }
+];
+
+
+let docFilter = 'all';
+let currentDocIndex = 0;
+let docsBuilt = false;
+
+function buildDocumentaries() {
+    if (!docsBuilt) { renderDocs(); docsBuilt = true; }
+}
+
+function getDocumentary(id) { return DOCUMENTARIES.find(d => d.id === id); }
+
+function renderDocs() {
+    const grid = document.getElementById('docsGrid');
+    if (!grid) return;
+
+    const term = (document.getElementById('docSearch') || {}).value || '';
+    const q = term.trim().toLowerCase();
+
+    const list = DOCUMENTARIES.filter(d => {
+        const catOk = q ? true : (docFilter === 'all' || d.cat === docFilter);
+        const textOk = !q || d.title.toLowerCase().includes(q) ||
+                       d.channel.toLowerCase().includes(q) ||
+                       d.desc.toLowerCase().includes(q) ||
+                       (DOC_CATS[d.cat] && DOC_CATS[d.cat].name.toLowerCase().includes(q));
+        return catOk && textOk;
+    });
+
+    const countEl = document.getElementById('docCount');
+    if (countEl) {
+        countEl.innerText = list.length
+            ? `${list.length} film${list.length === 1 ? '' : 's'} ready to watch \u2014 tap a poster to play!`
+            : 'No films found \u2014 try another search!';
+    }
+
+    grid.innerHTML = '';
+    list.forEach(d => {
+        const meta = DOC_CATS[d.cat] || { icon: '\ud83c\udfac', name: '' };
+        const card = document.createElement('div');
+        card.className = 'doc-card';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.onclick = () => openDoc(d.id);
+        card.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDoc(d.id); }
+        };
+        // Thumbnail is a plain image - no YouTube script loads until play is tapped.
+        card.innerHTML = `
+            <div class="doc-thumb">
+                <img src="https://i.ytimg.com/vi/${d.id}/hqdefault.jpg" alt="${d.title}" loading="lazy">
+                <span class="doc-play" aria-hidden="true">\u25b6</span>
+                <span class="doc-cat-tag">${meta.icon} ${meta.name}</span>
+                <span class="doc-age">${d.age}</span>
+            </div>
+            <div class="doc-body">
+                <h4>${d.title}</h4>
+                <span class="doc-channel">${d.channel}</span>
+                <p>${d.desc}</p>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+window.renderDocs = renderDocs;
+
+function filterDocs(cat, evt) {
+    docFilter = cat;
+    playSound(480);
+    document.querySelectorAll('.doc-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderDocs();
+}
+window.filterDocs = filterDocs;
+
+function randomDoc() {
+    const d = DOCUMENTARIES[Math.floor(Math.random() * DOCUMENTARIES.length)];
+    launchConfetti(12);
+    openDoc(d.id);
+}
+window.randomDoc = randomDoc;
+
+function openDoc(id) {
+    const d = getDocumentary(id);
+    if (!d) return;
+    currentDocIndex = DOCUMENTARIES.findIndex(x => x.id === id);
+
+    playSound(660);
+    stopSpeech();
+    if (typeof stopAnimalAudio === 'function') stopAnimalAudio();
+
+    const set = (elId, val) => { const e = document.getElementById(elId); if (e) e.innerText = val; };
+    set('docModalTitle', d.title);
+    set('docModalChannel', `${DOC_CATS[d.cat].icon} ${DOC_CATS[d.cat].name}  \u00b7  ${d.channel}  \u00b7  Ages ${d.age}`);
+    set('docModalDesc', d.desc);
+
+    // Build the iframe only now, so nothing from YouTube loads until the
+    // child actually chooses to watch. nocookie + rel=0 keeps it clean.
+    const player = document.getElementById('docPlayer');
+    if (player) {
+        player.innerHTML =
+            `<iframe src="https://www.youtube-nocookie.com/embed/${d.id}?rel=0&modestbranding=1&playsinline=1&autoplay=1"
+                     title="${d.title}"
+                     allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                     referrerpolicy="strict-origin-when-cross-origin"
+                     allowfullscreen loading="lazy"></iframe>`;
+    }
+
+    const modal = document.getElementById('docModal');
+    if (modal) modal.style.display = 'flex';
+
+    if (!factsViewed.has('doc-' + d.id)) {
+        factsViewed.add('doc-' + d.id);
+        addStars(3);
+        const seen = DOCUMENTARIES.filter(x => factsViewed.has('doc-' + x.id)).length;
+        if (seen === 1) unlockBadge('firstFilm');
+        if (seen >= 8) unlockBadge('filmFan');
+        if (seen === DOCUMENTARIES.length) { unlockBadge('documentarian'); launchConfetti(50); }
+        saveProgress();
+    }
+}
+window.openDoc = openDoc;
+
+function closeDocModal() {
+    const m = document.getElementById('docModal');
+    if (m) m.style.display = 'none';
+    // Clearing the iframe stops playback immediately.
+    const player = document.getElementById('docPlayer');
+    if (player) player.innerHTML = '';
+    playSound(400);
+}
+window.closeDocModal = closeDocModal;
+
+function closeDocModalOnBg(e) {
+    if (e.target.id === 'docModal') closeDocModal();
+}
+window.closeDocModalOnBg = closeDocModalOnBg;
+
+function nextDoc() {
+    currentDocIndex = (currentDocIndex + 1) % DOCUMENTARIES.length;
+    openDoc(DOCUMENTARIES[currentDocIndex].id);
+}
+window.nextDoc = nextDoc;
+
+function prevDoc() {
+    currentDocIndex = (currentDocIndex - 1 + DOCUMENTARIES.length) % DOCUMENTARIES.length;
+    openDoc(DOCUMENTARIES[currentDocIndex].id);
+}
+window.prevDoc = prevDoc;
+
+function speakDocInfo() {
+    const d = DOCUMENTARIES[currentDocIndex];
+    if (d) speakText(`${d.title}. ${d.desc}`);
+}
+window.speakDocInfo = speakDocInfo;
 
 
 // ============================================================
