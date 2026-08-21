@@ -418,6 +418,7 @@ window.addEventListener('keydown', (e) => {
         closeAdminPortalModal();
         if (typeof closeHistoryModal === 'function') closeHistoryModal();
         if (typeof closeGeoModal === 'function') closeGeoModal();
+        if (typeof closeHomeworkModal === 'function') closeHomeworkModal();
     }
 });
 
@@ -870,11 +871,13 @@ function setupUIForSession() {
     const avatarElem = document.getElementById('activeAvatar');
     const nameElem = document.getElementById('activeName');
     const logoutBtn = document.querySelector('.logout-btn[onclick="handleLogout()"]');
+    const homeworkAdminPanel = document.getElementById('homeworkAdminPanel');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
+        if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
         if (logoutBtn) {
@@ -885,6 +888,7 @@ function setupUIForSession() {
         if (addKidBtn) addKidBtn.style.display = 'none';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
         if (reportsBtn) reportsBtn.style.display = 'none';
+        if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'none';
         if (logoutBtn) {
             logoutBtn.innerText = '🚪 Logout';
             logoutBtn.title = 'Log Out';
@@ -1311,6 +1315,7 @@ function switchTab(tabId, evt) {
     if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
     if (tabId === 'geo') setTimeout(buildGeoExplorer, 30);
+    if (tabId === 'homework') setTimeout(buildHomeworkHub, 30);
     if (tabId !== 'docs' && typeof closeDocModal === 'function') {
         const dp = document.getElementById('docPlayer');
         if (dp && dp.innerHTML) dp.innerHTML = '';
@@ -2816,6 +2821,331 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+
+// ============================================================
+// HOMEWORK & TEST PAPER HUB
+// ============================================================
+let homeworkAssignments = [];
+let homeworkSubmissions = [];
+let homeworkFilter = 'all';
+let currentHomeworkId = null;
+let homeworkBuilt = false;
+
+function homeworkTypeIcon(type) {
+    if (type === 'Test Paper') return '🧪';
+    if (type === 'Worksheet') return '📄';
+    if (type === 'Reading Task') return '📖';
+    return '📝';
+}
+
+function formatHomeworkDate(value) {
+    if (!value) return 'No due date';
+    try {
+        const d = new Date(value + 'T12:00:00');
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) { return value; }
+}
+
+function getHomeworkSubmission(assignmentId, kidId = currentActiveId) {
+    return homeworkSubmissions.find(s => s.assignmentId === assignmentId && s.kidId === kidId);
+}
+
+function fileToDataUrl(file, maxBytes = 780 * 1024) {
+    return new Promise((resolve, reject) => {
+        if (!file) { resolve(null); return; }
+        if (file.size > maxBytes) {
+            reject(new Error('File is too large. Please use a file under 750 KB, or compress it first.'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, type: file.type || 'application/octet-stream', size: file.size, dataUrl: reader.result });
+        reader.onerror = () => reject(new Error('Could not read the file.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function listenToHomework() {
+    onSnapshot(collection(db, 'homework'), (snapshot) => {
+        homeworkAssignments = [];
+        snapshot.forEach(docSnap => homeworkAssignments.push(docSnap.data()));
+        homeworkAssignments.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        renderHomeworkHub();
+    }, (error) => console.error('Homework sync error:', error));
+
+    onSnapshot(collection(db, 'homeworkSubmissions'), (snapshot) => {
+        homeworkSubmissions = [];
+        snapshot.forEach(docSnap => homeworkSubmissions.push(docSnap.data()));
+        renderHomeworkHub();
+        if (document.getElementById('homeworkReviewPanel')?.style.display === 'block') renderHomeworkReview(currentHomeworkId);
+    }, (error) => console.error('Homework submissions sync error:', error));
+}
+
+function buildHomeworkHub() {
+    homeworkBuilt = true;
+    renderHomeworkHub();
+}
+window.buildHomeworkHub = buildHomeworkHub;
+
+function toggleHomeworkForm(force) {
+    if (currentRole !== 'admin') return;
+    const form = document.getElementById('homeworkUploadForm');
+    if (!form) return;
+    const show = typeof force === 'boolean' ? force : form.style.display === 'none';
+    form.style.display = show ? 'block' : 'none';
+    if (show) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.toggleHomeworkForm = toggleHomeworkForm;
+
+const hwFileInputWatcher = () => {
+    const input = document.getElementById('hwFile');
+    if (input && input.dataset.wired !== 'yes') {
+        input.dataset.wired = 'yes';
+        input.addEventListener('change', () => {
+            const box = document.getElementById('hwFilePreview');
+            const f = input.files && input.files[0];
+            if (box) box.innerText = f ? `Selected: ${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+        });
+    }
+};
+setTimeout(hwFileInputWatcher, 1000);
+
+async function handleHomeworkUpload(event) {
+    event.preventDefault();
+    if (currentRole !== 'admin') { showToast('Only Admin can upload homework.', '⚠️', 3000); return; }
+    const title = document.getElementById('hwTitle')?.value.trim();
+    const type = document.getElementById('hwType')?.value || 'Homework';
+    const dueDate = document.getElementById('hwDueDate')?.value || '';
+    const points = Math.max(0, Math.min(100, parseInt(document.getElementById('hwPoints')?.value || '10', 10) || 0));
+    const instructions = document.getElementById('hwInstructions')?.value.trim();
+    const file = document.getElementById('hwFile')?.files?.[0] || null;
+    if (!title || !instructions) { showToast('Please add a title and instructions.', '⚠️', 2800); return; }
+
+    const submitBtn = document.querySelector('#homeworkUploadForm .login-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Publishing…'; }
+    try {
+        const fileObj = await fileToDataUrl(file);
+        const id = 'hw_' + Date.now();
+        const data = {
+            id, title, type, dueDate, points, instructions,
+            file: fileObj,
+            createdAt: Date.now(), createdBy: currentActiveId || 'admin', active: true
+        };
+        await setDoc(doc(db, 'homework', id), data);
+        event.target.reset();
+        const preview = document.getElementById('hwFilePreview'); if (preview) preview.innerText = '';
+        toggleHomeworkForm(false);
+        playChime([523, 659, 784, 1046]);
+        launchConfetti(35);
+        showToast('Homework published for children!', '📝', 3500);
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Could not publish homework.', '❌', 4000);
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Publish to Children 🚀'; }
+    }
+}
+window.handleHomeworkUpload = handleHomeworkUpload;
+
+function filterHomeworkStatus(status, evt) {
+    homeworkFilter = status;
+    playSound(460);
+    document.querySelectorAll('.homework-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderHomeworkHub();
+}
+window.filterHomeworkStatus = filterHomeworkStatus;
+
+function renderHomeworkHub() {
+    const grid = document.getElementById('homeworkGrid');
+    if (!grid) return;
+    const adminPanel = document.getElementById('homeworkAdminPanel');
+    if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
+    hwFileInputWatcher();
+
+    const term = (document.getElementById('homeworkSearch') || {}).value || '';
+    const q = term.trim().toLowerCase();
+    let list = homeworkAssignments.filter(a => a.active !== false);
+    list = list.filter(a => !q || (a.title || '').toLowerCase().includes(q) || (a.type || '').toLowerCase().includes(q) || (a.instructions || '').toLowerCase().includes(q));
+    if (currentRole !== 'admin') {
+        list = list.filter(a => {
+            const submitted = !!getHomeworkSubmission(a.id);
+            if (homeworkFilter === 'todo') return !submitted;
+            if (homeworkFilter === 'done') return submitted;
+            return true;
+        });
+    }
+
+    const total = homeworkAssignments.filter(a => a.active !== false).length;
+    const done = currentRole === 'kid' ? homeworkAssignments.filter(a => getHomeworkSubmission(a.id)).length : homeworkSubmissions.length;
+    const stats = document.getElementById('homeworkStats');
+    if (stats) {
+        stats.innerHTML = currentRole === 'admin'
+            ? `<div class="hw-stat-card"><strong>${total}</strong><span>Assignments</span></div><div class="hw-stat-card"><strong>${homeworkSubmissions.length}</strong><span>Submissions</span></div><div class="hw-stat-card"><strong>${cachedKidProfiles.length}</strong><span>Kids</span></div>`
+            : `<div class="hw-stat-card"><strong>${total}</strong><span>Total Tasks</span></div><div class="hw-stat-card"><strong>${done}</strong><span>Submitted</span></div><div class="hw-stat-card"><strong>${Math.max(0,total-done)}</strong><span>To Do</span></div>`;
+    }
+
+    if (!list.length) {
+        grid.innerHTML = `<div class="homework-card"><div class="hw-card-icon">📭</div><h3>No homework found</h3><p>${currentRole === 'admin' ? 'Create the first assignment using the Admin Teacher Tools.' : 'Nothing to do right now. Great job!'}</p></div>`;
+        return;
+    }
+
+    grid.innerHTML = list.map(a => {
+        const sub = getHomeworkSubmission(a.id);
+        const statusClass = currentRole === 'admin' ? 'admin' : (sub ? 'done' : 'todo');
+        const statusText = currentRole === 'admin' ? `${homeworkSubmissions.filter(s => s.assignmentId === a.id).length} answer(s)` : (sub ? 'Submitted' : 'To Do');
+        return `<div class="homework-card" role="button" tabindex="0" onclick="openHomework('${a.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHomework('${a.id}');}">
+            <span class="hw-due-badge">${escapeHtml(formatHomeworkDate(a.dueDate))}</span>
+            <div class="hw-card-icon">${homeworkTypeIcon(a.type)}</div>
+            <h3>${escapeHtml(a.title)}</h3>
+            <p>${escapeHtml((a.instructions || '').slice(0, 110))}${(a.instructions || '').length > 110 ? '…' : ''}</p>
+            <span class="hw-status ${statusClass}">${statusClass === 'done' ? '✅' : statusClass === 'todo' ? '🟡' : '📊'} ${escapeHtml(statusText)}</span>
+            ${a.file ? `<span class="hw-status admin" style="margin-left:6px;">📎 File</span>` : ''}
+        </div>`;
+    }).join('');
+}
+window.renderHomeworkHub = renderHomeworkHub;
+
+function renderHomeworkFile(file) {
+    if (!file || !file.dataUrl) return '<p style="color:var(--text-muted);font-weight:700;">No file attached. Follow the written instructions.</p>';
+    const safeName = escapeHtml(file.name || 'homework-file');
+    const href = escapeHtml(file.dataUrl);
+    const img = (file.type || '').startsWith('image/') ? `<img class="hw-file-image" src="${href}" alt="${safeName}">` : '';
+    const pdf = (file.type || '').includes('pdf') ? `<iframe title="${safeName}" src="${href}" style="width:100%;height:420px;border:0;border-radius:12px;margin-top:12px;background:#fff;"></iframe>` : '';
+    return `<a class="hw-file-link" href="${href}" download="${safeName}" target="_blank" rel="noopener">📎 Open / Download ${safeName}</a>${img}${pdf}`;
+}
+
+function openHomework(id) {
+    const a = homeworkAssignments.find(x => x.id === id);
+    if (!a) return;
+    currentHomeworkId = id;
+    playSound(620);
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+    set('homeworkModalIcon', homeworkTypeIcon(a.type));
+    set('homeworkModalType', a.type || 'Homework');
+    set('homeworkModalTitle', a.title || 'Assignment');
+    set('homeworkModalDue', `Due: ${formatHomeworkDate(a.dueDate)} · Reward: ${a.points || 0} stars`);
+    const inst = document.getElementById('homeworkModalInstructions'); if (inst) inst.innerText = a.instructions || '';
+    const fileBox = document.getElementById('homeworkModalFile'); if (fileBox) fileBox.innerHTML = renderHomeworkFile(a.file);
+    const submitBox = document.getElementById('homeworkKidSubmitBox');
+    const adminActions = document.getElementById('homeworkAdminModalActions');
+    const answer = document.getElementById('homeworkAnswerText');
+    if (currentRole === 'admin') {
+        if (submitBox) submitBox.style.display = 'none';
+        if (adminActions) adminActions.style.display = 'flex';
+    } else {
+        const sub = getHomeworkSubmission(id);
+        if (submitBox) submitBox.style.display = 'flex';
+        if (adminActions) adminActions.style.display = 'none';
+        if (answer) answer.value = sub ? (sub.answer || '') : '';
+    }
+    const modal = document.getElementById('homeworkModal'); if (modal) modal.style.display = 'flex';
+}
+window.openHomework = openHomework;
+
+function closeHomeworkModal() {
+    const m = document.getElementById('homeworkModal'); if (m) m.style.display = 'none';
+    const fileInput = document.getElementById('homeworkAnswerFile'); if (fileInput) fileInput.value = '';
+    playSound(350);
+}
+window.closeHomeworkModal = closeHomeworkModal;
+function closeHomeworkModalOnBg(e) { if (e.target.id === 'homeworkModal') closeHomeworkModal(); }
+window.closeHomeworkModalOnBg = closeHomeworkModalOnBg;
+
+async function submitHomeworkAnswer() {
+    if (currentRole !== 'kid' || !currentActiveId || !currentHomeworkId) { showToast('Please log in as a kid to submit work.', '⚠️', 3000); return; }
+    const a = homeworkAssignments.find(x => x.id === currentHomeworkId);
+    if (!a) return;
+    const answer = document.getElementById('homeworkAnswerText')?.value.trim() || '';
+    const file = document.getElementById('homeworkAnswerFile')?.files?.[0] || null;
+    if (!answer && !file) { showToast('Type an answer or attach a file/photo first.', '⚠️', 3000); return; }
+    const submitBtn = document.querySelector('#homeworkKidSubmitBox .login-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Submitting…'; }
+    try {
+        const existing = getHomeworkSubmission(currentHomeworkId);
+        const fileObj = await fileToDataUrl(file);
+        const kid = cachedKidProfiles.find(p => p.id === currentActiveId) || {};
+        const id = `${currentHomeworkId}_${currentActiveId}`;
+        await setDoc(doc(db, 'homeworkSubmissions', id), {
+            id, assignmentId: currentHomeworkId, assignmentTitle: a.title,
+            kidId: currentActiveId, kidName: kid.name || 'Explorer', kidAvatar: kid.avatar || '🚀',
+            answer, file: fileObj || (existing ? existing.file : null), submittedAt: Date.now(), status: 'submitted',
+            score: existing ? (existing.score || null) : null, feedback: existing ? (existing.feedback || '') : ''
+        }, { merge: true });
+        if (!existing) addStars(a.points || 0);
+        launchConfetti(30);
+        showToast(existing ? 'Work updated!' : `Submitted! You earned ${a.points || 0} stars.`, '✅', 3500);
+        closeHomeworkModal();
+        renderHomeworkHub();
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Could not submit work.', '❌', 4000);
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Submit My Work ✅'; }
+    }
+}
+window.submitHomeworkAnswer = submitHomeworkAnswer;
+
+function openHomeworkReviewForCurrent() {
+    closeHomeworkModal();
+    renderHomeworkReview(currentHomeworkId);
+    const panel = document.getElementById('homeworkReviewPanel');
+    if (panel) { panel.style.display = 'block'; panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+window.openHomeworkReviewForCurrent = openHomeworkReviewForCurrent;
+
+function renderHomeworkReview(assignmentId = currentHomeworkId) {
+    currentHomeworkId = assignmentId;
+    const body = document.getElementById('homeworkReviewBody');
+    if (!body) return;
+    const a = homeworkAssignments.find(x => x.id === assignmentId);
+    const subs = homeworkSubmissions.filter(s => s.assignmentId === assignmentId).sort((x,y)=>(y.submittedAt||0)-(x.submittedAt||0));
+    if (!a) { body.innerHTML = '<p class="rep-loading">Assignment not found.</p>'; return; }
+    if (!subs.length) { body.innerHTML = `<p class="rep-loading">No children have submitted <strong>${escapeHtml(a.title)}</strong> yet.</p>`; return; }
+    body.innerHTML = subs.map(s => {
+        const when = s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '';
+        return `<div class="hw-review-row">
+            <h4>${escapeHtml(s.kidAvatar || '🚀')} ${escapeHtml(s.kidName || 'Explorer')}</h4>
+            <p><strong>${escapeHtml(a.title)}</strong> · submitted ${escapeHtml(when)}</p>
+            <p>${escapeHtml(s.answer || '(No typed answer)')}</p>
+            ${s.file ? renderHomeworkFile(s.file) : ''}
+            <div class="hw-review-actions">
+                <input type="text" id="fb_${s.id}" placeholder="Feedback" value="${escapeHtml(s.feedback || '')}">
+                <input type="number" id="sc_${s.id}" placeholder="Score" min="0" max="100" value="${escapeHtml(s.score == null ? '' : s.score)}">
+                <button class="solar-tool-btn" onclick="saveHomeworkFeedback('${s.id}')">💾 Save Feedback</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+window.renderHomeworkReview = renderHomeworkReview;
+function closeHomeworkReview() { const p = document.getElementById('homeworkReviewPanel'); if (p) p.style.display = 'none'; }
+window.closeHomeworkReview = closeHomeworkReview;
+
+async function saveHomeworkFeedback(submissionId) {
+    if (currentRole !== 'admin') return;
+    const sub = homeworkSubmissions.find(s => s.id === submissionId);
+    if (!sub) return;
+    const feedback = document.getElementById('fb_' + submissionId)?.value || '';
+    const scoreVal = document.getElementById('sc_' + submissionId)?.value;
+    const score = scoreVal === '' ? null : Math.max(0, Math.min(100, parseInt(scoreVal, 10) || 0));
+    try {
+        await setDoc(doc(db, 'homeworkSubmissions', submissionId), { feedback, score, reviewedAt: Date.now() }, { merge: true });
+        showToast('Feedback saved!', '💾', 2500);
+    } catch (e) { console.error(e); showToast('Could not save feedback.', '❌', 3000); }
+}
+window.saveHomeworkFeedback = saveHomeworkFeedback;
+
+async function deleteCurrentHomework() {
+    if (currentRole !== 'admin' || !currentHomeworkId) return;
+    const a = homeworkAssignments.find(x => x.id === currentHomeworkId);
+    if (!a) return;
+    if (!confirm(`Delete assignment "${a.title}"? Submissions will stay in reports.`)) return;
+    try {
+        await setDoc(doc(db, 'homework', currentHomeworkId), { active: false, deletedAt: Date.now() }, { merge: true });
+        closeHomeworkModal();
+        showToast('Assignment removed from children.', '🗑️', 3000);
+    } catch (e) { console.error(e); showToast('Could not delete assignment.', '❌', 3000); }
+}
+window.deleteCurrentHomework = deleteCurrentHomework;
 
 
 // ============================================================
@@ -5817,6 +6147,7 @@ window.toggleStep = toggleStep;
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
+    listenToHomework();
     watchAdminAuth();      // signs out any old remembered admin token; admin must type password each visit
     checkLoginSession();
     renderStoryPage();
