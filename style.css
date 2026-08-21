@@ -4053,3 +4053,119 @@ input {
 .safezone-chat-panel {
     overflow-anchor: none !important;
 }
+
+/* Chat attachment preview before sending + download links after sending */
+.safe-attachment-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    border: 2px solid var(--border-color);
+    border-bottom: 4px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    max-width: 420px;
+}
+.safe-attachment-preview-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+}
+.safe-attachment-preview-card strong {
+    display: block;
+    color: var(--text-color);
+    font-size: .86rem;
+    overflow-wrap: anywhere;
+}
+.safe-attachment-preview-card small {
+    display: block;
+    color: var(--text-muted);
+    font-size: .72rem;
+}
+.safe-file-big { font-size: 2rem; }
+.safe-remove-attachment {
+    margin-left: auto;
+    background: #ffe5e5;
+    color: var(--accent-red);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+}
+.safe-chat-download {
+    display: inline-flex;
+    margin-top: 6px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.25);
+    color: inherit;
+    text-decoration: none;
+    font-size: .75rem;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,.35);
+}
+.safe-chat-bubble.friend .safe-chat-download {
+    background: #eef2ff;
+    color: #4338ca;
+    border-color: #c7d2fe;
+}
+.safe-chat-attachment a img:hover {
+    transform: scale(1.02);
+    filter: brightness(1.04);
+}
+@media (max-width: 768px) {
+    .safe-attachment-preview-card { max-width: 100%; }
+    .safe-attachment-preview-card img { width: 54px; height: 54px; }
+}
+
+/* Chat attachment preview before sending + download links after sending */
+.safe-attachment-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    border: 2px solid var(--border-color);
+    border-bottom: 4px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    max-width: 420px;
+}
+.safe-attachment-preview-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+}
+.safe-attachment-preview-card strong { display: block; color: var(--text-color); font-size: .86rem; overflow-wrap: anywhere; }
+.safe-attachment-preview-card small { display: block; color: var(--text-muted); font-size: .72rem; }
+.safe-file-big { font-size: 2rem; }
+.safe-remove-attachment {
+    margin-left: auto;
+    background: #ffe5e5;
+    color: var(--accent-red);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+}
+.safe-chat-download {
+    display: inline-flex;
+    margin-top: 6px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.25);
+    color: inherit;
+    text-decoration: none;
+    font-size: .75rem;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,.35);
+}
+.safe-chat-bubble.friend .safe-chat-download { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+.safe-chat-attachment a img:hover { transform: scale(1.02); filter: brightness(1.04); }
+@media (max-width: 768px) {
+    .safe-attachment-preview-card { max-width: 100%; }
+    .safe-attachment-preview-card img { width: 54px; height: 54px; }
+}
