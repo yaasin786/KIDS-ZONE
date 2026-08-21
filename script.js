@@ -677,7 +677,6 @@ function listenToKidProfiles() {
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
         if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
         if (typeof renderSafeZone === 'function') renderSafeZone();
-        if (typeof renderSafeChat === 'function') renderSafeChat();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
             renderAdminPortalProfiles();
@@ -2993,7 +2992,6 @@ function renderSafeZone() {
     if (!feed) return;
     populateSafeAudience();
     populateSafeChatFriends();
-    renderSafeChat();
 
     const adminPanel = document.getElementById('safezoneAdminPanel');
     if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
@@ -3230,8 +3228,6 @@ function renderSafeChat() {
     if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
     populateSafeChatFriends();
 
-    const previousScrollTop = win.scrollTop;
-    const wasNearBottom = false; // prevent realtime snapshots from making the chat jump up/down
 
     if (!selectedSafeChatFriend) {
         const recentIds = [...new Set(getAllSafeZoneChats()
@@ -3268,13 +3264,8 @@ function renderSafeChat() {
         </div>`;
     }).join('');
 
-    // Stop the annoying up/down jump: only move to bottom when the user was already
-    // near the bottom, changed friend, or just sent a message.
-    if (safeChatStickBottom || wasNearBottom) {
-        win.scrollTop = win.scrollHeight;
-    } else {
-        win.scrollTop = previousScrollTop;
-    }
+    // Do NOT change scrollTop here. Realtime Firebase/profile updates can arrive
+    // many times per second and moving scrollTop causes the up/down jumping on phones.
     safeChatStickBottom = false;
 }
 window.renderSafeChat = renderSafeChat;
@@ -3316,7 +3307,6 @@ function setupSafeProgressChatListener() {
         const data = snap.exists() ? (snap.data() || {}) : {};
         safeZoneProgressChats = Array.isArray(data.safeChats) ? data.safeChats.filter(m => m && m.id) : [];
         if (typeof renderSafeChat === 'function') renderSafeChat();
-        if (typeof renderSafeZone === 'function') renderSafeZone();
     }, (err) => console.warn('[KidZone] safe progress chat listener failed:', err && (err.code || err.message || err)));
 }
 
@@ -3382,7 +3372,6 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (attachmentInput && !forcedText) attachmentInput.value = '';
     const attPreview = document.getElementById('safeChatAttachmentPreview');
     if (attPreview && !forcedText) attPreview.innerText = '';
-    safeChatStickBottom = true;
     renderSafeChat();
     playSound(720, 'triangle', 0.12);
 
