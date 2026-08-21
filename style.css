@@ -2786,3 +2786,442 @@ input {
     .navbar { justify-content: center; }
     .player-stats { justify-content: center; }
 }
+
+/* ============================================================
+   21. EARTH & MOON PHASE SIMULATOR
+   ============================================================ */
+.moon-dance-panel {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.82fr) minmax(320px, 1.18fr);
+    gap: 22px;
+    align-items: stretch;
+    background: linear-gradient(135deg, #080617, #111b3d 55%, #08111f);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 26px;
+    color: #ffffff;
+    box-shadow: inset 0 0 80px rgba(0,0,0,.55), var(--shadow-md);
+    overflow: hidden;
+    position: relative;
+}
+
+.moon-dance-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(circle at 18% 22%, rgba(255,255,255,.9) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 72% 30%, rgba(255,255,255,.65) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 88% 78%, rgba(255,255,255,.7) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 44% 85%, rgba(255,255,255,.5) 0 1px, transparent 1.5px);
+    opacity: .55;
+    pointer-events: none;
+}
+
+.moon-dance-info,
+.moon-system-stage { position: relative; z-index: 1; }
+
+.moon-dance-kicker {
+    display: inline-block;
+    color: #fde68a;
+    font-weight: 800;
+    letter-spacing: .02em;
+    margin-bottom: 6px;
+}
+
+.moon-dance-info h2 {
+    font-family: var(--font-heading);
+    font-size: 1.8rem;
+    line-height: 1.1;
+    margin-bottom: 10px;
+}
+
+.moon-dance-info p {
+    color: rgba(255,255,255,.82);
+    font-size: .96rem;
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+.moon-phase-readout {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(4px);
+}
+
+#moonPhaseEmoji { font-size: 3rem; line-height: 1; }
+.moon-phase-readout strong { display: block; font-family: var(--font-heading); font-size: 1.15rem; }
+.moon-phase-readout small { color: rgba(255,255,255,.72); font-weight: 700; }
+
+.moon-dance-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.moon-dance-actions .solar-tool-btn { background: rgba(255,255,255,.13); color: #fff; border: 1px solid rgba(255,255,255,.18); }
+.moon-dance-actions .solar-tool-btn.active { background: #7c3aed; box-shadow: 0 4px 0 #5b21b6; }
+
+.moon-system-stage {
+    min-height: 420px;
+    border-radius: var(--radius-md);
+    background: radial-gradient(circle at 55% 50%, rgba(37,99,235,.22), transparent 34%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.moon-sun {
+    position: absolute;
+    left: -42px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 116px;
+    height: 230px;
+    border-radius: 0 140px 140px 0;
+    background: radial-gradient(circle at 12% 50%, #fff8b5, #ffd000 43%, #ff8a00 70%);
+    box-shadow: 0 0 35px #ffc400, 0 0 90px rgba(255,196,0,.72);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 18px;
+    font-size: 2.2rem;
+    z-index: 2;
+}
+
+.moon-sun span {
+    position: absolute;
+    left: 16px;
+    bottom: 38px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: var(--font-heading);
+    font-size: .75rem;
+    text-transform: uppercase;
+    color: #7c2d12;
+}
+
+.sun-rays {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255,220,90,.34), rgba(255,220,90,.12) 34%, transparent 72%);
+    clip-path: polygon(0 22%, 100% 4%, 100% 96%, 0 78%);
+    opacity: .6;
+    animation: rayPulse 4s ease-in-out infinite;
+}
+
+@keyframes rayPulse {
+    0%,100% { opacity: .46; }
+    50% { opacity: .72; }
+}
+
+.moon-orbit-demo {
+    width: min(520px, 92%);
+    aspect-ratio: 1.35 / 1;
+    border: 3px solid rgba(255,255,255,.7);
+    border-radius: 50%;
+    position: relative;
+    transform: rotate(-5deg);
+    box-shadow: 0 0 22px rgba(255,255,255,.14);
+}
+
+.moon-orbit-demo::after {
+    content: 'Orbit of Moon';
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,.72);
+    font-family: var(--font-heading);
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.earth-demo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(5deg);
+    width: 86px;
+    height: 86px;
+    border-radius: 50%;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 64% 34%, #7ee787 0 10%, transparent 11%),
+        radial-gradient(circle at 38% 62%, #65a30d 0 13%, transparent 14%),
+        radial-gradient(circle at 30% 30%, #93c5fd, #2563eb 64%, #0f377e 100%);
+    box-shadow: inset -15px 0 18px rgba(0,0,0,.42), 0 0 24px rgba(37,99,235,.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: var(--font-heading);
+    font-size: .78rem;
+    text-shadow: 0 1px 3px #000;
+}
+
+.earth-day {
+    position: absolute;
+    inset: 0 50% 0 0;
+    background: rgba(125,211,252,.25);
+    border-right: 2px solid rgba(255,255,255,.45);
+}
+
+.moon-demo-spinner {
+    position: absolute;
+    inset: 0;
+    transform-origin: center;
+    animation: moonDemoOrbit 18s linear infinite;
+}
+
+.moon-dance-panel.paused .moon-demo-spinner { animation-play-state: paused; }
+
+@keyframes moonDemoOrbit {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.moon-demo-body {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    border: 0;
+    background: radial-gradient(circle at var(--phase-light-x, 15%) 50%, #ffffff 0 18%, #c8c8c8 42%, #252936 73%);
+    box-shadow: inset -5px -3px 8px rgba(0,0,0,.5), 0 0 16px rgba(255,255,255,.55);
+    cursor: pointer;
+}
+
+.moon-demo-body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 35% 35%, rgba(0,0,0,.22) 0 8%, transparent 9%),
+        radial-gradient(circle at 66% 58%, rgba(0,0,0,.20) 0 7%, transparent 8%),
+        radial-gradient(circle at 48% 74%, rgba(0,0,0,.16) 0 5%, transparent 6%);
+    opacity: .75;
+}
+
+.phase-label {
+    position: absolute;
+    transform: translate(-50%, -50%) rotate(5deg);
+    font-family: var(--font-heading);
+    font-size: .72rem;
+    color: rgba(255,255,255,.88);
+    text-align: center;
+    text-shadow: 0 1px 5px #000;
+    background: rgba(0,0,0,.28);
+    padding: 3px 7px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+.phase-new { left: 4%; top: 50%; }
+.phase-waxcres { left: 18%; top: 19%; }
+.phase-first { left: 50%; top: 2%; }
+.phase-waxgib { left: 82%; top: 19%; }
+.phase-full { left: 96%; top: 50%; }
+.phase-wangib { left: 82%; top: 81%; }
+.phase-last { left: 50%; top: 98%; }
+.phase-wancres { left: 18%; top: 81%; }
+
+.phase-label.active {
+    background: #fde68a;
+    color: #111827;
+    box-shadow: 0 0 18px rgba(253,230,138,.9);
+}
+
+@media (max-width: 850px) {
+    .moon-dance-panel { grid-template-columns: 1fr; }
+    .moon-system-stage { min-height: 360px; }
+    .moon-orbit-demo { width: min(430px, 88%); }
+    .phase-label { font-size: .62rem; }
+    .moon-sun { width: 88px; height: 178px; left: -34px; }
+}
+
+/* Solar-system perfection pass: clearer Moon, labels, asteroid belt, and easier clicking */
+.solar-map {
+    background:
+        radial-gradient(circle at 50% 50%, rgba(76, 29, 149, 0.35) 0%, transparent 28%),
+        radial-gradient(circle at 50% 50%, #241a52 0%, #140d33 45%, #060512 100%);
+}
+
+.orbit-ring {
+    border-color: rgba(255, 255, 255, 0.24);
+}
+
+.planet-label {
+    opacity: 0.72;
+    background: rgba(0, 0, 0, 0.42);
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+}
+
+.solar-map:hover .planet-label { opacity: 0.9; }
+
+.planet-body[data-planet="earth"] {
+    box-shadow: 0 0 0 2px rgba(147,197,253,.45), 0 0 24px rgba(37,99,235,.75), inset -4px -5px 10px rgba(0,0,0,.45);
+}
+
+.planet-body[data-planet="earth"]::after {
+    content: '🌙';
+    position: absolute;
+    right: -44px;
+    top: -30px;
+    font-size: 1rem;
+    filter: drop-shadow(0 0 6px #fff);
+    opacity: .92;
+    pointer-events: none;
+}
+
+.moon-orbit {
+    border: 2px dashed rgba(255, 255, 255, 0.62);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.28);
+}
+
+.moon-body {
+    min-width: 15px;
+    min-height: 15px;
+    box-shadow:
+        0 0 0 2px rgba(255,255,255,.78),
+        0 0 18px rgba(255,255,255,.95),
+        inset -3px -3px 6px rgba(0, 0, 0, 0.55);
+    z-index: 8;
+}
+
+.moon-body::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 35% 36%, rgba(0,0,0,.22) 0 14%, transparent 15%),
+        radial-gradient(circle at 64% 62%, rgba(0,0,0,.18) 0 12%, transparent 13%),
+        radial-gradient(circle at 48% 76%, rgba(0,0,0,.14) 0 9%, transparent 10%);
+    pointer-events: none;
+}
+
+.moon-label {
+    opacity: 1 !important;
+    top: 155%;
+    font-size: 0.7rem;
+    color: #fff;
+    background: rgba(15, 23, 42, 0.82);
+    box-shadow: 0 0 10px rgba(255,255,255,.24);
+}
+
+.planet-card .pc-body h4 {
+    line-height: 1.2;
+}
+
+/* Asteroid belt between Mars and Jupiter */
+.asteroid-belt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1px;
+    height: 1px;
+    transform: translate(-50%, -50%);
+    animation: orbitSpin 140s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.asteroid-belt span {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    background: #d6d3d1;
+    box-shadow: 0 0 4px rgba(255,255,255,.55);
+    transform-origin: 0 0;
+}
+
+.orbit-layer.paused .asteroid-belt,
+.orbit-layer.hover-paused .asteroid-belt { animation-play-state: paused; }
+
+.asteroid-belt::after {
+    content: 'Asteroid Belt';
+    position: absolute;
+    transform: translate(-50%, -50%);
+    left: 0;
+    top: -214px;
+    font-family: var(--font-heading);
+    font-size: .68rem;
+    color: rgba(255,255,255,.7);
+    white-space: nowrap;
+    background: rgba(0,0,0,.35);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+@media (max-width: 768px) {
+    .moon-body {
+        min-width: 18px;
+        min-height: 18px;
+    }
+    .moon-label { display: block; font-size: .62rem; }
+    .asteroid-belt::after { display: none; }
+}
+
+/* Clean realistic solar-system view: no dotted asteroid belt, bigger real Moon */
+.asteroid-belt,
+.asteroid-belt span,
+.asteroid-belt::after {
+    display: none !important;
+}
+
+/* Remove the extra tiny emoji moon marker; the real orbiting Moon is enough. */
+.planet-body[data-planet="earth"]::after {
+    content: none !important;
+}
+
+.moon-orbit {
+    width: 124px !important;
+    height: 124px !important;
+    border: 2px solid rgba(255, 255, 255, 0.42) !important;
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.22);
+}
+
+.moon-body[data-planet="moon"] {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    background:
+        radial-gradient(circle at 38% 30%, rgba(255,255,255,.95) 0 10%, transparent 11%),
+        radial-gradient(circle at 68% 64%, rgba(70,70,70,.28) 0 11%, transparent 12%),
+        radial-gradient(circle at 42% 70%, rgba(70,70,70,.22) 0 8%, transparent 9%),
+        radial-gradient(circle at 30% 42%, rgba(70,70,70,.18) 0 7%, transparent 8%),
+        radial-gradient(circle at 34% 28%, #ffffff, #d8d5cc 58%, #77736b 100%) !important;
+    box-shadow:
+        0 0 0 2px rgba(255,255,255,.72),
+        0 0 20px rgba(255,255,255,.85),
+        inset -5px -5px 9px rgba(0,0,0,.48) !important;
+}
+
+.moon-body[data-planet="moon"]::after {
+    content: none !important;
+}
+
+.moon-label {
+    top: 145% !important;
+    font-size: .72rem !important;
+    opacity: 1 !important;
+}
+
+/* Even in real-size mode, keep the Moon visible for kids. */
+.solar-map.real-scale .moon-body[data-planet="moon"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+}
