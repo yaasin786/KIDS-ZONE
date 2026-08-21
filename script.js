@@ -2872,6 +2872,7 @@ let safeZoneProfileChats = []; // chat fallback stored in kidProfiles so it sync
 let safeZoneProgressChats = []; // chat fallback stored in kidProgress inbox
 let safeProgressChatUnsub = null;
 let selectedSafeChatFriend = '';
+let safeChatStickBottom = true;
 let safeZoneFilter = 'all';
 
 // If Firestore rules do not yet allow the new safeZoneChats collection,
@@ -2950,6 +2951,7 @@ function buildSafeZone() {
     populateSafeChatFriends();
     renderSafeZone();
     renderSafeChat();
+    wireSafeChatAttachmentPreview();
     syncLocalSafeChatsToCloud();
 }
 window.buildSafeZone = buildSafeZone;
@@ -3140,6 +3142,7 @@ function populateSafeChatFriends() {
 
 function selectSafeChatFriend(friendId) {
     selectedSafeChatFriend = friendId || '';
+    safeChatStickBottom = true;
     playSound(480);
     renderSafeChat();
 }
@@ -3154,12 +3157,49 @@ function chatVisibleToCurrent(m) {
     return m.status === 'approved' || m.fromId === currentActiveId;
 }
 
+
+function wireSafeChatAttachmentPreview() {
+    const input = document.getElementById('safeChatAttachment');
+    if (!input || input.dataset.wired === 'yes') return;
+    input.dataset.wired = 'yes';
+    input.addEventListener('change', () => {
+        const box = document.getElementById('safeChatAttachmentPreview');
+        const f = input.files && input.files[0];
+        if (box) box.innerText = f ? `📎 Attached: ${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+    });
+}
+
+function addSafeChatEmoji(emoji) {
+    const input = document.getElementById('safeChatInput');
+    if (!input) return;
+    const start = input.selectionStart || input.value.length;
+    const end = input.selectionEnd || input.value.length;
+    input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+}
+window.addSafeChatEmoji = addSafeChatEmoji;
+
+function renderSafeChatAttachment(att) {
+    if (!att || !att.dataUrl) return '';
+    const name = escapeHtml(att.name || 'attachment');
+    const url = escapeHtml(att.dataUrl);
+    if ((att.type || '').startsWith('image/')) {
+        return `<span class="safe-chat-attachment"><img src="${url}" alt="${name}"></span>`;
+    }
+    return `<a class="safe-chat-file-link" href="${url}" download="${name}" target="_blank" rel="noopener">📎 ${name}</a>`;
+}
+
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
     if (!win) return;
     const panel = document.getElementById('safezoneChatPanel');
     if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
     populateSafeChatFriends();
+
+    const previousScrollTop = win.scrollTop;
+    const wasNearBottom = (win.scrollHeight - win.scrollTop - win.clientHeight) < 80;
+
     if (!selectedSafeChatFriend) {
         const recentIds = [...new Set(getAllSafeZoneChats()
             .filter(m => m.status !== 'deleted' && (m.fromId === currentActiveId || m.toId === currentActiveId))
@@ -3190,10 +3230,19 @@ function renderSafeChat() {
         const pending = m.status === 'pending';
         return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}">
             ${escapeHtml(m.text || '')}
-            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)} ${pending ? '' : ''}</small>
+            ${renderSafeChatAttachment(m.attachment)}
+            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}</small>
         </div>`;
     }).join('');
-    win.scrollTop = win.scrollHeight;
+
+    // Stop the annoying up/down jump: only move to bottom when the user was already
+    // near the bottom, changed friend, or just sent a message.
+    if (safeChatStickBottom || wasNearBottom) {
+        win.scrollTop = win.scrollHeight;
+    } else {
+        win.scrollTop = previousScrollTop;
+    }
+    safeChatStickBottom = false;
 }
 window.renderSafeChat = renderSafeChat;
 
@@ -3267,8 +3316,17 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (!selectedSafeChatFriend) { showToast('Choose a friend first.', '👋', 2500); return; }
     const input = document.getElementById('safeChatInput');
     const text = String(forcedText || input?.value || '').trim();
-    if (!text) return;
+    const attachmentInput = document.getElementById('safeChatAttachment');
+    const attachmentFile = (!forcedText && attachmentInput && attachmentInput.files) ? attachmentInput.files[0] : null;
+    if (!text && !attachmentFile) return;
     if (safeZoneContainsBadWords(text)) { showToast('Kind chat only please.', '🛡️', 3000); return; }
+    let attachment = null;
+    try {
+        attachment = attachmentFile ? await fileToDataUrl(attachmentFile, 650 * 1024) : null;
+    } catch (e) {
+        showToast(e.message || 'Attachment is too large.', '📎', 3600);
+        return;
+    }
 
     const me = getActiveKidProfile() || {};
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend) || {};
@@ -3281,12 +3339,17 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         toId: selectedSafeChatFriend,
         toName: friend.name || 'Friend',
         toAvatar: friend.avatar || '🚀',
-        status: 'approved'
+        status: 'approved',
+        attachment
     };
 
     // Show it immediately for the sender, without waiting for Firebase.
     upsertLocalSafeChat({ ...data, instantLocal: true });
     if (input && !forcedText) input.value = '';
+    if (attachmentInput && !forcedText) attachmentInput.value = '';
+    const attPreview = document.getElementById('safeChatAttachmentPreview');
+    if (attPreview && !forcedText) attPreview.innerText = '';
+    safeChatStickBottom = true;
     renderSafeChat();
     playSound(720, 'triangle', 0.12);
 
