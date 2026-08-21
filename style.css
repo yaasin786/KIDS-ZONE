@@ -4043,3 +4043,13 @@ input {
     .safe-chat-input-row { display: grid; grid-template-columns: 1fr auto; }
     .safe-chat-input-row .book-btn { grid-column: 1 / -1; }
 }
+
+/* Final safe chat anti-jump fix */
+.safe-chat-window {
+    scroll-behavior: auto !important;
+    overscroll-behavior: contain;
+    overflow-anchor: none !important;
+}
+.safezone-chat-panel {
+    overflow-anchor: none !important;
+}
