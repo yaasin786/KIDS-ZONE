@@ -114,7 +114,8 @@ import {
     setDoc, 
     getDoc, 
     deleteDoc, 
-    onSnapshot 
+    onSnapshot,
+    arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
     getAuth,
@@ -926,6 +927,7 @@ function setupUIForSession() {
             if (nameElem) nameElem.innerText = kid.name;
         }
     }
+    setupSafeProgressChatListener();
     updateSafeZoneIdentity();
 }
 
@@ -947,6 +949,8 @@ function handleLogout() {
     
     currentRole = null;
     currentActiveId = null;
+    if (safeProgressChatUnsub) { try { safeProgressChatUnsub(); } catch (e) {} safeProgressChatUnsub = null; }
+    safeZoneProgressChats = [];
 
     const pinElem = document.getElementById('loginKidPin');
     const passElem = document.getElementById('adminPassword');
@@ -1189,7 +1193,7 @@ async function saveProgress() {
             finishedStories: [...finishedStories],
             completedExperiments: [...completedExperiments]
         };
-        await setDoc(doc(db, "kidProgress", currentActiveId), data);
+        await setDoc(doc(db, "kidProgress", currentActiveId), data, { merge: true });
     } catch (e) {
         console.error("Cloud Save error:", e);
     }
@@ -2860,6 +2864,8 @@ window.resetKidStats = resetKidStats;
 let safeZonePosts = [];
 let safeZoneChats = [];
 let safeZoneProfileChats = []; // chat fallback stored in kidProfiles so it syncs across devices
+let safeZoneProgressChats = []; // chat fallback stored in kidProgress inbox
+let safeProgressChatUnsub = null;
 let selectedSafeChatFriend = '';
 let safeZoneFilter = 'all';
 
@@ -2881,7 +2887,7 @@ function upsertLocalSafeChat(msg) {
 }
 function getAllSafeZoneChats() {
     const map = new Map();
-    [...getLocalSafeChats(), ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
+    [...getLocalSafeChats(), ...safeZoneProgressChats, ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
     return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 function getLatestSafeChatFriendId() {
@@ -3196,6 +3202,29 @@ async function saveSafeChatToProfileFallback(data) {
     const profileChat = { ...data, kind: 'safeChat', profileFallback: true };
     await setDoc(doc(db, 'kidProfiles', 'safechat_' + data.id), profileChat);
 }
+async function saveSafeChatToProgressFallback(data) {
+    const progressChat = { ...data, progressFallback: true };
+    // Put a copy in both children's progress docs so both devices can receive it.
+    await Promise.all([
+        setDoc(doc(db, 'kidProgress', data.fromId), { safeChats: arrayUnion(progressChat) }, { merge: true }),
+        setDoc(doc(db, 'kidProgress', data.toId), { safeChats: arrayUnion(progressChat) }, { merge: true })
+    ]);
+}
+
+function setupSafeProgressChatListener() {
+    if (safeProgressChatUnsub) {
+        try { safeProgressChatUnsub(); } catch (e) {}
+        safeProgressChatUnsub = null;
+    }
+    safeZoneProgressChats = [];
+    if (!currentActiveId || currentRole === 'admin') return;
+    safeProgressChatUnsub = onSnapshot(doc(db, 'kidProgress', currentActiveId), (snap) => {
+        const data = snap.exists() ? (snap.data() || {}) : {};
+        safeZoneProgressChats = Array.isArray(data.safeChats) ? data.safeChats.filter(m => m && m.id) : [];
+        if (typeof renderSafeChat === 'function') renderSafeChat();
+        if (typeof renderSafeZone === 'function') renderSafeZone();
+    }, (err) => console.warn('[KidZone] safe progress chat listener failed:', err && (err.code || err.message || err)));
+}
 
 async function syncLocalSafeChatsToCloud() {
     const local = getLocalSafeChats();
@@ -3241,6 +3270,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         // opened the new safeZoneChats collection for all devices.
         await setDoc(doc(db, 'safeZoneChats', id), data);
         saveSafeChatToProfileFallback(data).catch(e => console.warn('[KidZone] profile chat mirror failed:', e && (e.code || e.message || e)));
+        saveSafeChatToProgressFallback(data).catch(e => console.warn('[KidZone] progress chat mirror failed:', e && (e.code || e.message || e)));
         if (input && !forcedText) input.value = '';
         showToast('Safe message sent!', '💬', 2600);
         if (currentRole === 'kid') unlockBadge('safeFriend');
@@ -3252,13 +3282,21 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
             showToast('Safe message sent!', '💬', 2600);
             if (currentRole === 'kid') unlockBadge('safeFriend');
         } catch (e2) {
-            console.warn('[KidZone] Profile chat fallback failed, saving on this device:', e2 && (e2.code || e2.message || e2));
-            upsertLocalSafeChat({ ...data, localOnly: true });
-            if (input && !forcedText) input.value = '';
-            renderSafeChat();
-            renderSafeAdminPanel();
-            showToast('Message saved on this device only. Ask Admin to enable chat sync.', '💬', 4200);
-            if (currentRole === 'kid') unlockBadge('safeFriend');
+            console.warn('[KidZone] Profile chat fallback failed; trying kidProgress sync fallback:', e2 && (e2.code || e2.message || e2));
+            try {
+                await saveSafeChatToProgressFallback(data);
+                if (input && !forcedText) input.value = '';
+                showToast('Safe message sent!', '💬', 2600);
+                if (currentRole === 'kid') unlockBadge('safeFriend');
+            } catch (e3) {
+                console.warn('[KidZone] Progress chat fallback failed, saving on this device:', e3 && (e3.code || e3.message || e3));
+                upsertLocalSafeChat({ ...data, localOnly: true });
+                if (input && !forcedText) input.value = '';
+                renderSafeChat();
+                renderSafeAdminPanel();
+                showToast('Message saved only on this device. Cloud chat sync is blocked in Firebase rules.', '💬', 5200);
+                if (currentRole === 'kid') unlockBadge('safeFriend');
+            }
         }
     }
 }
