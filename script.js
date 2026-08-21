@@ -1144,7 +1144,10 @@ const BADGES = {
     geoExplorer:   { icon: '🏔️', name: 'Geography Explorer', desc: 'Explored your first mountain or river!' },
     geoMaster:     { icon: '🗺️', name: 'World Map Master',   desc: 'Explored every mountain and river topic!' },
     geoQuizAce:    { icon: '🌊', name: 'Geo Quiz Ace',       desc: 'Perfect score on the Mountains & Rivers Quiz!' },
-    geoMatcher:    { icon: '🧭', name: 'Map Matcher',        desc: 'Matched every place to its correct continent!' }
+    geoMatcher:    { icon: '🧭', name: 'Map Matcher',        desc: 'Matched every place to its correct continent!' },
+    safePoster:   { icon: '💬', name: 'Kind Communicator', desc: 'Shared your first safe post!' },
+    safeFriend:   { icon: '🤝', name: 'Friendly Helper',   desc: 'Sent your first kind buddy note!' },
+    safePopular:  { icon: '❤️', name: 'Heart Collector',   desc: 'Received 5 likes in the Safe Zone!' }
 };
 
 async function saveProgress() {
@@ -1316,6 +1319,7 @@ function switchTab(tabId, evt) {
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
     if (tabId === 'geo') setTimeout(buildGeoExplorer, 30);
     if (tabId === 'homework') setTimeout(buildHomeworkHub, 30);
+    if (tabId === 'safezone') setTimeout(buildSafeZone, 30);
     if (tabId !== 'docs' && typeof closeDocModal === 'function') {
         const dp = document.getElementById('docPlayer');
         if (dp && dp.innerHTML) dp.innerHTML = '';
@@ -2821,6 +2825,437 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+// ============================================================
+// KIDZONE SAFE SOCIAL CLUB
+// Admin-moderated, no hidden private chats. All notes are visible to Admin.
+// ============================================================
+let safeZonePosts = [];
+let safeZoneChats = [];
+let selectedSafeChatFriend = '';
+let safeZoneFilter = 'all';
+let safeZoneBuilt = false;
+let safeZonePaused = false;
+
+const SAFE_BAD_WORDS = ['stupid', 'idiot', 'hate', 'kill', 'ugly', 'dumb', 'shut up'];
+
+function safeZoneContainsBadWords(text) {
+    const lower = String(text || '').toLowerCase();
+    return SAFE_BAD_WORDS.some(w => lower.includes(w));
+}
+
+function getSafePost(id) { return safeZonePosts.find(p => p.id === id); }
+
+function safePostTime(ms) {
+    if (!ms) return '';
+    try { return new Date(ms).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); }
+    catch(e) { return ''; }
+}
+
+function listenToSafeZone() {
+    onSnapshot(collection(db, 'safeZonePosts'), (snapshot) => {
+        safeZonePosts = [];
+        snapshot.forEach(docSnap => safeZonePosts.push(docSnap.data()));
+        safeZonePosts.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+        renderSafeZone();
+    }, (error) => console.error('Safe Zone sync error:', error));
+
+    onSnapshot(collection(db, 'safeZoneChats'), (snapshot) => {
+        safeZoneChats = [];
+        snapshot.forEach(docSnap => safeZoneChats.push(docSnap.data()));
+        safeZoneChats.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+        renderSafeChat();
+        renderSafeAdminPanel();
+    }, (error) => console.error('Safe Zone chat sync error:', error));
+
+    onSnapshot(doc(db, 'safeZoneSettings', 'main'), (snap) => {
+        safeZonePaused = snap.exists() ? !!snap.data().paused : false;
+        renderSafeZone();
+    }, (error) => console.error('Safe Zone settings sync error:', error));
+}
+
+function buildSafeZone() {
+    safeZoneBuilt = true;
+    populateSafeAudience();
+    populateSafeChatFriends();
+    renderSafeZone();
+    renderSafeChat();
+}
+window.buildSafeZone = buildSafeZone;
+
+function populateSafeAudience() {
+    const sel = document.getElementById('safePostAudience');
+    if (!sel) return;
+    const oldVal = sel.value || 'everyone';
+    sel.innerHTML = '<option value="everyone">🌍 Everyone in KidZone</option>';
+    cachedKidProfiles.forEach(k => {
+        if (k.id === currentActiveId) return;
+        const opt = document.createElement('option');
+        opt.value = k.id;
+        opt.innerText = `💌 Buddy note to ${k.avatar || '🚀'} ${k.name || 'Explorer'} (Admin can see)`;
+        sel.appendChild(opt);
+    });
+    if ([...sel.options].some(o => o.value === oldVal)) sel.value = oldVal;
+}
+
+function filterSafeZone(filter, evt) {
+    safeZoneFilter = filter;
+    playSound(460);
+    document.querySelectorAll('.safe-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderSafeZone();
+}
+window.filterSafeZone = filterSafeZone;
+
+function renderSafeZone() {
+    const feed = document.getElementById('safezoneFeed');
+    if (!feed) return;
+    populateSafeAudience();
+    populateSafeChatFriends();
+    renderSafeChat();
+
+    const adminPanel = document.getElementById('safezoneAdminPanel');
+    if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
+    document.querySelectorAll('.admin-only-filter').forEach(el => el.style.display = currentRole === 'admin' ? 'inline-block' : 'none');
+
+    const avatar = document.getElementById('safeComposerAvatar');
+    const activeKid = cachedKidProfiles.find(k => k.id === currentActiveId);
+    if (avatar) avatar.innerText = currentRole === 'admin' ? '🛠️' : (activeKid ? activeKid.avatar : '🚀');
+
+    const composer = document.getElementById('safezoneComposer');
+    if (composer) composer.style.display = currentRole === 'admin' || currentRole === 'kid' ? 'flex' : 'none';
+    const hint = document.getElementById('safeComposerHint');
+    if (hint) hint.innerText = safeZonePaused && currentRole !== 'admin'
+        ? 'Admin has paused posting for now. You can still read approved posts.'
+        : (currentRole === 'admin' ? 'Admin posts appear immediately. Kids posts still need approval.' : 'Posts are sent to Admin for approval before everyone sees them.');
+    const postBtn = document.querySelector('#safezoneComposer .login-submit-btn');
+    if (postBtn) postBtn.disabled = safeZonePaused && currentRole !== 'admin';
+
+    renderSafeAdminPanel();
+
+    const q = ((document.getElementById('safezoneSearch') || {}).value || '').trim().toLowerCase();
+    let list = safeZonePosts.filter(p => p.status !== 'deleted');
+
+    if (currentRole !== 'admin') {
+        list = list.filter(p => p.status === 'approved' || p.authorId === currentActiveId);
+    }
+    if (safeZoneFilter === 'mine') list = list.filter(p => p.authorId === currentActiveId);
+    if (safeZoneFilter === 'notes') list = list.filter(p => p.audienceId && p.audienceId !== 'everyone');
+    if (safeZoneFilter === 'pending') list = list.filter(p => p.status === 'pending' || (p.comments || []).some(c => c.status === 'pending'));
+    if (q) list = list.filter(p => (p.text || '').toLowerCase().includes(q) || (p.authorName || '').toLowerCase().includes(q));
+
+    if (!list.length) {
+        feed.innerHTML = '<div class="safe-empty">📭 No safe posts here yet. Share something kind or clever!</div>';
+        return;
+    }
+    feed.innerHTML = list.map(renderSafePostCard).join('');
+}
+window.renderSafeZone = renderSafeZone;
+
+function renderSafeAdminPanel() {
+    if (currentRole !== 'admin') return;
+    const stats = document.getElementById('safezoneAdminStats');
+    const pendingBox = document.getElementById('safezonePendingQueue');
+    const pendingPosts = safeZonePosts.filter(p => p.status === 'pending');
+    const pendingComments = safeZonePosts.reduce((n,p)=> n + (p.comments || []).filter(c => c.status === 'pending').length, 0);
+    const pendingChats = safeZoneChats.filter(m => m.status === 'pending').length;
+    const approved = safeZonePosts.filter(p => p.status === 'approved').length;
+    if (stats) stats.innerHTML = `
+        <div class="safe-stat"><strong>${pendingPosts.length}</strong><span>Pending Posts</span></div>
+        <div class="safe-stat"><strong>${pendingComments}</strong><span>Pending Comments</span></div>
+        <div class="safe-stat"><strong>${pendingChats}</strong><span>Pending Chats</span></div>
+        <div class="safe-stat"><strong>${approved}</strong><span>Approved Posts</span></div>
+        <div class="safe-stat"><strong>${safeZonePaused ? 'ON' : 'OFF'}</strong><span>Posting Paused</span></div>`;
+    const btn = document.getElementById('safePauseBtn');
+    if (btn) btn.innerText = safeZonePaused ? '▶️ Resume Posting' : '⏸️ Pause Posting';
+    if (pendingBox) {
+        const items = [];
+        pendingPosts.slice(0,5).forEach(p => items.push(`<div class="safe-pending-card"><div><strong>${escapeHtml(p.authorAvatar || '🚀')} ${escapeHtml(p.authorName || 'Explorer')}</strong><p>${escapeHtml(p.text || '')}</p></div><div class="safe-pending-actions"><button class="solar-tool-btn active" onclick="safeApprovePost('${p.id}')">✅ Approve</button><button class="book-btn danger" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button></div></div>`));
+        if (!items.length) items.push('<div class="safe-empty" style="padding:14px;">✅ No pending posts right now.</div>');
+        pendingBox.innerHTML = items.join('');
+    }
+    const chatQueue = document.getElementById('safezoneChatAdminQueue');
+    if (chatQueue) {
+        const pendingChat = safeZoneChats.filter(m => m.status === 'pending').slice(0, 8);
+        chatQueue.innerHTML = pendingChat.length ? pendingChat.map(m => `<div class="safe-pending-card"><div><strong>💬 ${escapeHtml(m.fromName || 'Explorer')} → ${escapeHtml(m.toName || 'Friend')}</strong><p>${escapeHtml(m.text || '')}</p></div><div class="safe-pending-actions"><button class="solar-tool-btn active" onclick="safeApproveChat('${m.id}')">✅ Approve</button><button class="book-btn danger" onclick="safeDeleteChat('${m.id}')">🗑️ Delete</button></div></div>`).join('') : '';
+    }
+}
+
+function renderSafePostCard(p) {
+    const liked = (p.likes || []).includes(currentActiveId);
+    const isNote = p.audienceId && p.audienceId !== 'everyone';
+    const visibleComments = (p.comments || []).filter(c => currentRole === 'admin' || c.status === 'approved' || c.authorId === currentActiveId);
+    const pendingClass = p.status === 'pending' ? ' pending' : '';
+    const targetName = isNote ? (cachedKidProfiles.find(k => k.id === p.audienceId)?.name || 'a friend') : 'Everyone';
+    return `<article class="safe-post${pendingClass}" id="safePost_${p.id}">
+        <div class="safe-post-head">
+            <div class="safe-author"><span class="safe-author-avatar">${escapeHtml(p.authorAvatar || '🚀')}</span><div><strong>${escapeHtml(p.authorName || 'Explorer')}</strong><small>${escapeHtml(safePostTime(p.createdAt))}</small></div></div>
+            <div class="safe-post-badges">
+                <span class="safe-badge ${p.status === 'approved' ? 'approved' : 'pending'}">${p.status === 'approved' ? '✅ Approved' : '⏳ Waiting'}</span>
+                ${isNote ? `<span class="safe-badge note">💌 To ${escapeHtml(targetName)}</span>` : '<span class="safe-badge">🏠 Club Feed</span>'}
+                <span class="safe-badge">${escapeHtml(p.mood || '😊')}</span>
+            </div>
+        </div>
+        <div class="safe-post-text">${escapeHtml(p.text || '')}</div>
+        <div class="safe-post-actions">
+            <button class="safe-action-btn ${liked ? 'liked' : ''}" onclick="toggleSafeLike('${p.id}')">❤️ ${(p.likes || []).length} Like</button>
+            <button class="safe-action-btn" onclick="focusSafeComment('${p.id}')">💬 ${visibleComments.length} Comment</button>
+            ${currentRole === 'admin' ? `<button class="safe-action-btn" onclick="safeApprovePost('${p.id}')">✅ Approve</button><button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
+        </div>
+        <div class="safe-comments">
+            ${visibleComments.map(c => `<div class="safe-comment ${c.status === 'pending' ? 'pending' : ''}"><strong>${escapeHtml(c.authorAvatar || '🚀')} ${escapeHtml(c.authorName || 'Explorer')}:</strong> ${escapeHtml(c.text || '')} ${c.status === 'pending' ? '<em>⏳ waiting</em>' : ''}${currentRole === 'admin' && c.status === 'pending' ? ` <button class="book-btn" onclick="safeApproveComment('${p.id}','${c.id}')">Approve</button>` : ''}</div>`).join('')}
+        </div>
+        ${currentRole === 'kid' || currentRole === 'admin' ? `<div class="safe-comment-box"><input id="comment_${p.id}" maxlength="220" placeholder="Write a kind comment..."><button class="book-btn" onclick="submitSafeComment('${p.id}')">Send 💬</button></div>` : ''}
+    </article>`;
+}
+
+function focusSafeComment(postId) {
+    const input = document.getElementById('comment_' + postId);
+    if (input) input.focus();
+}
+window.focusSafeComment = focusSafeComment;
+
+
+function populateSafeChatFriends() {
+    const sel = document.getElementById('safeChatFriendSelect');
+    if (!sel) return;
+    const old = selectedSafeChatFriend || sel.value;
+    sel.innerHTML = '<option value="">Choose a friend...</option>';
+    cachedKidProfiles.forEach(k => {
+        if (k.id === currentActiveId && currentRole !== 'admin') return;
+        const opt = document.createElement('option');
+        opt.value = k.id;
+        opt.innerText = `${k.avatar || '🚀'} ${k.name || 'Explorer'}`;
+        sel.appendChild(opt);
+    });
+    if ([...sel.options].some(o => o.value === old)) {
+        sel.value = old;
+        selectedSafeChatFriend = old;
+    }
+}
+
+function selectSafeChatFriend(friendId) {
+    selectedSafeChatFriend = friendId || '';
+    playSound(480);
+    renderSafeChat();
+}
+window.selectSafeChatFriend = selectSafeChatFriend;
+
+function chatVisibleToCurrent(m) {
+    if (currentRole === 'admin') return true;
+    if (!currentActiveId) return false;
+    const mine = m.fromId === currentActiveId || m.toId === currentActiveId;
+    if (!mine) return false;
+    // Sender can see their own pending typed message; receiver only sees approved messages.
+    return m.status === 'approved' || m.fromId === currentActiveId;
+}
+
+function renderSafeChat() {
+    const win = document.getElementById('safeChatWindow');
+    if (!win) return;
+    const panel = document.getElementById('safezoneChatPanel');
+    if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
+    populateSafeChatFriends();
+    if (!selectedSafeChatFriend) {
+        win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
+        return;
+    }
+    const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
+    const messages = safeZoneChats.filter(m => m.status !== 'deleted' && chatVisibleToCurrent(m) && (
+        currentRole === 'admin'
+            ? (m.fromId === selectedSafeChatFriend || m.toId === selectedSafeChatFriend)
+            : ((m.fromId === currentActiveId && m.toId === selectedSafeChatFriend) || (m.fromId === selectedSafeChatFriend && m.toId === currentActiveId))
+    ));
+    if (!messages.length) {
+        win.innerHTML = `<div class="safe-empty">💬 No messages yet with ${escapeHtml(friend ? friend.name : 'this friend')}. Send a quick kind message!</div>`;
+        return;
+    }
+    win.innerHTML = messages.map(m => {
+        const isMe = m.fromId === currentActiveId;
+        const pending = m.status === 'pending';
+        return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}">
+            ${escapeHtml(m.text || '')}
+            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)} ${pending ? '· waiting for Admin' : ''}</small>
+        </div>`;
+    }).join('');
+    win.scrollTop = win.scrollHeight;
+}
+window.renderSafeChat = renderSafeChat;
+
+async function sendSafeQuickMessage(text) {
+    await sendSafeChatMessage(text, true);
+}
+window.sendSafeQuickMessage = sendSafeQuickMessage;
+
+async function sendSafeChatMessage(forcedText = null, quick = false) {
+    if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 2500); return; }
+    if (safeZonePaused && currentRole !== 'admin') { showToast('Chat is paused by Admin right now.', '⏸️', 3000); return; }
+    if (!selectedSafeChatFriend) { showToast('Choose a friend first.', '👋', 2500); return; }
+    const input = document.getElementById('safeChatInput');
+    const text = String(forcedText || input?.value || '').trim();
+    if (!text) return;
+    if (safeZoneContainsBadWords(text)) { showToast('Kind chat only please.', '🛡️', 3000); return; }
+    const me = cachedKidProfiles.find(k => k.id === currentActiveId) || {};
+    const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend) || {};
+    const id = 'chat_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const data = {
+        id, text, createdAt: Date.now(), quick: !!quick,
+        fromId: currentActiveId,
+        fromName: currentRole === 'admin' ? 'Admin' : (me.name || 'Explorer'),
+        fromAvatar: currentRole === 'admin' ? '🛠️' : (me.avatar || '🚀'),
+        toId: selectedSafeChatFriend,
+        toName: friend.name || 'Friend',
+        toAvatar: friend.avatar || '🚀',
+        status: (quick || currentRole === 'admin') ? 'approved' : 'pending'
+    };
+    try {
+        await setDoc(doc(db, 'safeZoneChats', id), data);
+        if (input && !forcedText) input.value = '';
+        showToast(data.status === 'approved' ? 'Safe message sent!' : 'Message sent to Admin for approval.', '💬', 2600);
+        if (currentRole === 'kid') unlockBadge('safeFriend');
+    } catch (e) { console.error(e); showToast('Could not send chat.', '❌', 3000); }
+}
+window.sendSafeChatMessage = sendSafeChatMessage;
+
+async function safeApproveChat(chatId) {
+    if (currentRole !== 'admin') return;
+    try { await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'approved', approvedAt: Date.now() }, { merge: true }); showToast('Chat message approved.', '✅', 2200); }
+    catch (e) { console.error(e); }
+}
+window.safeApproveChat = safeApproveChat;
+
+async function safeDeleteChat(chatId) {
+    if (currentRole !== 'admin') return;
+    try { await setDoc(doc(db, 'safeZoneChats', chatId), { status: 'deleted', deletedAt: Date.now() }, { merge: true }); showToast('Chat message deleted.', '🗑️', 2200); }
+    catch (e) { console.error(e); }
+}
+window.safeDeleteChat = safeDeleteChat;
+
+
+async function submitSafePost() {
+    if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 3000); return; }
+    if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
+    const textEl = document.getElementById('safePostText');
+    const text = (textEl?.value || '').trim();
+    const mood = document.getElementById('safePostMood')?.value || '😊';
+    const audienceId = document.getElementById('safePostAudience')?.value || 'everyone';
+    if (!text) { showToast('Write something kind first.', '✍️', 2500); return; }
+    if (safeZoneContainsBadWords(text)) { showToast('Please use kind words only. Ask an adult if unsure.', '🛡️', 4000); return; }
+    const kid = cachedKidProfiles.find(k => k.id === currentActiveId) || {};
+    const id = 'safe_' + Date.now();
+    const data = {
+        id, text, mood, audienceId, createdAt: Date.now(),
+        authorId: currentActiveId,
+        authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
+        authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
+        status: currentRole === 'admin' ? 'approved' : 'pending',
+        likes: [], comments: []
+    };
+    try {
+        await setDoc(doc(db, 'safeZonePosts', id), data);
+        if (textEl) textEl.value = '';
+        if (currentRole === 'kid') {
+            unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
+            addStars(2);
+        }
+        showToast(currentRole === 'admin' ? 'Posted to the club!' : 'Sent to Admin for approval!', '🛡️', 3500);
+        launchConfetti(16);
+    } catch (e) { console.error(e); showToast('Could not post.', '❌', 3000); }
+}
+window.submitSafePost = submitSafePost;
+
+async function toggleSafeLike(postId) {
+    if (!currentActiveId) return;
+    const p = getSafePost(postId); if (!p || p.status !== 'approved') return;
+    const likes = Array.isArray(p.likes) ? [...p.likes] : [];
+    const i = likes.indexOf(currentActiveId);
+    if (i >= 0) likes.splice(i, 1); else likes.push(currentActiveId);
+    try {
+        await setDoc(doc(db, 'safeZonePosts', postId), { likes }, { merge: true });
+        if (likes.length >= 5 && p.authorId === currentActiveId) unlockBadge('safePopular');
+        playSound(i >= 0 ? 320 : 720);
+    } catch (e) { console.error(e); }
+}
+window.toggleSafeLike = toggleSafeLike;
+
+async function submitSafeComment(postId) {
+    if (!currentActiveId) return;
+    if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
+    const input = document.getElementById('comment_' + postId);
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    if (safeZoneContainsBadWords(text)) { showToast('Kind comments only please.', '🛡️', 3000); return; }
+    const p = getSafePost(postId); if (!p) return;
+    const kid = cachedKidProfiles.find(k => k.id === currentActiveId) || {};
+    const comments = Array.isArray(p.comments) ? [...p.comments] : [];
+    comments.push({
+        id: 'c_' + Date.now(), text, createdAt: Date.now(), authorId: currentActiveId,
+        authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
+        authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
+        status: currentRole === 'admin' ? 'approved' : 'pending'
+    });
+    try {
+        await setDoc(doc(db, 'safeZonePosts', postId), { comments }, { merge: true });
+        if (input) input.value = '';
+        showToast(currentRole === 'admin' ? 'Comment posted.' : 'Comment sent for approval.', '💬', 2600);
+    } catch (e) { console.error(e); showToast('Could not comment.', '❌', 3000); }
+}
+window.submitSafeComment = submitSafeComment;
+
+async function safeApprovePost(postId) {
+    if (currentRole !== 'admin') return;
+    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'approved', approvedAt: Date.now() }, { merge: true }); showToast('Post approved.', '✅', 2200); }
+    catch(e) { console.error(e); }
+}
+window.safeApprovePost = safeApprovePost;
+
+async function safeHidePost(postId) {
+    if (currentRole !== 'admin') return;
+    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'hidden', hiddenAt: Date.now() }, { merge: true }); showToast('Post hidden from kids.', '🙈', 2200); }
+    catch(e) { console.error(e); }
+}
+window.safeHidePost = safeHidePost;
+
+async function safeDeletePost(postId) {
+    if (currentRole !== 'admin') return;
+    if (!confirm('Delete this Safe Zone post?')) return;
+    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'deleted', deletedAt: Date.now() }, { merge: true }); showToast('Post deleted.', '🗑️', 2200); }
+    catch(e) { console.error(e); }
+}
+window.safeDeletePost = safeDeletePost;
+
+async function safeApproveComment(postId, commentId) {
+    if (currentRole !== 'admin') return;
+    const p = getSafePost(postId); if (!p) return;
+    const comments = (p.comments || []).map(c => c.id === commentId ? { ...c, status:'approved', approvedAt: Date.now() } : c);
+    try { await setDoc(doc(db, 'safeZonePosts', postId), { comments }, { merge: true }); showToast('Comment approved.', '✅', 2200); }
+    catch(e) { console.error(e); }
+}
+window.safeApproveComment = safeApproveComment;
+
+async function safeApproveAllPending() {
+    if (currentRole !== 'admin') return;
+    const pending = safeZonePosts.filter(p => p.status === 'pending' || (p.comments || []).some(c => c.status === 'pending'));
+    const pendingChats = safeZoneChats.filter(m => m.status === 'pending');
+    try {
+        await Promise.all([
+            ...pending.map(p => {
+            const comments = (p.comments || []).map(c => c.status === 'pending' ? { ...c, status:'approved', approvedAt: Date.now() } : c);
+            return setDoc(doc(db, 'safeZonePosts', p.id), { status: p.status === 'pending' ? 'approved' : p.status, comments, approvedAt: Date.now() }, { merge: true });
+            }),
+            ...pendingChats.map(m => setDoc(doc(db, 'safeZoneChats', m.id), { status: 'approved', approvedAt: Date.now() }, { merge: true }))
+        ]);
+        showToast('All pending Safe Zone items approved.', '✅', 3000);
+    } catch(e) { console.error(e); showToast('Could not approve all.', '❌', 3000); }
+}
+window.safeApproveAllPending = safeApproveAllPending;
+
+async function toggleSafeZonePause() {
+    if (currentRole !== 'admin') return;
+    try { await setDoc(doc(db, 'safeZoneSettings', 'main'), { paused: !safeZonePaused, updatedAt: Date.now() }, { merge: true }); }
+    catch(e) { console.error(e); showToast('Could not update Safe Zone settings.', '❌', 3000); }
+}
+window.toggleSafeZonePause = toggleSafeZonePause;
+
 
 // ============================================================
 // HOMEWORK & TEST PAPER HUB
@@ -6148,6 +6583,7 @@ window.toggleStep = toggleStep;
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     listenToHomework();
+    listenToSafeZone();
     watchAdminAuth();      // signs out any old remembered admin token; admin must type password each visit
     checkLoginSession();
     renderStoryPage();
