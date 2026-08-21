@@ -68,6 +68,7 @@
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
+            <button class="nav-btn" onclick="switchTab('docs', event)">🎬 Documentaries</button>
             <button class="nav-btn" onclick="switchTab('solar', event)">🪐 Solar System</button>
             <button class="nav-btn" onclick="switchTab('lab', event)">🧪 Science Lab</button>
         </nav>
@@ -587,6 +588,38 @@
             </div>
         </section>
 
+        <!-- DOCUMENTARIES TAB -->
+        <section id="docs" class="tab-content" aria-label="Documentaries Section">
+            <div class="hero-banner docs-hero">
+                <h1>🎬 Kids Documentary Cinema</h1>
+                <p>Watch amazing real-life videos about animals, space, oceans, dinosaurs and your body!</p>
+            </div>
+
+            <div class="docs-toolbar">
+                <input type="text" id="docSearch" placeholder="Search documentaries..." onkeyup="renderDocs()" aria-label="Search documentaries">
+                <div class="doc-cats" role="group" aria-label="Documentary categories">
+                    <button class="doc-chip active" onclick="filterDocs('all', event)">🎬 All</button>
+                    <button class="doc-chip" onclick="filterDocs('animals', event)">🦁 Animals</button>
+                    <button class="doc-chip" onclick="filterDocs('space', event)">🪐 Space</button>
+                    <button class="doc-chip" onclick="filterDocs('ocean', event)">🌊 Ocean</button>
+                    <button class="doc-chip" onclick="filterDocs('dinos', event)">🦖 Dinosaurs</button>
+                    <button class="doc-chip" onclick="filterDocs('earth', event)">🌋 Our Earth</button>
+                    <button class="doc-chip" onclick="filterDocs('body', event)">🧍 Human Body</button>
+                </div>
+                <button class="surprise-btn" onclick="randomDoc()">🎲 Surprise Film!</button>
+            </div>
+
+            <p class="doc-count" id="docCount"></p>
+            <div class="docs-grid" id="docsGrid"></div>
+
+            <div class="docs-note">
+                <span aria-hidden="true">🛡️</span>
+                <p><strong>Safe viewing:</strong> videos only load when a child taps play, and they run in
+                YouTube's no-cookie privacy mode with related videos turned off. All films come from trusted
+                educational channels like Nat Geo Kids, SciShow Kids and Free School.</p>
+            </div>
+        </section>
+
         <!-- SOLAR SYSTEM TAB -->
         <section id="solar" class="tab-content" aria-label="Solar System Section">
             <div class="hero-banner solar-hero">
@@ -764,6 +797,22 @@
         </div>
     </div>
 
+    <!-- Modal Popup: Documentary Player -->
+    <div id="docModal" class="modal" onclick="closeDocModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="docModalTitle">
+        <div class="modal-content doc-modal-content">
+            <button class="close-btn" onclick="closeDocModal()" aria-label="Close video">&times;</button>
+            <h2 id="docModalTitle">Documentary</h2>
+            <p class="doc-modal-sub" id="docModalChannel"></p>
+            <div class="doc-player" id="docPlayer"></div>
+            <p class="doc-modal-desc" id="docModalDesc"></p>
+            <div class="doc-modal-actions">
+                <button class="book-btn" onclick="prevDoc()">◀ Previous</button>
+                <button class="book-btn audio-btn" onclick="speakDocInfo()">🔊 Read Title</button>
+                <button class="book-btn" onclick="nextDoc()">Next ▶</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Animal Detail -->
     <div id="animalModal" class="modal" onclick="closeAnimalModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="animalModalTitle">
         <div class="modal-content animal-modal-content">
@@ -853,5 +902,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2e7837879398e6d',t:'MTc4NzI5MzAzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
