@@ -121,7 +121,9 @@ import {
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    setPersistence,
+    inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // ============================================================
@@ -140,6 +142,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// Admin login must NOT be remembered by the browser.
+// This prevents the website from opening directly as Admin on the next visit.
+const authPersistenceReady = setPersistence(auth, inMemoryPersistence).catch(e => {
+    console.warn('[KidZone] Could not set in-memory admin auth persistence:', e);
+});
 
 // Helper function to shuffle questions
 function shuffleArray(array) {
@@ -576,6 +584,7 @@ const ADMIN_UID = "l9skt6UUdcdMrmR1jKLRXQyhv4c2";
 
 let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
+let adminLoginInProgress = false; // true only after the admin submits the password form
 
 function toggleLoginType(type) {
     playSound(400);
@@ -745,10 +754,14 @@ async function handleAdminLogin(event) {
 
     try {
         // The password is verified by Google, NOT in this browser.
+        // Mark this as a fresh password entry so Firebase's auth callback may open Admin.
+        adminLoginInProgress = true;
+        await authPersistenceReady;
         const cred = await signInWithEmailAndPassword(auth, email, password);
 
         // Signed in - but is this account actually the admin?
         if (cred.user.uid !== ADMIN_UID) {
+            adminLoginInProgress = false;
             await signOut(auth);
             registerFailedLogin('admin');
             if (errorMsg) {
@@ -764,6 +777,7 @@ async function handleAdminLogin(event) {
         if (errorMsg) errorMsg.style.display = 'none';
         passElem.value = '';
     } catch (err) {
+        adminLoginInProgress = false;
         registerFailedLogin('admin');
         playSound(150, 'sawtooth', 0.3);
         const code = (err && err.code) || '';
@@ -788,8 +802,23 @@ window.handleAdminLogin = handleAdminLogin;
  * (including automatically on page refresh, so the session survives).
  */
 function watchAdminAuth() {
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         if (user && user.uid === ADMIN_UID) {
+            // If Firebase remembered an old admin token from a previous visit,
+            // do NOT auto-open the website as Admin. Require the password form again.
+            if (!adminLoginInProgress) {
+                try { await signOut(auth); } catch (e) { console.warn('[KidZone] auto admin sign-out failed:', e); }
+                sessionStorage.removeItem('kidzone_logged_in');
+                sessionStorage.removeItem('kidzone_user_role');
+                sessionStorage.removeItem('kidzone_active_id');
+                currentRole = null;
+                currentActiveId = null;
+                const overlay = document.getElementById('loginScreen');
+                if (overlay) overlay.classList.remove('hidden');
+                setupUIForSession();
+                return;
+            }
+
             currentRole = 'admin';
             currentActiveId = 'admin_' + user.uid.slice(0, 8);
             sessionStorage.setItem('kidzone_logged_in', 'true');
@@ -804,6 +833,7 @@ function watchAdminAuth() {
             showToast('Welcome Admin! \ud83d\udee0\ufe0f', '\ud83d\udc51', 3500);
         } else if (currentRole === 'admin') {
             // Admin signed out or the token expired.
+            adminLoginInProgress = false;
             currentRole = null;
             currentActiveId = null;
             sessionStorage.clear();
@@ -838,6 +868,7 @@ function setupUIForSession() {
     const reportsBtn = document.getElementById('reportsBtn');
     const avatarElem = document.getElementById('activeAvatar');
     const nameElem = document.getElementById('activeName');
+    const logoutBtn = document.querySelector('.logout-btn[onclick="handleLogout()"]');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
@@ -845,10 +876,18 @@ function setupUIForSession() {
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
+        if (logoutBtn) {
+            logoutBtn.innerText = '🔒 Admin Logout';
+            logoutBtn.title = 'Log out of Admin';
+        }
     } else {
         if (addKidBtn) addKidBtn.style.display = 'none';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
         if (reportsBtn) reportsBtn.style.display = 'none';
+        if (logoutBtn) {
+            logoutBtn.innerText = '🚪 Logout';
+            logoutBtn.title = 'Log Out';
+        }
         const kid = cachedKidProfiles.find(p => p.id === currentActiveId);
         if (kid) {
             if (avatarElem) avatarElem.innerText = kid.avatar;
@@ -864,6 +903,7 @@ function handleLogout() {
     // otherwise the token would still authorise database writes.
     const wasAdmin = currentRole === 'admin';
     currentRole = null;                       // stop watchAdminAuth double-firing
+    adminLoginInProgress = false;
     if (wasAdmin) {
         signOut(auth).catch(e => console.warn('[KidZone] signOut failed:', e));
     }
@@ -5450,7 +5490,7 @@ window.toggleStep = toggleStep;
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
-    watchAdminAuth();      // restores an admin session if the token is still valid
+    watchAdminAuth();      // signs out any old remembered admin token; admin must type password each visit
     checkLoginSession();
     renderStoryPage();
     // Pac-Man now starts itself (see showGame) once its tab is opened,
