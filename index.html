@@ -67,6 +67,7 @@
             <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
+            <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
             <button class="nav-btn" onclick="switchTab('solar', event)">🪐 Solar System</button>
             <button class="nav-btn" onclick="switchTab('lab', event)">🧪 Science Lab</button>
         </nav>
@@ -514,6 +515,78 @@
             </div>
         </section>
 
+        <!-- ANIMAL KINGDOM TAB -->
+        <section id="animals" class="tab-content" aria-label="Animal Kingdom Section">
+            <div class="hero-banner animals-hero">
+                <h1>🦁 Animal Kingdom Explorer</h1>
+                <p>Meet amazing animals, hear their sounds, and play habitat &amp; guessing games!</p>
+            </div>
+
+            <div class="animal-modes" role="tablist">
+                <button class="animal-mode-btn active" onclick="setAnimalMode('explore', event)">🔍 Meet the Animals</button>
+                <button class="animal-mode-btn" onclick="setAnimalMode('sound', event)">🔊 Guess the Sound</button>
+                <button class="animal-mode-btn" onclick="setAnimalMode('habitat', event)">🏞️ Habitat Match</button>
+                <button class="animal-mode-btn" onclick="setAnimalMode('quiz', event)">🧠 Animal Quiz</button>
+            </div>
+
+            <!-- ============ EXPLORE MODE ============ -->
+            <div id="animalExplore" class="animal-panel">
+                <div class="animal-filters">
+                    <input type="text" id="animalSearch" placeholder="Search animals (e.g. tiger, shark)..." onkeyup="filterAnimals()" aria-label="Search animals">
+                    <div class="animal-group-btns" role="group" aria-label="Animal group filters">
+                        <button class="animal-chip active" onclick="filterAnimalGroup('all', event)">🌍 All</button>
+                        <button class="animal-chip" onclick="filterAnimalGroup('mammal', event)">🐘 Mammals</button>
+                        <button class="animal-chip" onclick="filterAnimalGroup('bird', event)">🦜 Birds</button>
+                        <button class="animal-chip" onclick="filterAnimalGroup('reptile', event)">🐊 Reptiles</button>
+                        <button class="animal-chip" onclick="filterAnimalGroup('sea', event)">🐠 Sea Life</button>
+                        <button class="animal-chip" onclick="filterAnimalGroup('insect', event)">🦋 Bugs</button>
+                    </div>
+                    <button class="surprise-btn" onclick="randomAnimal()">🎲 Surprise Animal!</button>
+                </div>
+
+                <p class="animal-count" id="animalCount"></p>
+                <div class="animal-grid" id="animalGrid"></div>
+            </div>
+
+            <!-- ============ SOUND GAME ============ -->
+            <div id="animalSound" class="animal-panel" style="display:none;">
+                <div class="game-stats">
+                    <span>Score: <strong id="soundScore">0</strong></span>
+                    <span>Round: <strong id="soundRound">1 / 8</strong></span>
+                    <button class="restart-btn" onclick="startSoundGame()">🔄 New Game</button>
+                </div>
+                <div class="sound-game-box">
+                    <p class="sound-prompt" id="soundPrompt">Press the speaker to hear an animal!</p>
+                    <button class="big-speaker-btn" id="bigSpeaker" onclick="playAnimalSound()" aria-label="Play animal sound">
+                        <span class="speaker-icon">🔊</span>
+                        <span class="speaker-wave" aria-hidden="true"></span>
+                    </button>
+                    <div class="sound-options" id="soundOptions"></div>
+                </div>
+            </div>
+
+            <!-- ============ HABITAT MATCH ============ -->
+            <div id="animalHabitat" class="animal-panel" style="display:none;">
+                <div class="game-stats">
+                    <span>Matched: <strong id="habitatMatched">0 / 8</strong></span>
+                    <button class="restart-btn" onclick="startHabitatGame()">🔄 New Game</button>
+                </div>
+                <p class="habitat-help">🏞️ <strong>Drag each animal</strong> to the home where it lives! (On a phone: tap the animal, then tap its home.)</p>
+                <div class="habitat-pool" id="habitatPool" aria-label="Animals to sort"></div>
+                <div class="habitat-zones" id="habitatZones"></div>
+            </div>
+
+            <!-- ============ ANIMAL QUIZ ============ -->
+            <div id="animalQuiz" class="animal-panel" style="display:none;">
+                <div class="game-stats">
+                    <span>Score: <strong id="aqScore">0</strong></span>
+                    <span>Question: <strong id="aqProgress">1 / 10</strong></span>
+                    <button class="restart-btn" onclick="startAnimalQuiz()">🔄 New Quiz</button>
+                </div>
+                <div class="quiz-container" id="aqContainer"></div>
+            </div>
+        </section>
+
         <!-- SOLAR SYSTEM TAB -->
         <section id="solar" class="tab-content" aria-label="Solar System Section">
             <div class="hero-banner solar-hero">
@@ -691,6 +764,41 @@
         </div>
     </div>
 
+    <!-- Modal Popup: Animal Detail -->
+    <div id="animalModal" class="modal" onclick="closeAnimalModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="animalModalTitle">
+        <div class="modal-content animal-modal-content">
+            <button class="close-btn" onclick="closeAnimalModal()" aria-label="Close animal dialog">&times;</button>
+
+            <div class="animal-modal-hero" id="animalModalHero">
+                <span class="animal-big-emoji" id="animalBigEmoji">🦁</span>
+            </div>
+
+            <h2 id="animalModalTitle">Animal</h2>
+            <p class="animal-tagline" id="animalTagline"></p>
+
+            <div class="animal-badges-row" id="animalBadgesRow"></div>
+
+            <div class="animal-stats-grid" id="animalStatsGrid"></div>
+
+            <div class="animal-fact-box">
+                <span class="af-icon" aria-hidden="true">✨</span>
+                <p id="animalFactText"></p>
+            </div>
+
+            <div class="animal-sound-box">
+                <button class="animal-sound-btn" onclick="speakAnimalSound()">🔊 Hear the sound!</button>
+                <span class="animal-sound-word" id="animalSoundWord"></span>
+                <span class="animal-sound-credit" id="animalSoundCredit" style="display:none;"></span>
+            </div>
+
+            <div class="animal-modal-actions">
+                <button class="book-btn audio-btn" onclick="speakAnimalFact()">📖 Read Aloud</button>
+                <button class="book-btn" onclick="prevAnimal()">◀ Previous</button>
+                <button class="book-btn" onclick="nextAnimal()">Next ▶</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Planet Detail -->
     <div id="planetModal" class="modal" onclick="closePlanetModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="planetModalTitle">
         <div class="modal-content planet-modal-content">
@@ -745,5 +853,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2e34dbcce998e6d',t:'MTc4NzI0ODg5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
