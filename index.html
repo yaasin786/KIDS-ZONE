@@ -702,6 +702,50 @@
                 <span class="solar-hint">💡 Tip: click any planet!</span>
             </div>
 
+
+            <!-- Earth & Moon Phase Simulator -->
+            <div class="moon-dance-panel" id="moonDancePanel" aria-label="Earth and Moon phase simulator">
+                <div class="moon-dance-info">
+                    <span class="moon-dance-kicker">🌙 The Moon's Endless Dance</span>
+                    <h2>See how the Moon orbits Earth</h2>
+                    <p>The Sun lights half of the Moon. As the Moon travels around Earth, we see different bright parts called <strong>phases</strong>.</p>
+                    <div class="moon-phase-readout">
+                        <span id="moonPhaseEmoji">🌑</span>
+                        <div>
+                            <strong id="moonPhaseName">New Moon</strong>
+                            <small id="moonPhaseHint">The Moon is between Earth and the Sun.</small>
+                        </div>
+                    </div>
+                    <div class="moon-dance-actions">
+                        <button class="solar-tool-btn active" id="moonOrbitToggleBtn" onclick="toggleMoonDance()">⏸️ Pause Moon</button>
+                        <button class="solar-tool-btn" onclick="stepMoonPhase()">➡️ Next Phase</button>
+                        <button class="solar-tool-btn" onclick="speakMoonPhase()">🔊 Explain</button>
+                    </div>
+                </div>
+
+                <div class="moon-system-stage" id="moonSystemStage">
+                    <div class="moon-sun" aria-label="Sun">☀️<span>Sunlight</span></div>
+                    <div class="sun-rays" aria-hidden="true"></div>
+                    <div class="moon-orbit-demo" id="moonOrbitDemo">
+                        <div class="earth-demo" aria-label="Earth">
+                            <span class="earth-day"></span>
+                            <strong>Earth</strong>
+                        </div>
+                        <div class="moon-demo-spinner" id="moonDemoSpinner">
+                            <button class="moon-demo-body" id="moonDemoBody" onclick="stepMoonPhase()" aria-label="Moon orbiting Earth"></button>
+                        </div>
+                        <div class="phase-label phase-new">🌑 New</div>
+                        <div class="phase-label phase-waxcres">🌒 Waxing Crescent</div>
+                        <div class="phase-label phase-first">🌓 1st Quarter</div>
+                        <div class="phase-label phase-waxgib">🌔 Waxing Gibbous</div>
+                        <div class="phase-label phase-full">🌕 Full</div>
+                        <div class="phase-label phase-wangib">🌖 Waning Gibbous</div>
+                        <div class="phase-label phase-last">🌗 Last Quarter</div>
+                        <div class="phase-label phase-wancres">🌘 Waning Crescent</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Orbit map -->
             <div class="solar-map" id="solarMap">
                 <div class="starfield" id="starfield" aria-hidden="true"></div>
@@ -997,5 +1041,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2e915af88ea3111',t:'MTc4NzMwOTUwOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb0eac1c1e3872',t:'MTc4NzMzMDE5Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
