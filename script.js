@@ -408,6 +408,7 @@ window.addEventListener('keydown', (e) => {
         closeBadgesModal();
         closeCreateAccountModal();
         closeAdminPortalModal();
+        if (typeof closeHistoryModal === 'function') closeHistoryModal();
     }
 });
 
@@ -1090,7 +1091,11 @@ const BADGES = {
     animalExpert: { icon: '🦁', name: 'Animal Expert',       desc: 'Perfect score on the Animal Quiz!' },
     firstFilm:    { icon: '🎬', name: 'First Screening',     desc: 'Watched your first documentary!' },
     filmFan:      { icon: '🍿', name: 'Film Fan',            desc: 'Watched 8 documentaries!' },
-    documentarian:{ icon: '🏆', name: 'Documentarian',       desc: 'Watched every documentary!' }
+    documentarian:{ icon: '🏆', name: 'Documentarian',       desc: 'Watched every documentary!' },
+    historyStarter: { icon: '🕰️', name: 'Time Traveller',     desc: 'Explored your first world history topic!' },
+    historyExplorer:{ icon: '🌍', name: 'World Historian',     desc: 'Explored 8 world history topics!' },
+    historyMaster:  { icon: '🏛️', name: 'History Master',     desc: 'Explored every world history topic!' },
+    historyQuizAce: { icon: '🧠', name: 'History Quiz Ace',    desc: 'Perfect score on the World History Quiz!' }
 };
 
 async function saveProgress() {
@@ -1259,6 +1264,7 @@ function switchTab(tabId, evt) {
     if (tabId === 'solar') setTimeout(buildSolarSystem, 30);
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
     if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
+    if (tabId === 'history') setTimeout(buildWorldHistory, 30);
     if (tabId !== 'docs' && typeof closeDocModal === 'function') {
         const dp = document.getElementById('docPlayer');
         if (dp && dp.innerHTML) dp.innerHTML = '';
@@ -2425,7 +2431,8 @@ const ACTIVITY_LABELS = {
     memory:   { icon: '🧩', name: 'Memory Match' },
     animalsound: { icon: '👂', name: 'Guess the Sound' },
     habitat:     { icon: '🏞️', name: 'Habitat Match' },
-    animalquiz:  { icon: '🦁', name: 'Animal Quiz' }
+    animalquiz:  { icon: '🦁', name: 'Animal Quiz' },
+    historyquiz: { icon: '🌍', name: 'World History Quiz' }
 };
 
 let quizStats = {};
@@ -2761,6 +2768,415 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+
+
+// ============================================================
+// WORLD HISTORY TIME MACHINE
+// Kid-friendly world history: eras, videos, timeline, and quiz
+// ============================================================
+const HISTORY_ERAS = {
+    ancient:      { icon: '🏺', name: 'Ancient World',      color: '#a16207' },
+    classical:    { icon: '🏛️', name: 'Classical World',    color: '#7c3aed' },
+    medieval:     { icon: '🏰', name: 'Medieval World',     color: '#2563eb' },
+    earlymodern:  { icon: '🧭', name: 'Early Modern World', color: '#0891b2' },
+    modern:       { icon: '🚂', name: 'Modern World',       color: '#dc2626' },
+    contemporary: { icon: '💻', name: 'Our World Today',    color: '#16a34a' }
+};
+
+const WORLD_HISTORY = [
+    {
+        id: 'early-humans', era: 'ancient', year: 'c. 200,000 BCE', icon: '🦣',
+        title: 'Early Humans Learn to Survive', short: 'People made tools, shared food, told stories, and learned to live in many climates.',
+        body: 'Long before cities existed, early humans lived as hunters and gatherers. They made stone tools, learned to use fire, painted caves, cared for families, and slowly spread across the world. Their biggest superpower was teamwork: people shared knowledge so the next generation could do even better.',
+        why: 'It shows that learning, cooperation, and imagination helped humans survive and build every later civilization.',
+        videoId: 'KFojGxkCKJI'
+    },
+    {
+        id: 'farming', era: 'ancient', year: 'c. 10,000 BCE', icon: '🌾',
+        title: 'The Farming Revolution', short: 'People began growing crops and raising animals, so villages could become larger.',
+        body: 'In several parts of the world, people discovered that seeds could be planted and animals could be raised. Farming meant families could stay in one place for longer. Villages grew, jobs became more specialized, and people had time to invent pottery, weaving, and new tools.',
+        why: 'Farming helped create towns, trade, calendars, leaders, and many of the first civilizations.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'mesopotamia', era: 'ancient', year: 'c. 3500 BCE', icon: '🏙️',
+        title: 'Mesopotamia: First Cities', short: 'Sumerians built cities, invented cuneiform writing, and used irrigation.',
+        body: 'Between the Tigris and Euphrates rivers, people built some of the world’s first cities. They made canals to water crops, traded goods, built temples called ziggurats, and wrote on clay tablets using wedge-shaped marks called cuneiform.',
+        why: 'Writing let people record laws, stories, maths, business, and ideas so knowledge could travel through time.',
+        videoId: 'EHkAGKgoyGo'
+    },
+    {
+        id: 'ancient-egypt', era: 'ancient', year: 'c. 3100 BCE', icon: '🔺',
+        title: 'Ancient Egypt and the Nile', short: 'The Nile River helped Egyptians farm, build pyramids, and develop hieroglyphs.',
+        body: 'Ancient Egypt grew beside the Nile River. Every year the river flooded and left rich soil for crops. Egyptians became famous for pyramids, mummies, pharaohs, papyrus, medicine, maths, and picture writing called hieroglyphs.',
+        why: 'Egypt shows how geography, engineering, art, and belief systems can shape a powerful civilization.',
+        videoId: '04cs4-BMsHo'
+    },
+    {
+        id: 'indus-china', era: 'ancient', year: 'c. 2500 BCE', icon: '🐉',
+        title: 'Indus Valley and Ancient China', short: 'Great river civilizations planned cities, farmed, traded, and invented useful things.',
+        body: 'The Indus Valley had carefully planned cities with streets and drainage systems. In ancient China, river valleys supported farming, bronze work, early writing, silk-making, and important inventions. Around the world, rivers helped people build stable communities.',
+        why: 'Civilizations did not grow in only one place. Many regions invented clever solutions to local problems.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'ancient-greece', era: 'classical', year: 'c. 800 BCE', icon: '🏛️',
+        title: 'Ancient Greece: Ideas and Olympics', short: 'Greek city-states explored democracy, philosophy, theatre, science, and sport.',
+        body: 'Ancient Greece was made of many city-states such as Athens and Sparta. Greek thinkers asked big questions about nature, fairness, numbers, and government. The Olympic Games began in Greece, and Greek stories, buildings, theatre, and science influenced many later cultures.',
+        why: 'Many words and ideas used in science, art, sport, and government today have roots in ancient Greece.',
+        videoId: 'jloEzVh31TE'
+    },
+    {
+        id: 'rome', era: 'classical', year: 'c. 500 BCE–476 CE', icon: '🛣️',
+        title: 'Ancient Rome: Roads, Law, and Empire', short: 'Romans connected lands with roads, aqueducts, cities, and shared laws.',
+        body: 'Rome began as a small city and grew into a huge empire around the Mediterranean. Romans built roads, aqueducts, bridges, arenas, and cities. Roman law, language, engineering, and citizenship ideas shaped many societies after the empire changed and divided.',
+        why: 'Rome reminds us how roads, laws, and shared systems can connect many different people over long distances.',
+        videoId: '-uaMjhpi12M'
+    },
+    {
+        id: 'world-religions', era: 'classical', year: 'c. 1500 BCE–700 CE', icon: '🕊️',
+        title: 'World Religions and Big Ideas', short: 'Major belief systems taught values, stories, community, and ways to understand life.',
+        body: 'Across Asia, the Middle East, Africa, and Europe, major religions and philosophies developed over centuries. They shared stories, music, art, rules for living, celebrations, and ideas about kindness, duty, wisdom, peace, and community.',
+        why: 'Understanding beliefs helps kids respect cultures and see why people celebrate, build, write, and live in different ways.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'silk-road', era: 'medieval', year: 'c. 130 BCE–1400 CE', icon: '🐫',
+        title: 'The Silk Road Connects Continents', short: 'Trade routes carried silk, spices, inventions, art, stories, and ideas.',
+        body: 'The Silk Road was not one road but many land and sea routes linking Asia, the Middle East, Africa, and Europe. Traders carried silk, spices, paper, glass, horses, and knowledge. Cities along the routes became meeting places for languages, foods, music, and ideas.',
+        why: 'Trade can move more than objects: it spreads inventions, culture, and new ways of thinking.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'islamic-golden-age', era: 'medieval', year: 'c. 750–1258', icon: '🔭',
+        title: 'The Islamic Golden Age', short: 'Scholars advanced maths, medicine, astronomy, geography, libraries, and translation.',
+        body: 'In cities such as Baghdad, Cordoba, and Cairo, scholars studied and translated books from many cultures. They improved algebra, hospitals, astronomy, maps, optics, and libraries. People debated ideas and preserved knowledge that later students around the world could use.',
+        why: 'It shows how sharing knowledge across languages and cultures can create amazing discoveries.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'medieval-world', era: 'medieval', year: 'c. 500–1500', icon: '🏰',
+        title: 'Castles, Kingdoms, and Great Cities', short: 'The medieval world included castles, farms, guilds, universities, and busy trade cities.',
+        body: 'The medieval period looked different around the world. In Europe there were castles, knights, farms, guilds, and universities. In Africa, Asia, and the Americas, powerful kingdoms and cities traded gold, salt, books, textiles, and ideas. Many ordinary people worked as farmers, craftspeople, merchants, and builders.',
+        why: 'History is richer when we look beyond one region and notice many civilizations at the same time.',
+        videoId: 'KFojGxkCKJI'
+    },
+    {
+        id: 'renaissance', era: 'earlymodern', year: 'c. 1400–1600', icon: '🎨',
+        title: 'The Renaissance: Art and Questions', short: 'Artists, scientists, writers, and inventors studied the world in new ways.',
+        body: 'Renaissance means rebirth. Many artists and thinkers studied nature, the human body, old books, light, machines, and perspective. Printing helped books spread faster, so more people could learn, debate, and build on each other’s ideas.',
+        why: 'Curiosity and access to books helped art, science, and education grow quickly.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'exploration-exchange', era: 'earlymodern', year: 'c. 1450–1700', icon: '🧭',
+        title: 'Exploration and the Columbian Exchange', short: 'Ocean voyages connected continents, but also brought unfairness, disease, and colonization.',
+        body: 'Improved ships and navigation connected the Americas, Africa, Europe, and Asia more closely. Plants like potatoes, maize, tomatoes, and cacao spread around the world. But this age also included colonization, forced labour, and diseases that harmed many Indigenous peoples.',
+        why: 'It teaches that discoveries can have both benefits and serious consequences, so fairness matters.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'printing', era: 'earlymodern', year: 'c. 1450', icon: '📚',
+        title: 'The Printing Press Spreads Ideas', short: 'Movable type made books faster and cheaper to copy.',
+        body: 'Before printing, many books had to be copied by hand. Printing presses could produce pages much faster. More books meant more readers, more schools, and faster sharing of discoveries, maps, music, news, and different opinions.',
+        why: 'The printing press was like an early information revolution: ideas could travel farther and faster.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'scientific-revolution', era: 'earlymodern', year: 'c. 1500–1700', icon: '🔬',
+        title: 'The Scientific Revolution', short: 'Scientists used observation, experiments, maths, and evidence to explain nature.',
+        body: 'Thinkers studied the sky, motion, magnets, the human body, and tiny living things. They learned to test ideas with evidence instead of guessing. Telescopes, microscopes, careful notes, and maths helped people understand the universe in new ways.',
+        why: 'Science grows when people ask questions, test fairly, share results, and change their minds when evidence improves.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'industrial-revolution', era: 'modern', year: 'c. 1750–1900', icon: '🚂',
+        title: 'The Industrial Revolution', short: 'Machines, factories, steam engines, and railways changed work and cities.',
+        body: 'New machines made cloth, pumped water, and powered trains and ships. Factories produced goods quickly, and many people moved to cities for work. The changes brought inventions and cheaper products, but also pollution and difficult factory conditions that reformers worked to improve.',
+        why: 'It explains why modern cities, transport, jobs, and environmental challenges changed so quickly.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'rights-democracy', era: 'modern', year: 'c. 1700–1900', icon: '⚖️',
+        title: 'Rights, Revolutions, and Democracy', short: 'People debated freedom, voting, education, slavery, and fair government.',
+        body: 'Across the world, people challenged old systems and asked who should have rights and a voice. Revolutions, independence movements, abolition campaigns, and reformers pushed societies to rethink slavery, citizenship, voting, workers’ rights, and education.',
+        why: 'Many freedoms people value today were won because people spoke up, organized, and demanded fairness.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'world-wars', era: 'modern', year: '1914–1945', icon: '🕯️',
+        title: 'World Wars and Peace Lessons', short: 'Two world wars caused great harm and led many countries to work harder for peace.',
+        body: 'The 20th century included two terrible world wars. Millions of people were affected, and many families had to rebuild their lives. Afterward, countries created new groups and agreements to prevent future wars and protect human rights.',
+        why: 'It helps us value peace, cooperation, kindness, and solving disagreements before they become dangerous.',
+        videoId: 'plup3xkpVk8'
+    },
+    {
+        id: 'space-race', era: 'contemporary', year: '1957–1969', icon: '🚀',
+        title: 'The Space Race and Moon Landing', short: 'Satellites, astronauts, and the Moon landing showed what science teams can achieve.',
+        body: 'During the Space Race, scientists and engineers launched satellites, sent people into orbit, and landed astronauts on the Moon in 1969. Space exploration led to new technology, better communication, weather satellites, and a bigger view of Earth as one shared home.',
+        why: 'It shows how maths, science, courage, and teamwork can make impossible dreams become real.',
+        videoId: 'Qd6nLM2QlWw'
+    },
+    {
+        id: 'digital-age', era: 'contemporary', year: 'c. 1970–Today', icon: '💻',
+        title: 'The Digital Age', short: 'Computers, the internet, phones, and AI changed how people learn and communicate.',
+        body: 'Computers became smaller and more powerful. The internet connected schools, families, scientists, businesses, and friends across the world. Today, phones, robots, satellites, and artificial intelligence help people learn, create, translate, explore, and solve problems.',
+        why: 'Kids are growing up in a connected world, so digital kindness, safety, creativity, and critical thinking are important.',
+        videoId: 'plup3xkpVk8'
+    }
+];
+
+let historyFilter = 'all';
+let currentHistoryIndex = 0;
+let historyBuilt = false;
+let historyQuizQuestions = [];
+let historyQuizIndex = 0;
+let historyQuizScore = 0;
+let historyQuizLocked = false;
+
+function getHistoryTopic(id) { return WORLD_HISTORY.find(h => h.id === id); }
+function getHistoryEraMeta(key) { return HISTORY_ERAS[key] || { icon: '🌍', name: 'World History', color: '#7c3aed' }; }
+
+function buildWorldHistory() {
+    renderHistory();
+    historyBuilt = true;
+}
+
+function renderHistory() {
+    const grid = document.getElementById('historyGrid');
+    const timeline = document.getElementById('historyTimeline');
+    if (!grid || !timeline) return;
+
+    const term = (document.getElementById('historySearch') || {}).value || '';
+    const q = term.trim().toLowerCase();
+
+    const list = WORLD_HISTORY.filter(h => {
+        const eraOk = q ? true : (historyFilter === 'all' || h.era === historyFilter);
+        const textOk = !q || h.title.toLowerCase().includes(q) || h.short.toLowerCase().includes(q) ||
+            h.body.toLowerCase().includes(q) || h.year.toLowerCase().includes(q) ||
+            getHistoryEraMeta(h.era).name.toLowerCase().includes(q);
+        return eraOk && textOk;
+    });
+
+    const countEl = document.getElementById('historyCount');
+    if (countEl) countEl.innerText = list.length
+        ? `${list.length} history stop${list.length === 1 ? '' : 's'} ready — tap a card or timeline dot!`
+        : 'No history stops found — try another search.';
+
+    timeline.innerHTML = list.map(h => `
+        <button class="history-node" onclick="openHistoryTopic('${h.id}')" title="${escapeHtml(h.title)}">
+            <span class="hn-icon">${h.icon}</span>
+            <span class="hn-year">${escapeHtml(h.year)}</span>
+            <span class="hn-title">${escapeHtml(h.title)}</span>
+        </button>`).join('');
+
+    grid.innerHTML = list.map(h => {
+        const era = getHistoryEraMeta(h.era);
+        return `
+            <div class="history-card" role="button" tabindex="0" onclick="openHistoryTopic('${h.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHistoryTopic('${h.id}');}">
+                <div class="card-badge">${era.icon} ${era.name}</div>
+                <div class="history-card-icon" aria-hidden="true">${h.icon}</div>
+                <h3>${escapeHtml(h.title)}</h3>
+                <p>${escapeHtml(h.short)}</p>
+                <span class="history-year-tag">${escapeHtml(h.year)}</span>
+            </div>`;
+    }).join('');
+}
+window.renderHistory = renderHistory;
+
+function filterHistoryEra(era, evt) {
+    historyFilter = era;
+    playSound(480);
+    document.querySelectorAll('.history-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderHistory();
+}
+window.filterHistoryEra = filterHistoryEra;
+
+function openHistoryTopic(id) {
+    const h = getHistoryTopic(id);
+    if (!h) return;
+    currentHistoryIndex = WORLD_HISTORY.findIndex(x => x.id === id);
+    const era = getHistoryEraMeta(h.era);
+
+    playSound(660);
+    stopSpeech();
+
+    const setText = (elId, val) => { const e = document.getElementById(elId); if (e) e.innerText = val; };
+    setText('historyModalIcon', h.icon);
+    setText('historyModalTitle', h.title);
+    setText('historyModalYear', h.year);
+    setText('historyModalEra', `${era.icon} ${era.name}`);
+    setText('historyModalBody', h.body);
+    setText('historyModalWhy', h.why);
+
+    const top = document.getElementById('historyModalTop');
+    if (top) top.style.background = `linear-gradient(135deg, ${era.color}22, #e0f2fe)`;
+    const pill = document.getElementById('historyModalEra');
+    if (pill) pill.style.background = era.color;
+    const video = document.getElementById('historyVideoBox');
+    if (video) { video.style.display = 'none'; video.innerHTML = ''; }
+
+    const modal = document.getElementById('historyModal');
+    if (modal) modal.style.display = 'flex';
+
+    if (!factsViewed.has('history-' + h.id)) {
+        factsViewed.add('history-' + h.id);
+        addStars(4);
+        const seen = WORLD_HISTORY.filter(x => factsViewed.has('history-' + x.id)).length;
+        if (seen === 1) unlockBadge('historyStarter');
+        if (seen >= 8) unlockBadge('historyExplorer');
+        if (seen === WORLD_HISTORY.length) { unlockBadge('historyMaster'); launchConfetti(55); }
+        saveProgress();
+    }
+}
+window.openHistoryTopic = openHistoryTopic;
+
+function closeHistoryModal() {
+    const m = document.getElementById('historyModal');
+    if (m) m.style.display = 'none';
+    const video = document.getElementById('historyVideoBox');
+    if (video) video.innerHTML = '';
+    stopSpeech();
+    playSound(400);
+}
+window.closeHistoryModal = closeHistoryModal;
+
+function closeHistoryModalOnBg(e) {
+    if (e.target.id === 'historyModal') closeHistoryModal();
+}
+window.closeHistoryModalOnBg = closeHistoryModalOnBg;
+
+function nextHistoryTopic() {
+    currentHistoryIndex = (currentHistoryIndex + 1) % WORLD_HISTORY.length;
+    openHistoryTopic(WORLD_HISTORY[currentHistoryIndex].id);
+}
+window.nextHistoryTopic = nextHistoryTopic;
+
+function prevHistoryTopic() {
+    currentHistoryIndex = (currentHistoryIndex - 1 + WORLD_HISTORY.length) % WORLD_HISTORY.length;
+    openHistoryTopic(WORLD_HISTORY[currentHistoryIndex].id);
+}
+window.prevHistoryTopic = prevHistoryTopic;
+
+function speakHistoryTopic() {
+    const h = WORLD_HISTORY[currentHistoryIndex];
+    if (h) speakText(`${h.title}. ${h.year}. ${h.short} ${h.why}`);
+}
+window.speakHistoryTopic = speakHistoryTopic;
+
+function loadHistoryVideo() {
+    const h = WORLD_HISTORY[currentHistoryIndex];
+    const box = document.getElementById('historyVideoBox');
+    if (!h || !box) return;
+    stopSpeech();
+    box.style.display = 'block';
+    box.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${h.videoId}?rel=0&modestbranding=1&playsinline=1&autoplay=1"
+        title="${escapeHtml(h.title)} video"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen loading="lazy"></iframe>`;
+    showToast('Loading kid-friendly history video…', '🎬', 2200);
+}
+window.loadHistoryVideo = loadHistoryVideo;
+
+function historySurprise() {
+    const h = WORLD_HISTORY[Math.floor(Math.random() * WORLD_HISTORY.length)];
+    launchConfetti(14);
+    openHistoryTopic(h.id);
+}
+window.historySurprise = historySurprise;
+
+function startHistoryQuiz() {
+    historyQuizQuestions = shuffleArray(WORLD_HISTORY).slice(0, 8).map(h => {
+        const type = Math.random() < 0.5 ? 'era' : 'why';
+        if (type === 'era') {
+            const correct = getHistoryEraMeta(h.era).name;
+            const wrong = shuffleArray(Object.keys(HISTORY_ERAS).filter(k => k !== h.era)).slice(0, 3).map(k => HISTORY_ERAS[k].name);
+            return { q: `Which era does “${h.title}” belong to?`, icon: h.icon, correct, options: shuffleArray([correct, ...wrong]) };
+        }
+        const correct = h.title;
+        const wrong = shuffleArray(WORLD_HISTORY.filter(x => x.id !== h.id)).slice(0, 3).map(x => x.title);
+        return { q: `Which history stop matches this clue: ${h.short}`, icon: '🧩', correct, options: shuffleArray([correct, ...wrong]) };
+    });
+    historyQuizIndex = 0;
+    historyQuizScore = 0;
+    historyQuizLocked = false;
+    const box = document.getElementById('historyQuiz');
+    if (box) box.style.display = 'block';
+    playSound(700);
+    renderHistoryQuizQuestion();
+    if (box && typeof box.scrollIntoView === 'function') box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.startHistoryQuiz = startHistoryQuiz;
+
+function closeHistoryQuiz() {
+    const box = document.getElementById('historyQuiz');
+    if (box) box.style.display = 'none';
+    playSound(350);
+}
+window.closeHistoryQuiz = closeHistoryQuiz;
+
+function renderHistoryQuizQuestion() {
+    const qEl = document.getElementById('historyQuizQuestion');
+    const optEl = document.getElementById('historyQuizOptions');
+    const progEl = document.getElementById('historyQuizProgress');
+    const scoreEl = document.getElementById('historyQuizScore');
+    if (!qEl || !optEl) return;
+
+    if (historyQuizIndex >= historyQuizQuestions.length) {
+        qEl.innerText = `🎉 Time trip complete! You scored ${historyQuizScore} out of ${historyQuizQuestions.length}!`;
+        optEl.innerHTML = '<button class="pq-opt" onclick="startHistoryQuiz()">🔄 Play Again</button>';
+        if (progEl) progEl.innerText = 'Finished!';
+        if (scoreEl) scoreEl.innerText = historyQuizScore;
+        recordRoundScore('historyquiz', historyQuizScore, historyQuizQuestions.length);
+        addStars(historyQuizScore * 3);
+        if (historyQuizScore === historyQuizQuestions.length) { unlockBadge('historyQuizAce'); launchConfetti(55); }
+        speakText(`History quiz complete! You scored ${historyQuizScore} out of ${historyQuizQuestions.length}.`);
+        return;
+    }
+
+    const cur = historyQuizQuestions[historyQuizIndex];
+    qEl.innerText = `${cur.icon} ${cur.q}`;
+    if (progEl) progEl.innerText = `Question ${historyQuizIndex + 1} / ${historyQuizQuestions.length}`;
+    if (scoreEl) scoreEl.innerText = historyQuizScore;
+    optEl.innerHTML = '';
+    cur.options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'pq-opt';
+        b.innerText = opt;
+        b.onclick = () => answerHistoryQuiz(opt, b, cur.correct, cur.q);
+        optEl.appendChild(b);
+    });
+    historyQuizLocked = false;
+    speakText(cur.q);
+}
+
+function answerHistoryQuiz(choice, btn, correct, questionText) {
+    if (historyQuizLocked) return;
+    historyQuizLocked = true;
+    const all = [...document.querySelectorAll('#historyQuizOptions .pq-opt')];
+    all.forEach(b => b.disabled = true);
+    const ok = choice === correct;
+    recordAnswer('historyquiz', ok, questionText || 'World history question');
+    if (ok) {
+        btn.classList.add('correct');
+        historyQuizScore++;
+        playSound(900, 'sine', 0.2);
+        launchConfetti(10);
+        speakText('Correct!');
+    } else {
+        btn.classList.add('wrong');
+        const right = all.find(b => b.innerText === correct);
+        if (right) right.classList.add('correct');
+        playSound(200, 'sawtooth', 0.25);
+        speakText(`The answer is ${correct}.`);
+    }
+    const scoreEl = document.getElementById('historyQuizScore');
+    if (scoreEl) scoreEl.innerText = historyQuizScore;
+    setTimeout(() => { historyQuizIndex++; renderHistoryQuizQuestion(); }, 1900);
+}
+window.answerHistoryQuiz = answerHistoryQuiz;
 
 
 
