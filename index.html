@@ -69,6 +69,7 @@
             <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
             <button class="nav-btn" onclick="switchTab('geo', event)">🏔️ Mountains & Rivers</button>
             <button class="nav-btn" onclick="switchTab('homework', event)">📝 Homework</button>
+            <button class="nav-btn" onclick="switchTab('safezone', event)">🛡️ Safe Zone</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
@@ -422,6 +423,102 @@
                 </div>
                 <div id="homeworkReviewBody" class="homework-review-body"></div>
             </div>
+        </section>
+
+
+        <!-- SAFE ZONE SOCIAL HUB TAB -->
+        <section id="safezone" class="tab-content" aria-label="Safe Zone Social Hub Section">
+            <div class="hero-banner safezone-hero">
+                <h1>🛡️ KidZone Safe Social Club</h1>
+                <p>A private, admin-controlled social space where kids can share happy posts, send buddy notes, comment, and like safely.</p>
+            </div>
+
+            <div class="safezone-safety-strip">
+                <div class="safe-rule"><span>👀</span><strong>Admin sees everything</strong><small>No hidden private chats.</small></div>
+                <div class="safe-rule"><span>✅</span><strong>Approval before public</strong><small>Kids' posts wait for admin.</small></div>
+                <div class="safe-rule"><span>💬</span><strong>Kind words only</strong><small>Friendly comments and likes.</small></div>
+                <div class="safe-rule"><span>🔒</span><strong>Closed family/class club</strong><small>Only created profiles can post.</small></div>
+            </div>
+
+            <div id="safezoneAdminPanel" class="safezone-admin-panel" style="display:none;">
+                <div class="safezone-admin-head">
+                    <div>
+                        <span class="safe-kicker">🛠️ Admin Control Room</span>
+                        <h2>Moderate the Kids' Social Club</h2>
+                        <p>Approve, hide, delete, and monitor every post, buddy note, comment, and like.</p>
+                    </div>
+                    <div class="safe-admin-actions">
+                        <button class="solar-tool-btn active" onclick="safeApproveAllPending()">✅ Approve All Pending</button>
+                        <button class="solar-tool-btn" onclick="toggleSafeZonePause()" id="safePauseBtn">⏸️ Pause Posting</button>
+                    </div>
+                </div>
+                <div id="safezoneAdminStats" class="safezone-admin-stats"></div>
+                <div id="safezonePendingQueue" class="safezone-pending-queue"></div>
+                <div id="safezoneChatAdminQueue" class="safezone-pending-queue"></div>
+            </div>
+
+
+            <div id="safezoneChatPanel" class="safezone-chat-panel">
+                <div class="safezone-chat-head">
+                    <div>
+                        <span class="safe-kicker">💬 Buddy Chat</span>
+                        <h2>Chat with a friend safely</h2>
+                        <p>Quick messages send instantly. Typed messages wait for Admin approval before your friend sees them.</p>
+                    </div>
+                    <select id="safeChatFriendSelect" onchange="selectSafeChatFriend(this.value)" aria-label="Choose a friend to chat with">
+                        <option value="">Choose a friend...</option>
+                    </select>
+                </div>
+                <div id="safeChatWindow" class="safe-chat-window">
+                    <div class="safe-empty">👋 Choose a friend to start a safe chat.</div>
+                </div>
+                <div class="safe-quick-messages" id="safeQuickMessages">
+                    <button onclick="sendSafeQuickMessage('Hi! 👋')">Hi! 👋</button>
+                    <button onclick="sendSafeQuickMessage('Great job today! 🌟')">Great job! 🌟</button>
+                    <button onclick="sendSafeQuickMessage('Want to play a quiz? 🧠')">Quiz? 🧠</button>
+                    <button onclick="sendSafeQuickMessage('I liked your post! ❤️')">Liked your post ❤️</button>
+                    <button onclick="sendSafeQuickMessage('Let’s learn together! 📚')">Learn together 📚</button>
+                </div>
+                <div class="safe-chat-input-row">
+                    <input id="safeChatInput" maxlength="220" placeholder="Type a kind message... Admin approves typed messages first." onkeydown="if(event.key==='Enter'){sendSafeChatMessage();}">
+                    <button class="book-btn" onclick="sendSafeChatMessage()">Send 💬</button>
+                </div>
+            </div>
+
+            <div id="safezoneComposer" class="safezone-composer">
+                <div class="composer-avatar" id="safeComposerAvatar">🚀</div>
+                <div class="composer-body">
+                    <div class="composer-row">
+                        <select id="safePostMood" aria-label="Choose post mood">
+                            <option value="😊">😊 Happy</option>
+                            <option value="🌟">🌟 Proud</option>
+                            <option value="🎨">🎨 Creative</option>
+                            <option value="📚">📚 Learning</option>
+                            <option value="🤝">🤝 Kind Note</option>
+                        </select>
+                        <select id="safePostAudience" aria-label="Choose audience">
+                            <option value="everyone">🌍 Everyone in KidZone</option>
+                        </select>
+                    </div>
+                    <textarea id="safePostText" rows="3" maxlength="500" placeholder="Share something kind, fun, or clever! Example: I learned about the Nile River today! 🌊"></textarea>
+                    <div class="safe-composer-footer">
+                        <small id="safeComposerHint">Posts are sent to Admin for approval before everyone sees them.</small>
+                        <button class="login-submit-btn" onclick="submitSafePost()">Post Safely 🚀</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="safezone-toolbar">
+                <input type="text" id="safezoneSearch" placeholder="Search safe posts..." onkeyup="renderSafeZone()" aria-label="Search safe zone posts">
+                <div class="safezone-filters">
+                    <button class="safe-chip active" onclick="filterSafeZone('all', event)">🏠 Feed</button>
+                    <button class="safe-chip" onclick="filterSafeZone('mine', event)">👤 My Posts</button>
+                    <button class="safe-chip" onclick="filterSafeZone('notes', event)">💌 Buddy Notes</button>
+                    <button class="safe-chip admin-only-filter" onclick="filterSafeZone('pending', event)" style="display:none;">⏳ Pending</button>
+                </div>
+            </div>
+
+            <div id="safezoneFeed" class="safezone-feed"></div>
         </section>
 
         <!-- GAMES TAB -->
@@ -1271,5 +1368,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb36feefe05ec4',t:'MTc4NzMzMTg0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2eb6691beaa3877',t:'MTc4NzMzMzc5Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
