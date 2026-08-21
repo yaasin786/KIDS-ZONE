@@ -299,11 +299,7 @@ function splitForSpeech(text, maxLen = 180) {
 }
 
 function speakChunk(lang) {
-    if (!speechQueue.length) {
-        stopKeepAlive();
-        document.querySelectorAll('.book-text.reading').forEach(e => e.classList.remove('reading'));
-        return;
-    }
+    if (!speechQueue.length) { stopKeepAlive(); return; }
     const text = speechQueue.shift();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -360,11 +356,6 @@ function toggleNarration() {
         btn.innerHTML = speechEnabled ? '🔊 Voice On' : '🔇 Voice Off';
         btn.classList.toggle('muted', !speechEnabled);
     });
-    if (!speechEnabled) {
-        document.querySelectorAll('.book-text.reading').forEach(e => e.classList.remove('reading'));
-        const auto = document.getElementById('autoReadToggle');
-        if (auto && auto.checked) { auto.checked = false; autoReadStories = false; }
-    }
     if (speechEnabled) {
         playSound(700);
         speakText('Voice is on!');
@@ -376,7 +367,6 @@ function toggleNarration() {
 }
 window.toggleNarration = toggleNarration;
 
-// Console helper: run speechDiagnostics() in DevTools if audio misbehaves.
 function speechDiagnostics() {
     const v = speechSupported ? window.speechSynthesis.getVoices() : [];
     const info = {
@@ -843,7 +833,13 @@ const BADGES = {
     bodyDoctor:   { icon: '🩺', name: 'Little Doctor',       desc: 'Found every body part on the map!' },
     spaceCadet:   { icon: '🚀', name: 'Space Cadet',         desc: 'Visited your first planet!' },
     astronomer:   { icon: '🔭', name: 'Astronomer',          desc: 'Explored every planet and the Sun!' },
-    planetPro:    { icon: '🪐', name: 'Planet Pro',          desc: 'Perfect score on the Planet Quiz!' }
+    planetPro:    { icon: '🪐', name: 'Planet Pro',          desc: 'Perfect score on the Planet Quiz!' },
+    animalFriend: { icon: '🐾', name: 'Animal Friend',       desc: 'Met your first animal!' },
+    zooKeeper:    { icon: '🦓', name: 'Zoo Keeper',          desc: 'Met 20 different animals!' },
+    zoologist:    { icon: '🔬', name: 'Zoologist',           desc: 'Met every animal in the kingdom!' },
+    soundMaster:  { icon: '👂', name: 'Sound Master',        desc: 'Perfect score in Guess the Sound!' },
+    habitatHero:  { icon: '🏞️', name: 'Habitat Hero',        desc: 'Sent every animal to the right home!' },
+    animalExpert: { icon: '🦁', name: 'Animal Expert',       desc: 'Perfect score on the Animal Quiz!' }
 };
 
 async function saveProgress() {
@@ -1010,6 +1006,7 @@ window.mascotSpeak = mascotSpeak;
 // ============================================================
 function switchTab(tabId, evt) {
     if (tabId === 'solar') setTimeout(buildSolarSystem, 30);
+    if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
     playSound(440);
 
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -1060,19 +1057,10 @@ function showGame(gameId, evt) {
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
     if (gameId === 'body-game') {
-        // Guard: if script.js is stale/half-updated, say so instead of
-        // silently showing an empty panel.
         if (typeof initBodyGame === 'function') {
             initBodyGame();
         } else {
-            console.error('[KidZone] initBodyGame() is missing — script.js looks out of date.');
-            if (body) {
-                body.innerHTML = '<div style="text-align:center;padding:40px;">' +
-                    '<div style="font-size:3rem;">\u26a0\ufe0f</div>' +
-                    '<h3 style="font-family:var(--font-heading);margin:10px 0;">Body Parts Explorer could not load</h3>' +
-                    '<p style="color:var(--text-muted);">script.js is out of date \u2014 it has no initBodyGame() function. ' +
-                    'Copy the updated script.js into your project and hard-refresh (Ctrl+Shift+R).</p></div>';
-            }
+            console.error('[KidZone] initBodyGame() missing - script.js out of date.');
         }
     }
 
@@ -1329,7 +1317,6 @@ function renderStoryPage() {
         saveProgress();
     }
 
-    // Read the new page aloud when Auto-Read is switched on.
     if (typeof autoReadStories !== 'undefined' && autoReadStories && speechEnabled) {
         setTimeout(readStoryPage, 260);
     } else {
@@ -1345,10 +1332,7 @@ function readStoryPage() {
     const el = document.getElementById('bookText');
     const text = el ? el.innerText : '';
     if (!text) return;
-    if (!speechEnabled) {
-        showToast('Voice is off — turn it on to hear the story', '🔇', 2600);
-        return;
-    }
+    if (!speechEnabled) { showToast('Voice is off — turn it on to hear the story', '🔇', 2600); return; }
     if (el) el.classList.add('reading');
     speakText(text);
 }
@@ -1364,14 +1348,9 @@ window.stopStoryReading = stopStoryReading;
 function toggleAutoRead(on) {
     autoReadStories = !!on;
     playSound(on ? 700 : 350);
-    showToast(on ? 'Auto-Read on — pages read themselves!' : 'Auto-Read off',
-              on ? '📖' : '📕', 2600);
-    if (autoReadStories) {
-        if (!speechEnabled) toggleNarration();
-        readStoryPage();
-    } else {
-        stopStoryReading();
-    }
+    showToast(on ? 'Auto-Read on — pages read themselves!' : 'Auto-Read off', on ? '📖' : '📕', 2600);
+    if (autoReadStories) { if (!speechEnabled) toggleNarration(); readStoryPage(); }
+    else { stopStoryReading(); }
 }
 window.toggleAutoRead = toggleAutoRead;
 
@@ -2176,485 +2155,9 @@ function flipMemoryCard(card) {
     }
 }
 
-// ============================================================
-// GAME 6: BODY PARTS EXPLORER
-// ============================================================
-const BODY_PARTS = [
-    { id: 'head',      name: 'Head',      icon: '🧠', fact: 'Your head protects your brain, which is the boss of your whole body! It tells you when to move, think and giggle.' },
-    { id: 'hair',      name: 'Hair',      icon: '💇', fact: 'Hair keeps your head warm and grows about 1 centimetre every month. You have around 100,000 hairs up there!' },
-    { id: 'eyes',      name: 'Eyes',      icon: '👀', fact: 'Your two eyes let you see colours and shapes. You blink about 15 times a minute to keep them clean and wet!' },
-    { id: 'ears',      name: 'Ears',      icon: '👂', fact: 'Ears catch sounds and also help you keep your balance so you do not fall over when you spin!' },
-    { id: 'nose',      name: 'Nose',      icon: '👃', fact: 'Your nose warms up the air you breathe and can remember over 1 trillion different smells!' },
-    { id: 'mouth',     name: 'Mouth',     icon: '👄', fact: 'Your mouth helps you eat, talk and smile. Kids have 20 baby teeth hiding inside!' },
-    { id: 'neck',      name: 'Neck',      icon: '🧣', fact: 'Your neck holds your head up and lets you nod yes and shake no. It has 7 bones inside!' },
-    { id: 'shoulders', name: 'Shoulders', icon: '🤷', fact: 'Shoulders are the most bendy joints in your body. They let your arms swing in a big circle!' },
-    { id: 'chest',     name: 'Chest',     icon: '❤️', fact: 'Your chest protects your heart and lungs behind a cage of 24 ribs!' },
-    { id: 'arms',      name: 'Arms',      icon: '💪', fact: 'Arms let you hug, throw and carry things. The muscle on top is called the biceps!' },
-    { id: 'hands',     name: 'Hands',     icon: '🖐️', fact: 'Each hand has 27 bones and 5 fingers. Your fingerprints are special — nobody else has the same ones!' },
-    { id: 'tummy',     name: 'Tummy',     icon: '🍎', fact: 'Your tummy holds your stomach, which turns your breakfast into energy for playing!' },
-    { id: 'knees',     name: 'Knees',     icon: '🦵', fact: 'Knees are hinges like a door. They bend so you can run, jump and sit down!' },
-    { id: 'legs',      name: 'Legs',      icon: '🏃', fact: 'Your legs have the longest bone in your body — the femur — and they carry you everywhere!' },
-    { id: 'feet',      name: 'Feet',      icon: '🦶', fact: 'Feet keep you balanced. Each foot has 26 bones and lots of tickly nerve endings!' },
-    { id: 'back',      name: 'Back',      icon: '🔙', fact: 'Your back has a bendy spine made of 33 little bones so you can twist and bend over!' },
-    { id: 'elbows',    name: 'Elbows',    icon: '💪', fact: 'Elbows let your arms fold up. The tingly funny bone spot is really a nerve!' },
-    { id: 'heels',     name: 'Heels',     icon: '🦶', fact: 'Your heel bone is the biggest bone in your foot and takes your weight when you walk!' }
-];
-
-// The figure has two faces (front / back). These helpers keep every
-// lookup view-aware so nothing has to know which SVG it is dealing with.
-function getBodySvgs() {
-    return [document.getElementById('bodySvgFront'), document.getElementById('bodySvgBack')].filter(Boolean);
-}
-
-function getActiveBodySvg() {
-    return document.getElementById(bodyView === 'front' ? 'bodySvgFront' : 'bodySvgBack');
-}
-
-// Which view(s) can show a given part
-function getViewsForPart(id) {
-    const views = [];
-    const front = document.getElementById('bodySvgFront');
-    const back  = document.getElementById('bodySvgBack');
-    if (front && front.querySelector(`.body-part[data-part="${id}"]`)) views.push('front');
-    if (back  && back.querySelector(`.body-part[data-part="${id}"]`))  views.push('back');
-    return views;
-}
-
-// Unique parts across BOTH views (a part on both faces counts once)
-function getBodyHotspotIds() {
-    const ids = new Set();
-    getBodySvgs().forEach(svg =>
-        svg.querySelectorAll('.body-part').forEach(g => ids.add(g.dataset.part)));
-    return ids.size ? [...ids] : BODY_PARTS.map(p => p.id);
-}
-
-function getBodyTotal() {
-    return getBodyHotspotIds().length;
-}
-
-let bodyMode = 'explore';
-let bodyScore = 0;
-let bodyDiscovered = new Set();
-let bodyTargetId = null;
-let bodyRoundQueue = [];
-let bodyLocked = false;
-let bodyLastSpoken = '';
-let bodyView = 'front';
-
-function getBodyPart(id) {
-    return BODY_PARTS.find(p => p.id === id);
-}
-
-function initBodyGame() {
-    const svgs = getBodySvgs();
-    if (!svgs.length) return;
-
-    bodyScore = 0;
-    bodyDiscovered = new Set();
-    bodyTargetId = null;
-    bodyLocked = false;
-
-    // Wire up hotspots once on both faces (click + keyboard for accessibility)
-    svgs.forEach(svg => {
-        svg.querySelectorAll('.body-part').forEach(group => {
-            if (group.dataset.wired === 'yes') return;
-            group.dataset.wired = 'yes';
-            group.addEventListener('click', () => handleBodyPartClick(group.dataset.part));
-            group.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleBodyPartClick(group.dataset.part);
-                }
-            });
-        });
-    });
-
-    setBodyView(bodyView, { silent: true, instant: true });
-    clearBodyHighlights();
-    renderBodyChecklist();
-    updateBodyStats();
-
-    if (bodyMode === 'explore') {
-        setBodyPrompt('Tap any part, then press Turn Around to see the back! 🔍');
-        showBodyInfo(null);
-        clearBodyChoices();
-    } else {
-        startBodyRound();
-    }
-}
-window.initBodyGame = initBodyGame;
-
-function setBodyMode(mode, evt) {
-    playSound(450);
-    bodyMode = mode;
-
-    document.querySelectorAll('.body-mode-btn').forEach(b => b.classList.remove('active'));
-    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
-
-    const label = document.getElementById('bodyModeLabel');
-    if (label) {
-        label.innerText = mode === 'explore' ? 'Explore' : (mode === 'find' ? 'Find the Part' : 'Label It');
-    }
-    initBodyGame();
-
-    // Explain the mode out loud so kids who cannot read yet still know what to do.
-    const intros = {
-        explore: 'Explore mode! Tap any part of the body and I will tell you all about it.',
-        find:    'Find the part! I will name a body part, and you tap it on the picture.',
-        spell:   'Label it! Look at the glowing part, then choose its correct name.'
-    };
-    setTimeout(() => speakText(intros[mode] || ''), 220);
-}
-window.setBodyMode = setBodyMode;
-
-function updateBodyStats() {
-    const foundElem = document.getElementById('bodyFound');
-    const scoreElem = document.getElementById('bodyScore');
-    if (foundElem) foundElem.innerText = `${bodyDiscovered.size} / ${getBodyTotal()}`;
-    if (scoreElem) scoreElem.innerText = bodyScore;
-}
-
-function setBodyPrompt(text) {
-    const el = document.getElementById('bodyPrompt');
-    if (el) el.innerText = text;
-}
-
-function clearBodyChoices() {
-    const box = document.getElementById('bodyChoices');
-    if (box) box.innerHTML = '';
-}
-
-function clearBodyHighlights() {
-    getBodySvgs().forEach(svg => {
-        svg.classList.remove('has-target');
-        svg.querySelectorAll('.body-part').forEach(g => {
-            g.classList.remove('selected', 'correct-flash', 'wrong-flash', 'target-glow');
-            g.classList.toggle('found-mark', bodyDiscovered.has(g.dataset.part));
-        });
-    });
-    removeBodyTargetRing();
-}
-
-// ---- Rotation ----
-function setBodyView(view, opts = {}) {
-    if (view !== 'front' && view !== 'back') return;
-    const changed = bodyView !== view;
-    bodyView = view;
-
-    const stage = document.getElementById('bodyStage');
-    if (stage) stage.classList.toggle('flipped', view === 'back');
-
-    const pill = document.getElementById('bodyViewPill');
-    if (pill) pill.innerText = view === 'front' ? 'Front' : 'Back';
-
-    const label = document.getElementById('bodyRotateLabel');
-    if (label) label.innerText = view === 'front' ? 'Turn Around' : 'Turn Back';
-
-    // hidden face must not be reachable by keyboard
-    getBodySvgs().forEach(svg => {
-        const isActive = (svg.id === 'bodySvgFront') === (view === 'front');
-        svg.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-        svg.querySelectorAll('.body-part').forEach(g =>
-            g.setAttribute('tabindex', isActive ? '0' : '-1'));
-    });
-
-    if (changed && !opts.silent) {
-        playSound(520, 'triangle', 0.18);
-        speakText(view === 'front' ? 'Now you see the front of the body.'
-                                   : 'Now you see the back of the body.');
-    }
-    // ring is positioned per-face, so redraw after the flip settles
-    if (bodyTargetId && bodyMode === 'spell') {
-        removeBodyTargetRing();
-        setTimeout(() => drawBodyTargetRing(bodyTargetId), opts.instant ? 0 : 700);
-    }
-}
-window.setBodyView = setBodyView;
-
-function flipBodyView() {
-    setBodyView(bodyView === 'front' ? 'back' : 'front');
-}
-window.flipBodyView = flipBodyView;
-
-// ---- Target ring overlay (Label It mode) ----
-function removeBodyTargetRing() {
-    document.querySelectorAll('.body-target-ring, .body-target-arrow').forEach(el => el.remove());
-}
-
-function drawBodyTargetRing(partId) {
-    removeBodyTargetRing();
-    const holder = document.querySelector('.body-svg-holder');
-    const svg = getActiveBodySvg();
-    if (!holder || !svg) return;
-
-    const group = svg.querySelector(`.body-part[data-part="${partId}"]`);
-    if (!group || typeof group.getBoundingClientRect !== 'function') return;
-
-    const gb = group.getBoundingClientRect();
-    const hb = holder.getBoundingClientRect();
-    if (!gb.width && !gb.height) return;
-
-    const pad = 14;
-    const size = Math.max(gb.width, gb.height) + pad * 2;
-    const cx = gb.left - hb.left + gb.width / 2;
-    const cy = gb.top - hb.top + gb.height / 2;
-
-    const ring = document.createElement('div');
-    ring.className = 'body-target-ring';
-    ring.style.width = `${size}px`;
-    ring.style.height = `${size}px`;
-    ring.style.left = `${cx - size / 2}px`;
-    ring.style.top = `${cy - size / 2}px`;
-    holder.appendChild(ring);
-
-    const arrow = document.createElement('div');
-    arrow.className = 'body-target-arrow';
-    arrow.innerText = '👉';
-    arrow.style.left = `${cx - size / 2 - 34}px`;
-    arrow.style.top = `${cy - 16}px`;
-    holder.appendChild(arrow);
-}
-
-function renderBodyChecklist() {
-    const box = document.getElementById('bodyChecklist');
-    if (!box) return;
-    box.innerHTML = '';
-    getBodyHotspotIds().forEach(id => {
-        const part = getBodyPart(id);
-        if (!part) return;
-        const chip = document.createElement('span');
-        chip.className = 'body-chip' + (bodyDiscovered.has(id) ? ' found' : '');
-        chip.innerText = bodyDiscovered.has(id) ? `${part.icon} ${part.name}` : `❔ ${part.name}`;
-        box.appendChild(chip);
-    });
-}
-
-function showBodyInfo(partId) {
-    const iconEl = document.getElementById('bodyInfoIcon');
-    const titleEl = document.getElementById('bodyInfoTitle');
-    const factEl = document.getElementById('bodyInfoFact');
-    if (!iconEl || !titleEl || !factEl) return;
-
-    if (!partId) {
-        iconEl.innerText = '👋';
-        titleEl.innerText = 'Meet your body!';
-        factEl.innerText = 'Click or tap a body part on the picture to hear its name and learn a cool fact about it.';
-        bodyLastSpoken = '';
-        return;
-    }
-
-    const part = getBodyPart(partId);
-    if (!part) return;
-    iconEl.innerText = part.icon;
-    titleEl.innerText = `This is the ${part.name}!`;
-    factEl.innerText = part.fact;
-    bodyLastSpoken = `${part.name}. ${part.fact}`;
-}
-
-function sayBodyPart() {
-    const text = bodyLastSpoken || 'Tap a body part to begin!';
-    speakText(text);
-}
-window.sayBodyPart = sayBodyPart;
-
-function markBodyDiscovered(partId) {
-    if (bodyDiscovered.has(partId)) return;
-    bodyDiscovered.add(partId);
-    renderBodyChecklist();
-    updateBodyStats();
-
-    if (bodyDiscovered.size === 1) {
-        unlockBadge('bodyExplorer');
-    }
-    if (bodyDiscovered.size >= getBodyTotal()) {
-        unlockBadge('bodyDoctor');
-        addStars(20);
-        launchConfetti(45);
-        playChime([523, 659, 784, 1046]);
-        showToast('You found every body part! 🧍✨', '🩺', 4200);
-        setBodyPrompt('Amazing! You know your whole body! 🎉');
-        setTimeout(() => speakText('Amazing work! You found every single body part. You are a little doctor now!'), 500);
-    }
-}
-
-function handleBodyPartClick(partId) {
-    if (bodyLocked) return;
-    const part = getBodyPart(partId);
-    if (!part) return;
-
-    const svg = getActiveBodySvg();
-    const group = svg ? svg.querySelector(`.body-part[data-part="${partId}"]`) : null;
-
-    if (bodyMode === 'explore') {
-        playSound(620);
-        getBodySvgs().forEach(s2 => s2.querySelectorAll('.body-part').forEach(g => g.classList.remove('selected')));
-        if (group) group.classList.add('selected');
-        showBodyInfo(partId);
-        const isNew = !bodyDiscovered.has(partId);
-        speakText(`${part.name}! ${part.fact}${isNew ? ' Great discovery!' : ''}`);
-        markBodyDiscovered(partId);
-        addStars(2);
-        return;
-    }
-
-    if (bodyMode === 'find') {
-        if (partId === bodyTargetId) {
-            bodyLocked = true;
-            playSound(900, 'sine', 0.2);
-            if (group) group.classList.add('correct-flash');
-            showBodyInfo(partId);
-            speakText(`Yes! That is the ${part.name}. ${part.fact}`);
-            bodyScore += 10;
-            recordAnswer('body', true, `Find: ${part.name}`);
-            markBodyDiscovered(partId);
-            addStars(3);
-            setBodyPrompt(`✅ Correct! That is the ${part.name}!`);
-            updateBodyStats();
-            launchConfetti(12);
-            setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2200);
-        } else {
-            playSound(200, 'sawtooth', 0.25);
-            if (group) {
-                group.classList.add('wrong-flash');
-                setTimeout(() => group.classList.remove('wrong-flash'), 520);
-            }
-            recordAnswer('body', false, `Find: looking for ${getBodyPart(bodyTargetId) ? getBodyPart(bodyTargetId).name : ''}`);
-            setBodyPrompt(`Oops, that is the ${part.name}. Try again! 🔍`);
-            speakText(`That is the ${part.name}. Try again!`);
-        }
-        return;
-    }
-
-    // In 'spell' (Label It) mode the picture is not the answer surface,
-    // but tapping still reads out the part for extra learning.
-    playSound(500);
-    speakText(`${part.name}. ${part.fact}`);
-}
-window.handleBodyPartClick = handleBodyPartClick;
-
-function startBodyRound() {
-    clearBodyHighlights();
-    clearBodyChoices();
-
-    const ids = getBodyHotspotIds();
-    if (!bodyRoundQueue.length) {
-        bodyRoundQueue = shuffleArray(ids);
-    }
-    // Avoid immediately repeating the same target
-    let next = bodyRoundQueue.pop();
-    if (next === bodyTargetId && bodyRoundQueue.length) {
-        bodyRoundQueue.unshift(next);
-        next = bodyRoundQueue.pop();
-    }
-    bodyTargetId = next;
-
-    const target = getBodyPart(bodyTargetId);
-    if (!target) return;
-
-    if (bodyMode === 'find') {
-        const views = getViewsForPart(bodyTargetId);
-        const hint = (views.length === 1 && views[0] !== bodyView)
-            ? ' (try turning around!)' : '';
-        setBodyPrompt(`🎯 Can you tap the ${target.name}?${hint}`);
-        speakText(`Where is the ${target.name}?`);
-        showBodyInfo(null);
-        const titleEl = document.getElementById('bodyInfoTitle');
-        const iconEl = document.getElementById('bodyInfoIcon');
-        const factEl = document.getElementById('bodyInfoFact');
-        if (titleEl) titleEl.innerText = `Find the ${target.name}!`;
-        if (iconEl) iconEl.innerText = '🎯';
-        if (factEl) factEl.innerText = 'Tap the matching part on the picture. Take your time!';
-        bodyLastSpoken = `Where is the ${target.name}?`;
-    } else {
-        // Label It: make sure the target is on the face we are showing,
-        // then glow it hard and ring it so it cannot be missed.
-        const views = getViewsForPart(bodyTargetId);
-        if (views.length && !views.includes(bodyView)) {
-            setBodyView(views[0], { silent: true });
-        }
-
-        const svg = getActiveBodySvg();
-        const group = svg ? svg.querySelector(`.body-part[data-part="${bodyTargetId}"]`) : null;
-        if (group) group.classList.add('target-glow');
-        if (svg) svg.classList.add('has-target');
-        setTimeout(() => drawBodyTargetRing(bodyTargetId), 60);
-
-        setBodyPrompt('🔤 What is the glowing part called?');
-        const iconEl = document.getElementById('bodyInfoIcon');
-        const titleEl = document.getElementById('bodyInfoTitle');
-        const factEl = document.getElementById('bodyInfoFact');
-        if (iconEl) iconEl.innerText = '❓';
-        if (titleEl) titleEl.innerText = 'Name that part!';
-        if (factEl) factEl.innerText = 'Look at the glowing spot, then pick the right name below.';
-        bodyLastSpoken = 'What is the glowing part called?';
-
-        const wrongPool = shuffleArray(ids.filter(i => i !== bodyTargetId)).slice(0, 3);
-        const choices = shuffleArray([bodyTargetId, ...wrongPool]);
-        renderBodyChoices(choices);
-    }
-}
-
-function renderBodyChoices(choiceIds) {
-    const box = document.getElementById('bodyChoices');
-    if (!box) return;
-    box.innerHTML = '';
-
-    choiceIds.forEach(id => {
-        const part = getBodyPart(id);
-        if (!part) return;
-        const btn = document.createElement('button');
-        btn.className = 'body-choice-btn';
-        btn.innerText = `${part.icon} ${part.name}`;
-        btn.onclick = () => answerBodyLabel(id, btn);
-        box.appendChild(btn);
-    });
-}
-
-function answerBodyLabel(chosenId, btn) {
-    if (bodyLocked) return;
-    bodyLocked = true;
-
-    const box = document.getElementById('bodyChoices');
-    const buttons = box ? [...box.querySelectorAll('.body-choice-btn')] : [];
-    buttons.forEach(b => b.disabled = true);
-
-    const target = getBodyPart(bodyTargetId);
-
-    recordAnswer('body', chosenId === bodyTargetId, `Label: ${target ? target.name : ''}`);
-
-    if (chosenId === bodyTargetId) {
-        playSound(900, 'sine', 0.2);
-        btn.classList.add('correct');
-        bodyScore += 10;
-        markBodyDiscovered(bodyTargetId);
-        addStars(3);
-        setBodyPrompt(`✅ Yes! That is the ${target.name}!`);
-        showBodyInfo(bodyTargetId);
-        speakText(`Correct! ${target.name}. ${target.fact}`);
-        launchConfetti(12);
-    } else {
-        playSound(200, 'sawtooth', 0.25);
-        btn.classList.add('wrong');
-        const correctBtn = buttons.find(b => b.innerText.includes(target.name));
-        if (correctBtn) correctBtn.classList.add('correct');
-        setBodyPrompt(`Not quite — that was the ${target.name}. 💡`);
-        showBodyInfo(bodyTargetId);
-        speakText(`Almost! It was the ${target.name}.`);
-    }
-
-    getBodySvgs().forEach(sv => sv.classList.remove('has-target'));
-    removeBodyTargetRing();
-    updateBodyStats();
-    setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2400);
-}
-window.answerBodyLabel = answerBodyLabel;
-
-
 
 // ============================================================
 // QUIZ RESULT TRACKING (per kid, per activity)
-// Every answer a kid gives is recorded so the admin can see
-// exactly how many they got right in each activity.
 // ============================================================
 const ACTIVITY_LABELS = {
     duo:      { icon: '🦉', name: 'Duolingo Dash' },
@@ -2663,22 +2166,18 @@ const ACTIVITY_LABELS = {
     mauritius:{ icon: '🇲🇺', name: 'Mauritius History' },
     body:     { icon: '🧍', name: 'Body Parts Explorer' },
     planet:   { icon: '🪐', name: 'Planet Quiz' },
-    memory:   { icon: '🧩', name: 'Memory Match' }
+    memory:   { icon: '🧩', name: 'Memory Match' },
+    animalsound: { icon: '👂', name: 'Guess the Sound' },
+    habitat:     { icon: '🏞️', name: 'Habitat Match' },
+    animalquiz:  { icon: '🦁', name: 'Animal Quiz' }
 };
 
-// In-memory mirror of this kid's stats (also saved to Firestore).
 let quizStats = {};
 
 function blankActivityStat() {
     return { correct: 0, wrong: 0, attempts: 0, best: 0, lastPlayed: null };
 }
 
-/**
- * Record one answer.
- * @param {string} activity - key from ACTIVITY_LABELS
- * @param {boolean} isCorrect
- * @param {string} questionText - optional, for the recent-answers log
- */
 function recordAnswer(activity, isCorrect, questionText = '') {
     if (!quizStats[activity]) quizStats[activity] = blankActivityStat();
     const st = quizStats[activity];
@@ -2688,18 +2187,14 @@ function recordAnswer(activity, isCorrect, questionText = '') {
 
     if (!quizStats._recent) quizStats._recent = [];
     quizStats._recent.unshift({
-        activity,
-        correct: !!isCorrect,
-        q: String(questionText).slice(0, 90),
-        at: Date.now()
+        activity, correct: !!isCorrect,
+        q: String(questionText).slice(0, 90), at: Date.now()
     });
     quizStats._recent = quizStats._recent.slice(0, 40);
-
     saveQuizStats();
 }
 window.recordAnswer = recordAnswer;
 
-/** Record a finished round's score (for "best score" tracking). */
 function recordRoundScore(activity, score, total) {
     if (!quizStats[activity]) quizStats[activity] = blankActivityStat();
     const st = quizStats[activity];
@@ -2714,7 +2209,6 @@ window.recordRoundScore = recordRoundScore;
 let quizStatsSaveTimer = null;
 async function saveQuizStats() {
     if (!currentActiveId || currentRole !== 'kid') return;
-    // debounce so rapid answers do not spam Firestore
     if (quizStatsSaveTimer) clearTimeout(quizStatsSaveTimer);
     quizStatsSaveTimer = setTimeout(async () => {
         try {
@@ -2723,9 +2217,7 @@ async function saveQuizStats() {
                 name: (cachedKidProfiles.find(p => p.id === currentActiveId) || {}).name || '',
                 updatedAt: Date.now()
             });
-        } catch (e) {
-            console.error('Stats save error:', e);
-        }
+        } catch (e) { console.error('Stats save error:', e); }
     }, 800);
 }
 
@@ -2735,11 +2227,8 @@ async function loadQuizStats() {
     try {
         const snap = await getDoc(doc(db, "kidStats", currentActiveId));
         if (snap.exists()) quizStats = snap.data().stats || {};
-    } catch (e) {
-        console.error('Stats load error:', e);
-    }
+    } catch (e) { console.error('Stats load error:', e); }
 }
-
 
 // ============================================================
 // ADMIN: KID PERFORMANCE REPORTS
@@ -3016,6 +2505,929 @@ async function resetKidStats(kidId) {
     }
 }
 window.resetKidStats = resetKidStats;
+
+
+// ============================================================
+// ANIMAL KINGDOM EXPLORER
+// ============================================================
+const HABITATS = {
+    savanna:  { icon: '🌾', name: 'Savanna',   bg: 'linear-gradient(160deg,#ffe9a8,#e0a83d)' },
+    jungle:   { icon: '🌴', name: 'Jungle',    bg: 'linear-gradient(160deg,#a8e6a1,#2f8f4e)' },
+    ocean:    { icon: '🌊', name: 'Ocean',     bg: 'linear-gradient(160deg,#a8dcff,#1c6fb8)' },
+    arctic:   { icon: '❄️', name: 'Arctic',    bg: 'linear-gradient(160deg,#e8f7ff,#7fb8d8)' },
+    forest:   { icon: '🌲', name: 'Forest',    bg: 'linear-gradient(160deg,#c3e6b4,#4a7c3f)' },
+    desert:   { icon: '🏜️', name: 'Desert',    bg: 'linear-gradient(160deg,#ffdfa8,#d18b3c)' },
+    farm:     { icon: '🚜', name: 'Farm',      bg: 'linear-gradient(160deg,#fff0b8,#b8a13d)' },
+    mountain: { icon: '⛰️', name: 'Mountains', bg: 'linear-gradient(160deg,#dfe6ef,#7a8ba3)' }
+};
+
+
+const ANIMAL_SOUND_FILES = {
+    "tiger": {
+        "file": "sounds/tiger.ogg",
+        "author": "schots",
+        "license": "CC0",
+        "page": "https://commons.wikimedia.org/wiki/File%3A439280_schots_angry-tiger.wav"
+    },
+    "elephant": {
+        "file": "sounds/elephant.ogg",
+        "author": "தகவலுழவன்",
+        "license": "CC0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AElephant_voice_-_trumpeting.ogg"
+    },
+    "wolf": {
+        "file": "sounds/wolf.ogg",
+        "author": "Wikimedia contributor",
+        "license": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File%3AWolf_howls.ogg"
+    },
+    "monkey": {
+        "file": "sounds/monkey.ogg",
+        "author": "Wikimedia contributor",
+        "license": "CC BY 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AMantled_Howler_Monkey_%28Alouatta_palliata%29_%28W_ALOUATTA_PALLIATA_R1_C2%29.ogg"
+    },
+    "cow": {
+        "file": "sounds/cow.ogg",
+        "author": "MichaeltheFox8621",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ASingle_Cow_Moo.ogg"
+    },
+    "owl": {
+        "file": "sounds/owl.ogg",
+        "author": "عثمان",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AMaghreb_owl_hooting.wav"
+    },
+    "penguin": {
+        "file": "sounds/penguin.ogg",
+        "author": "Mikeybear",
+        "license": "CC BY 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3A20091121_Little_Penguin_calls_at_St_Kilda_Breakwater.ogg"
+    },
+    "peacock": {
+        "file": "sounds/peacock.ogg",
+        "author": "Perlscrypt",
+        "license": "CC BY-SA 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AMalePeacockCall.ogg"
+    },
+    "duck": {
+        "file": "sounds/duck.ogg",
+        "author": "Commander Keane",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AEn-au-quack_like_a_duck.ogg"
+    },
+    "frog": {
+        "file": "sounds/frog.ogg",
+        "author": "MichaeltheFox8621",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ASingle_Frog_Croak.oga"
+    },
+    "bee": {
+        "file": "sounds/bee.ogg",
+        "author": "Free Sounds Library User Spanac",
+        "license": "CC BY 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ABee_buzzing_sound_%28animal_noises%29.opus"
+    },
+    "polarbear": {
+        "file": "sounds/bear.ogg",
+        "author": "Shizhao",
+        "license": "CC BY 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ABear_growl.ogg"
+    },
+    "cat": {
+        "file": "sounds/cat.ogg",
+        "author": "Smser",
+        "license": "GFDL",
+        "page": "https://commons.wikimedia.org/wiki/File%3AMeow_domestic_cat.ogg"
+    },
+    "dog": {
+        "file": "sounds/dog.ogg",
+        "author": "Amada44",
+        "license": "CC BY-SA 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ABarking_of_a_dog.ogg"
+    },
+    "sheep": {
+        "file": "sounds/sheep.ogg",
+        "author": "Eviatar Bach",
+        "license": "CC0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ASheep_bleat.ogg"
+    },
+    "goat": {
+        "file": "sounds/goat.ogg",
+        "author": "stephan",
+        "license": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File%3AHerd_of_goats_bleating.ogg"
+    },
+    "chicken": {
+        "file": "sounds/chicken.ogg",
+        "author": "alys",
+        "license": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File%3AHen_announcing_shes_lain_an_egg.ogg"
+    },
+    "rooster": {
+        "file": "sounds/rooster.ogg",
+        "author": "Filo gèn'",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ARooster_crowing.ogg"
+    },
+    "horse": {
+        "file": "sounds/horse.ogg",
+        "author": "Hü.",
+        "license": "Public domain",
+        "page": "https://commons.wikimedia.org/wiki/File%3AWiehern.ogg"
+    },
+    "donkey": {
+        "file": "sounds/donkey.ogg",
+        "author": "Troll Control",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AEn-uk-donkey.ogg"
+    },
+    "crow": {
+        "file": "sounds/crow.ogg",
+        "author": "Vis M",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ACrow_01a.wav"
+    },
+    "seagull": {
+        "file": "sounds/seagull.ogg",
+        "author": "Wikimedia contributor",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AHerring_Gull_%28Larus_argentatus%29_%28W1CDR0001420_BD12%29.ogg"
+    },
+    "turkey": {
+        "file": "sounds/turkey.ogg",
+        "author": "Jonathon Jongsma",
+        "license": "CC BY-SA 3.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3AMeleagris_gallopavo_-_Wild_Turkey_XC134155.ogg"
+    },
+    "cricket": {
+        "file": "sounds/cricket.ogg",
+        "author": "Rickjpelleg",
+        "license": "CC BY-SA 4.0",
+        "page": "https://commons.wikimedia.org/wiki/File%3ACricket_Gryllus_bimaculatus_Chirps.oga"
+    }
+};
+
+const ANIMALS = [
+    // ---------- MAMMALS ----------
+    { id:'lion', name:'Lion', emoji:'🦁', group:'mammal', habitat:'savanna', sound:'Roar!', soundWord:'roars',
+      tagline:'King of the savanna!', diet:'Carnivore', size:'Up to 250 kg', speed:'80 km/h', life:'15 years', baby:'Cub',
+      fact:'A lion\u2019s roar can be heard 8 kilometres away! Lions are the only cats that live together in family groups called prides.' },
+    { id:'elephant', name:'Elephant', emoji:'🐘', group:'mammal', habitat:'savanna', sound:'Trumpet!', soundWord:'trumpets',
+      tagline:'The biggest land animal!', diet:'Herbivore', size:'Up to 6,000 kg', speed:'40 km/h', life:'70 years', baby:'Calf',
+      fact:'An elephant\u2019s trunk has over 40,000 muscles \u2014 that is more than your whole body! They use it to drink, smell and hug.' },
+    { id:'tiger', name:'Tiger', emoji:'🐅', group:'mammal', habitat:'jungle', sound:'Growl!', soundWord:'growls',
+      tagline:'The stripey stealth hunter!', diet:'Carnivore', size:'Up to 300 kg', speed:'65 km/h', life:'20 years', baby:'Cub',
+      fact:'Every tiger has its own stripe pattern, just like your fingerprints! Their skin is striped too, not only their fur.' },
+    { id:'giraffe', name:'Giraffe', emoji:'🦒', group:'mammal', habitat:'savanna', sound:'Hum!', soundWord:'hums',
+      tagline:'The tallest animal on Earth!', diet:'Herbivore', size:'Up to 1,900 kg', speed:'60 km/h', life:'25 years', baby:'Calf',
+      fact:'A giraffe\u2019s neck is 2 metres long but has exactly 7 bones \u2014 the same number as in your neck! Their tongue is purple-blue.' },
+    { id:'monkey', name:'Monkey', emoji:'🐒', group:'mammal', habitat:'jungle', sound:'Ooh ooh ah ah!', soundWord:'chatters',
+      tagline:'The clever climber!', diet:'Omnivore', size:'Up to 35 kg', speed:'55 km/h', life:'20 years', baby:'Infant',
+      fact:'Monkeys use tools, solve puzzles, and some even wash their food before eating. They greet each other with hugs!' },
+    { id:'panda', name:'Giant Panda', emoji:'🐼', group:'mammal', habitat:'forest', sound:'Bleat!', soundWord:'bleats',
+      tagline:'The bamboo muncher!', diet:'Herbivore', size:'Up to 120 kg', speed:'32 km/h', life:'20 years', baby:'Cub',
+      fact:'Pandas eat bamboo for 14 hours a day \u2014 about 12 kilos! A newborn panda is smaller than a mouse and totally pink.' },
+    { id:'polarbear', name:'Polar Bear', emoji:'🐻‍❄️', group:'mammal', habitat:'arctic', sound:'Growl!', soundWord:'growls',
+      tagline:'The ice-cold giant!', diet:'Carnivore', size:'Up to 700 kg', speed:'40 km/h', life:'25 years', baby:'Cub',
+      fact:'Polar bear fur looks white but is actually see-through, and their skin underneath is black to soak up the sun\u2019s warmth!' },
+    { id:'kangaroo', name:'Kangaroo', emoji:'🦘', group:'mammal', habitat:'desert', sound:'Chortle!', soundWord:'chortles',
+      tagline:'The champion jumper!', diet:'Herbivore', size:'Up to 90 kg', speed:'70 km/h', life:'23 years', baby:'Joey',
+      fact:'A kangaroo can leap 9 metres in one hop \u2014 longer than a bus! Baby joeys ride in mum\u2019s pouch for 8 months.' },
+    { id:'wolf', name:'Wolf', emoji:'🐺', group:'mammal', habitat:'forest', sound:'Howwwl!', soundWord:'howls',
+      tagline:'The pack leader!', diet:'Carnivore', size:'Up to 80 kg', speed:'60 km/h', life:'13 years', baby:'Pup',
+      fact:'Wolves howl to talk to their family from far away \u2014 a howl carries up to 16 kilometres through the forest!' },
+    { id:'zebra', name:'Zebra', emoji:'🦓', group:'mammal', habitat:'savanna', sound:'Bark-neigh!', soundWord:'brays',
+      tagline:'The stripey horse!', diet:'Herbivore', size:'Up to 450 kg', speed:'65 km/h', life:'25 years', baby:'Foal',
+      fact:'No two zebras have the same stripes. Scientists think the stripes confuse biting flies and keep zebras cooler!' },
+    { id:'cow', name:'Cow', emoji:'🐄', group:'mammal', habitat:'farm', sound:'Mooooo!', soundWord:'moos',
+      tagline:'The friendly milk maker!', diet:'Herbivore', size:'Up to 750 kg', speed:'40 km/h', life:'20 years', baby:'Calf',
+      fact:'Cows have best friends and get stressed when apart! They have four stomach chambers to digest all that grass.' },
+    { id:'bat', name:'Bat', emoji:'🦇', group:'mammal', habitat:'forest', sound:'Screech!', soundWord:'screeches',
+      tagline:'The only flying mammal!', diet:'Omnivore', size:'Up to 1.5 kg', speed:'160 km/h', life:'30 years', baby:'Pup',
+      fact:'Bats "see" with sound using echolocation \u2014 just like dolphins! One little bat can eat 1,000 mosquitoes in an hour.' },
+
+    { id:'cat', name:'Cat', emoji:'🐱', group:'mammal', habitat:'farm', sound:'Meow!', soundWord:'meows',
+      tagline:'The purring house tiger!', diet:'Carnivore', size:'Up to 5 kg', speed:'48 km/h', life:'16 years', baby:'Kitten',
+      fact:'Cats sleep up to 16 hours a day and purr at a frequency that can help their own bones heal faster!' },
+    { id:'dog', name:'Dog', emoji:'🐶', group:'mammal', habitat:'farm', sound:'Woof woof!', soundWord:'barks',
+      tagline:'Our best friend!', diet:'Omnivore', size:'Up to 90 kg', speed:'70 km/h', life:'13 years', baby:'Puppy',
+      fact:'A dog’s sense of smell is 10,000 times better than yours — they can even smell how you are feeling!' },
+    { id:'sheep', name:'Sheep', emoji:'🐑', group:'mammal', habitat:'farm', sound:'Baaaa!', soundWord:'bleats',
+      tagline:'The woolly cloud!', diet:'Herbivore', size:'Up to 100 kg', speed:'40 km/h', life:'12 years', baby:'Lamb',
+      fact:'Sheep can remember up to 50 different faces for years, and they see almost all the way around without turning their head!' },
+    { id:'goat', name:'Goat', emoji:'🐐', group:'mammal', habitat:'mountain', sound:'Maaaa!', soundWord:'bleats',
+      tagline:'The champion climber!', diet:'Herbivore', size:'Up to 140 kg', speed:'25 km/h', life:'18 years', baby:'Kid',
+      fact:'Goats can climb almost vertical cliffs and even trees! Their rectangular pupils let them see nearly all around.' },
+    { id:'horse', name:'Horse', emoji:'🐴', group:'mammal', habitat:'farm', sound:'Neigh!', soundWord:'neighs',
+      tagline:'The graceful galloper!', diet:'Herbivore', size:'Up to 1,000 kg', speed:'88 km/h', life:'30 years', baby:'Foal',
+      fact:'Horses can sleep standing up AND lying down, and baby foals can walk within just two hours of being born!' },
+    { id:'donkey', name:'Donkey', emoji:'🐎', group:'mammal', habitat:'farm', sound:'Hee-haw!', soundWord:'brays',
+      tagline:'The sure-footed helper!', diet:'Herbivore', size:'Up to 500 kg', speed:'50 km/h', life:'40 years', baby:'Foal',
+      fact:'A donkey’s bray can be heard 3 kilometres away! They have amazing memories and recognise friends after 25 years.' },
+    { id:'chicken', name:'Chicken', emoji:'🐔', group:'bird', habitat:'farm', sound:'Cluck cluck!', soundWord:'clucks',
+      tagline:'The busy egg layer!', diet:'Omnivore', size:'Up to 4 kg', speed:'14 km/h', life:'8 years', baby:'Chick',
+      fact:'Chickens remember over 100 different faces and they talk to their chicks while the chicks are still inside the egg!' },
+    { id:'rooster', name:'Rooster', emoji:'🐓', group:'bird', habitat:'farm', sound:'Cock-a-doodle-doo!', soundWord:'crows',
+      tagline:'The morning alarm clock!', diet:'Omnivore', size:'Up to 5 kg', speed:'14 km/h', life:'8 years', baby:'Chick',
+      fact:'Roosters have a built-in body clock and start crowing before sunrise — even in a totally dark room!' },
+    { id:'crow', name:'Crow', emoji:'🐦', group:'bird', habitat:'forest', sound:'Caw! Caw!', soundWord:'caws',
+      tagline:'The feathered genius!', diet:'Omnivore', size:'Up to 1.5 kg', speed:'70 km/h', life:'20 years', baby:'Chick',
+      fact:'Crows make tools, recognise human faces, and even hold grudges! They solve puzzles as well as a 7-year-old child.' },
+    { id:'seagull', name:'Seagull', emoji:'🕊️', group:'bird', habitat:'ocean', sound:'Ah-ah-ah!', soundWord:'calls',
+      tagline:'The seaside squawker!', diet:'Omnivore', size:'Up to 1.8 kg', speed:'45 km/h', life:'20 years', baby:'Chick',
+      fact:'Seagulls can drink salty sea water! Special glands above their eyes squeeze all the salt back out.' },
+    { id:'turkey', name:'Turkey', emoji:'🦃', group:'bird', habitat:'farm', sound:'Gobble gobble!', soundWord:'gobbles',
+      tagline:'The fan-tailed gobbler!', diet:'Omnivore', size:'Up to 11 kg', speed:'88 km/h flying', life:'10 years', baby:'Poult',
+      fact:'Wild turkeys can fly at 88 km/h in short bursts and sleep up in trees to stay safe from foxes!' },
+    { id:'cricket', name:'Cricket', emoji:'🦗', group:'insect', habitat:'forest', sound:'Chirp chirp!', soundWord:'chirps',
+      tagline:'The night-time musician!', diet:'Omnivore', size:'Up to 2 g', speed:'5 km/h', life:'1 year', baby:'Nymph',
+      fact:'Crickets chirp by rubbing their wings together, and they hear through their KNEES! Count the chirps to guess the temperature.' },
+    // ---------- BIRDS ----------
+    { id:'eagle', name:'Bald Eagle', emoji:'🦅', group:'bird', habitat:'mountain', sound:'Screech!', soundWord:'screeches',
+      tagline:'The sharp-eyed hunter!', diet:'Carnivore', size:'Up to 6 kg', speed:'160 km/h', life:'25 years', baby:'Eaglet',
+      fact:'An eagle can spot a rabbit from 3 kilometres away \u2014 their eyesight is 8 times sharper than yours!' },
+    { id:'penguin', name:'Penguin', emoji:'🐧', group:'bird', habitat:'arctic', sound:'Squawk!', soundWord:'squawks',
+      tagline:'The bird that swims!', diet:'Carnivore', size:'Up to 40 kg', speed:'35 km/h swimming', life:'20 years', baby:'Chick',
+      fact:'Penguins cannot fly in the air, but they "fly" underwater at 35 km/h! Emperor dads balance the egg on their feet all winter.' },
+    { id:'owl', name:'Owl', emoji:'🦉', group:'bird', habitat:'forest', sound:'Hoo hoo!', soundWord:'hoots',
+      tagline:'The silent night flyer!', diet:'Carnivore', size:'Up to 4 kg', speed:'60 km/h', life:'25 years', baby:'Owlet',
+      fact:'Owls can turn their heads 270 degrees! Special soft feathers make their wings completely silent when hunting.' },
+    { id:'parrot', name:'Parrot', emoji:'🦜', group:'bird', habitat:'jungle', sound:'Squawk! Hello!', soundWord:'squawks',
+      tagline:'The talking rainbow!', diet:'Herbivore', size:'Up to 1.5 kg', speed:'40 km/h', life:'60 years', baby:'Chick',
+      fact:'Parrots can copy human words and even understand some of them! Some African Greys learn over 1,000 words.' },
+    { id:'flamingo', name:'Flamingo', emoji:'🦩', group:'bird', habitat:'ocean', sound:'Honk!', soundWord:'honks',
+      tagline:'The pink one-leg stander!', diet:'Omnivore', size:'Up to 4 kg', speed:'60 km/h', life:'40 years', baby:'Chick',
+      fact:'Flamingos are born grey! They turn pink from eating shrimp and algae. They stand on one leg to stay warm.' },
+    { id:'peacock', name:'Peacock', emoji:'🦚', group:'bird', habitat:'jungle', sound:'Meow-cry!', soundWord:'calls',
+      tagline:'The showiest tail ever!', diet:'Omnivore', size:'Up to 6 kg', speed:'16 km/h', life:'20 years', baby:'Peachick',
+      fact:'A peacock\u2019s tail has 200 feathers with eye-spots and can be wider than a door \u2014 he shakes it to impress peahens!' },
+    { id:'duck', name:'Duck', emoji:'🦆', group:'bird', habitat:'farm', sound:'Quack quack!', soundWord:'quacks',
+      tagline:'The waterproof swimmer!', diet:'Omnivore', size:'Up to 1.6 kg', speed:'95 km/h', life:'10 years', baby:'Duckling',
+      fact:'Duck feathers are totally waterproof \u2014 water rolls right off! Ducklings follow the first thing they see as mum.' },
+
+    // ---------- REPTILES & AMPHIBIANS ----------
+    { id:'crocodile', name:'Crocodile', emoji:'🐊', group:'reptile', habitat:'jungle', sound:'Hisss!', soundWord:'hisses',
+      tagline:'The ancient snapper!', diet:'Carnivore', size:'Up to 1,000 kg', speed:'35 km/h', life:'70 years', baby:'Hatchling',
+      fact:'Crocodiles have the strongest bite on Earth, but the muscles to OPEN their jaws are so weak you could hold them shut!' },
+    { id:'snake', name:'Snake', emoji:'🐍', group:'reptile', habitat:'desert', sound:'Sssssss!', soundWord:'hisses',
+      tagline:'The legless slitherer!', diet:'Carnivore', size:'Up to 250 kg', speed:'20 km/h', life:'25 years', baby:'Snakelet',
+      fact:'Snakes smell with their tongue! They flick it out to taste the air and find dinner. They can swallow food bigger than their head.' },
+    { id:'turtle', name:'Sea Turtle', emoji:'🐢', group:'reptile', habitat:'ocean', sound:'Grunt!', soundWord:'grunts',
+      tagline:'The ancient ocean traveller!', diet:'Omnivore', size:'Up to 900 kg', speed:'35 km/h', life:'100 years', baby:'Hatchling',
+      fact:'Sea turtles swim thousands of kilometres but always return to the very same beach where they hatched to lay their own eggs!' },
+    { id:'chameleon', name:'Chameleon', emoji:'🦎', group:'reptile', habitat:'jungle', sound:'Hiss!', soundWord:'hisses',
+      tagline:'The colour-changing sneak!', diet:'Carnivore', size:'Up to 2 kg', speed:'34 km/h', life:'7 years', baby:'Hatchling',
+      fact:'Chameleons change colour to show feelings, not just to hide! Each eye moves separately so they see two things at once.' },
+    { id:'frog', name:'Frog', emoji:'🐸', group:'reptile', habitat:'jungle', sound:'Ribbit ribbit!', soundWord:'croaks',
+      tagline:'The hopping singer!', diet:'Carnivore', size:'Up to 3 kg', speed:'8 km/h', life:'10 years', baby:'Tadpole',
+      fact:'Frogs drink water through their skin instead of their mouth! Baby frogs are tadpoles with tails and no legs at all.' },
+
+    // ---------- SEA LIFE ----------
+    { id:'dolphin', name:'Dolphin', emoji:'🐬', group:'sea', habitat:'ocean', sound:'Eee-eee-click!', soundWord:'clicks',
+      tagline:'The ocean genius!', diet:'Carnivore', size:'Up to 200 kg', speed:'60 km/h', life:'50 years', baby:'Calf',
+      fact:'Dolphins call each other by name using special whistles! They sleep with one half of the brain awake so they keep breathing.' },
+    { id:'whale', name:'Blue Whale', emoji:'🐋', group:'sea', habitat:'ocean', sound:'Wooooo!', soundWord:'sings',
+      tagline:'The biggest animal ever!', diet:'Carnivore', size:'Up to 150,000 kg', speed:'50 km/h', life:'90 years', baby:'Calf',
+      fact:'A blue whale\u2019s heart is the size of a small car, and its tongue weighs as much as an elephant! Its song travels 1,600 km.' },
+    { id:'shark', name:'Shark', emoji:'🦈', group:'sea', habitat:'ocean', sound:'Swoosh!', soundWord:'swooshes',
+      tagline:'The ocean\u2019s oldest hunter!', diet:'Carnivore', size:'Up to 2,000 kg', speed:'50 km/h', life:'70 years', baby:'Pup',
+      fact:'Sharks have been swimming for 400 million years \u2014 longer than trees have existed! They lose 30,000 teeth in a lifetime.' },
+    { id:'octopus', name:'Octopus', emoji:'🐙', group:'sea', habitat:'ocean', sound:'Blub!', soundWord:'blubs',
+      tagline:'The eight-armed genius!', diet:'Carnivore', size:'Up to 50 kg', speed:'40 km/h', life:'5 years', baby:'Larva',
+      fact:'An octopus has three hearts, blue blood and nine brains! It can squeeze through any hole bigger than its beak.' },
+    { id:'crab', name:'Crab', emoji:'🦀', group:'sea', habitat:'ocean', sound:'Click-clack!', soundWord:'clicks',
+      tagline:'The sideways walker!', diet:'Omnivore', size:'Up to 20 kg', speed:'12 km/h', life:'8 years', baby:'Larva',
+      fact:'Crabs walk sideways because of how their knees bend! They taste with their feet and can regrow a lost claw.' },
+    { id:'seahorse', name:'Seahorse', emoji:'🐠', group:'sea', habitat:'ocean', sound:'Click!', soundWord:'clicks',
+      tagline:'The dad who has the babies!', diet:'Carnivore', size:'Up to 200 g', speed:'1.5 km/h', life:'5 years', baby:'Fry',
+      fact:'Seahorse dads carry the eggs in a pouch and give birth to up to 1,000 babies! They are the slowest fish in the sea.' },
+
+    // ---------- BUGS ----------
+    { id:'butterfly', name:'Butterfly', emoji:'🦋', group:'insect', habitat:'forest', sound:'Flutter!', soundWord:'flutters',
+      tagline:'The flying flower!', diet:'Herbivore', size:'Up to 3 g', speed:'20 km/h', life:'1 year', baby:'Caterpillar',
+      fact:'Butterflies taste with their FEET! They start life as a caterpillar and completely rebuild themselves inside a chrysalis.' },
+    { id:'bee', name:'Honey Bee', emoji:'🐝', group:'insect', habitat:'farm', sound:'Bzzzzz!', soundWord:'buzzes',
+      tagline:'The busy honey maker!', diet:'Herbivore', size:'Up to 0.1 g', speed:'25 km/h', life:'1 year', baby:'Larva',
+      fact:'Bees dance to tell friends where flowers are! One bee makes just a twelfth of a teaspoon of honey in her whole life.' },
+    { id:'ant', name:'Ant', emoji:'🐜', group:'insect', habitat:'forest', sound:'Tiny scritch!', soundWord:'scritches',
+      tagline:'The tiny strongman!', diet:'Omnivore', size:'Up to 0.02 g', speed:'0.9 km/h', life:'3 years', baby:'Larva',
+      fact:'An ant can lift 50 times its own weight \u2014 like you lifting a car! Ant colonies can have millions of workers.' },
+    { id:'ladybug', name:'Ladybug', emoji:'🐞', group:'insect', habitat:'farm', sound:'Tiny flutter!', soundWord:'flutters',
+      tagline:'The spotty garden helper!', diet:'Carnivore', size:'Up to 0.05 g', speed:'24 km/h', life:'1 year', baby:'Larva',
+      fact:'Ladybugs eat up to 5,000 aphids in their life, protecting plants! Their bright spots warn birds they taste horrible.' },
+    { id:'spider', name:'Spider', emoji:'🕷️', group:'insect', habitat:'forest', sound:'Silent!', soundWord:'creeps',
+      tagline:'The eight-legged weaver!', diet:'Carnivore', size:'Up to 175 g', speed:'8 km/h', life:'2 years', baby:'Spiderling',
+      fact:'Spider silk is stronger than steel of the same thickness! Most spiders have 8 eyes but still see quite badly.' }
+];
+
+let animalGroupFilter = 'all';
+let animalMode = 'explore';
+let currentAnimalIndex = 0;
+let animalsBuilt = false;
+
+
+// ------------------------------------------------------------
+// REAL ANIMAL SOUND PLAYER
+// Plays genuine recordings from the sounds/ folder when we have
+// one, and falls back to the spoken sound word when we do not.
+// ------------------------------------------------------------
+const animalAudioCache = {};
+let currentAnimalAudio = null;
+
+function hasRealSound(animalId) {
+    return !!(typeof ANIMAL_SOUND_FILES !== 'undefined' && ANIMAL_SOUND_FILES[animalId]);
+}
+
+function stopAnimalAudio() {
+    if (currentAnimalAudio) {
+        try { currentAnimalAudio.pause(); currentAnimalAudio.currentTime = 0; } catch (e) {}
+        currentAnimalAudio = null;
+    }
+    document.querySelectorAll('.sound-playing').forEach(el => el.classList.remove('sound-playing'));
+}
+window.stopAnimalAudio = stopAnimalAudio;
+
+function playRealAnimalSound(animalId, onDone) {
+    const entry = hasRealSound(animalId) ? ANIMAL_SOUND_FILES[animalId] : null;
+    if (!entry) { if (onDone) onDone(false); return false; }
+
+    stopSpeech();
+    stopAnimalAudio();
+
+    let audio = animalAudioCache[animalId];
+    if (!audio) {
+        audio = new Audio(entry.file);
+        audio.preload = 'auto';
+        animalAudioCache[animalId] = audio;
+    }
+    try { audio.currentTime = 0; } catch (e) {}
+    audio.volume = 1;
+    currentAnimalAudio = audio;
+
+    audio.onended = () => { stopAnimalAudio(); if (onDone) onDone(true); };
+    audio.onerror = () => {
+        console.warn('[KidZone] could not load', entry.file, '- using voice instead');
+        stopAnimalAudio();
+        if (onDone) onDone(false);
+    };
+
+    const p = audio.play();
+    if (p && typeof p.catch === 'function') {
+        p.catch(err => {
+            console.warn('[KidZone] audio blocked:', err && err.name);
+            stopAnimalAudio();
+            if (onDone) onDone(false);
+        });
+    }
+    return true;
+}
+window.playRealAnimalSound = playRealAnimalSound;
+
+function playAnimalCry(animalId, spokenFallback) {
+    let spoke = false;
+    const ok = playRealAnimalSound(animalId, (played) => {
+        if (!played && spokenFallback && !spoke) { spoke = true; speakText(spokenFallback); }
+    });
+    if (!ok && spokenFallback && !spoke) { spoke = true; speakText(spokenFallback); }
+    return ok;
+}
+window.playAnimalCry = playAnimalCry;
+
+
+function getAnimal(id) { return ANIMALS.find(a => a.id === id); }
+
+// "An octopus" vs "A lion"
+function articleFor(word) {
+    return /^[aeiou]/i.test(String(word).trim()) ? 'An' : 'A';
+}
+
+function buildAnimalKingdom() {
+    if (!animalsBuilt) {
+        renderAnimalGrid();
+        animalsBuilt = true;
+    }
+}
+
+// ---------- EXPLORE ----------
+function renderAnimalGrid() {
+    const grid = document.getElementById('animalGrid');
+    if (!grid) return;
+
+    const term = (document.getElementById('animalSearch') || {}).value || '';
+    const q = term.trim().toLowerCase();
+
+    const list = ANIMALS.filter(a => {
+        // When the child is typing a search, ignore the group filter so they
+        // always find the animal they are looking for.
+        const groupOk = q ? true : (animalGroupFilter === 'all' || a.group === animalGroupFilter);
+        const textOk = !q || a.name.toLowerCase().includes(q) ||
+                       a.tagline.toLowerCase().includes(q) ||
+                       (HABITATS[a.habitat] && HABITATS[a.habitat].name.toLowerCase().includes(q));
+        return groupOk && textOk;
+    });
+
+    const countEl = document.getElementById('animalCount');
+    if (countEl) {
+        countEl.innerText = list.length
+            ? `Showing ${list.length} animal${list.length === 1 ? '' : 's'} — tap one to meet it!`
+            : 'No animals found — try another search!';
+    }
+
+    grid.innerHTML = '';
+    list.forEach(a => {
+        const hab = HABITATS[a.habitat] || { icon: '🌍', name: '' };
+        const card = document.createElement('div');
+        card.className = 'animal-card';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.dataset.animal = a.id;
+        card.onclick = () => openAnimal(a.id);
+        card.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnimal(a.id); }
+        };
+        card.innerHTML = `
+            <span class="ac-habitat">${hab.icon}</span>
+            <span class="ac-emoji">${a.emoji}</span>
+            <h4>${a.name}</h4>
+            <p>${a.tagline}</p>
+            <span class="ac-sound${hasRealSound(a.id) ? ' has-real' : ''}">${hasRealSound(a.id) ? '\ud83c\udf99\ufe0f' : '\ud83d\udd0a'} ${a.sound}</span>`;
+        grid.appendChild(card);
+    });
+}
+
+function filterAnimals() { renderAnimalGrid(); }
+window.filterAnimals = filterAnimals;
+
+function filterAnimalGroup(group, evt) {
+    animalGroupFilter = group;
+    playSound(480);
+    document.querySelectorAll('.animal-chip').forEach(c => c.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    renderAnimalGrid();
+}
+window.filterAnimalGroup = filterAnimalGroup;
+
+function randomAnimal() {
+    const a = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+    launchConfetti(12);
+    openAnimal(a.id);
+}
+window.randomAnimal = randomAnimal;
+
+function setAnimalMode(mode, evt) {
+    animalMode = mode;
+    playSound(450);
+    document.querySelectorAll('.animal-mode-btn').forEach(b => b.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+
+    const panels = {
+        explore: 'animalExplore', sound: 'animalSound',
+        habitat: 'animalHabitat', quiz: 'animalQuiz'
+    };
+    Object.entries(panels).forEach(([k, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (k === mode) ? 'block' : 'none';
+    });
+
+    if (mode === 'explore') renderAnimalGrid();
+    if (mode === 'sound') startSoundGame();
+    if (mode === 'habitat') startHabitatGame();
+    if (mode === 'quiz') startAnimalQuiz();
+}
+window.setAnimalMode = setAnimalMode;
+
+// ---------- ANIMAL MODAL ----------
+function openAnimal(id) {
+    const a = getAnimal(id);
+    if (!a) return;
+    currentAnimalIndex = ANIMALS.findIndex(x => x.id === id);
+    playSound(640);
+
+    const hab = HABITATS[a.habitat] || { icon: '🌍', name: 'Everywhere', bg: '#eee' };
+    const set = (elId, val) => { const e = document.getElementById(elId); if (e) e.innerText = val; };
+
+    const hero = document.getElementById('animalModalHero');
+    if (hero) hero.style.background = hab.bg;
+    set('animalBigEmoji', a.emoji);
+    set('animalModalTitle', a.name);
+    set('animalTagline', a.tagline);
+    set('animalFactText', a.fact);
+    set('animalSoundWord', `${articleFor(a.name)} ${a.name.toLowerCase()} ${a.soundWord}: "${a.sound}"`);
+
+    // CC BY-SA requires crediting the recording's author.
+    const creditEl = document.getElementById('animalSoundCredit');
+    const snd = hasRealSound(a.id) ? ANIMAL_SOUND_FILES[a.id] : null;
+    if (creditEl) {
+        if (snd) {
+            creditEl.innerHTML = 'Real recording \u00b7 <a href="' + snd.page +
+                '" target="_blank" rel="noopener">' + snd.author + '</a> \u00b7 ' + snd.license;
+            creditEl.style.display = 'block';
+        } else {
+            creditEl.style.display = 'none';
+        }
+    }
+    const soundBtn = document.querySelector('.animal-sound-btn');
+    if (soundBtn) {
+        soundBtn.innerHTML = snd ? '\ud83c\udf99\ufe0f Hear the REAL sound!' : '\ud83d\udd0a Hear the sound!';
+    }
+
+    const groupNames = { mammal:'🐘 Mammal', bird:'🦜 Bird', reptile:'🐊 Reptile', sea:'🐠 Sea Life', insect:'🦋 Bug' };
+    const badges = document.getElementById('animalBadgesRow');
+    if (badges) {
+        badges.innerHTML =
+            `<span class="a-badge">${groupNames[a.group] || a.group}</span>
+             <span class="a-badge">${hab.icon} ${hab.name}</span>
+             <span class="a-badge diet-${a.diet.toLowerCase()}">${a.diet}</span>`;
+    }
+
+    const stats = document.getElementById('animalStatsGrid');
+    if (stats) {
+        const rows = [
+            ['⚖️', 'Weight', a.size], ['🏃', 'Top speed', a.speed],
+            ['🎂', 'Lives about', a.life], ['👶', 'Baby is called', a.baby]
+        ];
+        stats.innerHTML = rows.map(([i, l, v]) =>
+            `<div class="a-stat"><span class="a-stat-icon">${i}</span>
+             <span class="a-stat-label">${l}</span><span class="a-stat-val">${v}</span></div>`).join('');
+    }
+
+    const modal = document.getElementById('animalModal');
+    if (modal) modal.style.display = 'flex';
+
+    if (!factsViewed.has('animal-' + a.id)) {
+        factsViewed.add('animal-' + a.id);
+        addStars(3);
+        const seen = ANIMALS.filter(x => factsViewed.has('animal-' + x.id)).length;
+        if (seen === 1) unlockBadge('animalFriend');
+        if (seen >= 20) unlockBadge('zooKeeper');
+        if (seen === ANIMALS.length) { unlockBadge('zoologist'); launchConfetti(50); }
+        saveProgress();
+    }
+}
+window.openAnimal = openAnimal;
+
+function closeAnimalModal() {
+    const m = document.getElementById('animalModal');
+    if (m) m.style.display = 'none';
+    stopAnimalAudio();
+    stopSpeech();
+    playSound(400);
+}
+window.closeAnimalModal = closeAnimalModal;
+
+function closeAnimalModalOnBg(e) {
+    if (e.target.id === 'animalModal') closeAnimalModal();
+}
+window.closeAnimalModalOnBg = closeAnimalModalOnBg;
+
+function nextAnimal() {
+    currentAnimalIndex = (currentAnimalIndex + 1) % ANIMALS.length;
+    openAnimal(ANIMALS[currentAnimalIndex].id);
+}
+window.nextAnimal = nextAnimal;
+
+function prevAnimal() {
+    currentAnimalIndex = (currentAnimalIndex - 1 + ANIMALS.length) % ANIMALS.length;
+    openAnimal(ANIMALS[currentAnimalIndex].id);
+}
+window.prevAnimal = prevAnimal;
+
+function speakAnimalFact() {
+    const a = ANIMALS[currentAnimalIndex];
+    if (a) speakText(`${a.name}. ${a.tagline} ${a.fact}`);
+}
+window.speakAnimalFact = speakAnimalFact;
+
+function speakAnimalSound() {
+    const a = ANIMALS[currentAnimalIndex];
+    if (!a) return;
+    const btn = document.querySelector('.animal-sound-btn');
+    if (btn) {
+        btn.classList.add('sound-playing');
+        setTimeout(() => btn.classList.remove('sound-playing'), 3200);
+    }
+    playAnimalCry(a.id, `${a.name} says ${a.sound}`);
+}
+window.speakAnimalSound = speakAnimalSound;
+
+// ---------- GAME: GUESS THE SOUND ----------
+let soundRounds = [], soundIdx = 0, soundScore = 0, soundLocked = false;
+
+function startSoundGame() {
+    // Prefer animals with a genuine recording so the game is really
+    // about listening rather than a voice reading a word aloud.
+    const withReal = ANIMALS.filter(a => hasRealSound(a.id));
+    const pool = withReal.length >= 8 ? withReal : ANIMALS;
+    soundRounds = shuffleArray(pool).slice(0, 8);
+    soundIdx = 0; soundScore = 0; soundLocked = false;
+    renderSoundRound();
+}
+window.startSoundGame = startSoundGame;
+
+function renderSoundRound() {
+    const promptEl = document.getElementById('soundPrompt');
+    const optsEl = document.getElementById('soundOptions');
+    const scoreEl = document.getElementById('soundScore');
+    const roundEl = document.getElementById('soundRound');
+    if (!optsEl) return;
+
+    if (scoreEl) scoreEl.innerText = soundScore;
+
+    if (soundIdx >= soundRounds.length) {
+        if (roundEl) roundEl.innerText = 'Done!';
+        if (promptEl) promptEl.innerText = `🎉 You scored ${soundScore} out of ${soundRounds.length}!`;
+        optsEl.innerHTML = '<button class="sound-opt" onclick="startSoundGame()">🔄 Play Again</button>';
+        recordRoundScore('animalsound', soundScore, soundRounds.length);
+        addStars(soundScore * 2);
+        if (soundScore === soundRounds.length) { unlockBadge('soundMaster'); launchConfetti(45); }
+        speakText(`Great job! You scored ${soundScore} out of ${soundRounds.length}.`);
+        return;
+    }
+
+    if (roundEl) roundEl.innerText = `${soundIdx + 1} / ${soundRounds.length}`;
+    if (promptEl) promptEl.innerText = 'Press the speaker, then pick who made that sound!';
+
+    const target = soundRounds[soundIdx];
+    const others = shuffleArray(ANIMALS.filter(a => a.id !== target.id)).slice(0, 3);
+    const opts = shuffleArray([target, ...others]);
+
+    optsEl.innerHTML = '';
+    opts.forEach(a => {
+        const b = document.createElement('button');
+        b.className = 'sound-opt';
+        b.innerHTML = `<span class="so-emoji">${a.emoji}</span><span>${a.name}</span>`;
+        b.onclick = () => answerSound(a.id, b, target);
+        optsEl.appendChild(b);
+    });
+
+    soundLocked = false;
+    setTimeout(playAnimalSound, 350);
+}
+
+function playAnimalSound() {
+    const target = soundRounds[soundIdx];
+    if (!target) return;
+    const btn = document.getElementById('bigSpeaker');
+    if (btn) {
+        btn.classList.add('playing');
+        setTimeout(() => btn.classList.remove('playing'), 1200);
+    }
+    playAnimalCry(target.id, target.sound);
+}
+window.playAnimalSound = playAnimalSound;
+
+function answerSound(chosenId, btn, target) {
+    if (soundLocked) return;
+    soundLocked = true;
+
+    const all = [...document.querySelectorAll('#soundOptions .sound-opt')];
+    all.forEach(b => b.disabled = true);
+
+    const correct = chosenId === target.id;
+    recordAnswer('animalsound', correct, `Sound: ${target.sound}`);
+
+    if (correct) {
+        btn.classList.add('correct');
+        soundScore++;
+        playSound(880, 'sine', 0.2);
+        launchConfetti(10);
+        speakText(`Yes! That was the ${target.name}.`);
+    } else {
+        btn.classList.add('wrong');
+        const right = all.find(b => b.textContent.includes(target.name));
+        if (right) right.classList.add('correct');
+        playSound(200, 'sawtooth', 0.25);
+        speakText(`That was the ${target.name}.`);
+    }
+
+    const scoreEl = document.getElementById('soundScore');
+    if (scoreEl) scoreEl.innerText = soundScore;
+    setTimeout(() => { soundIdx++; renderSoundRound(); }, 2000);
+}
+
+// ---------- GAME: HABITAT MATCH ----------
+let habitatRound = [], habitatDone = 0, habitatPicked = null;
+
+function startHabitatGame() {
+    habitatDone = 0;
+    habitatPicked = null;
+    habitatRound = shuffleArray(ANIMALS).slice(0, 8);
+
+    const usedHabitats = [...new Set(habitatRound.map(a => a.habitat))];
+    const pool = document.getElementById('habitatPool');
+    const zones = document.getElementById('habitatZones');
+    if (!pool || !zones) return;
+
+    const matchEl = document.getElementById('habitatMatched');
+    if (matchEl) matchEl.innerText = `0 / ${habitatRound.length}`;
+
+    pool.innerHTML = '';
+    shuffleArray(habitatRound).forEach(a => {
+        const chip = document.createElement('button');
+        chip.className = 'hab-animal';
+        chip.type = 'button';
+        chip.draggable = true;
+        chip.dataset.animal = a.id;
+        chip.dataset.habitat = a.habitat;
+        chip.innerHTML = `<span class="ha-emoji">${a.emoji}</span><span class="ha-name">${a.name}</span>`;
+
+        chip.addEventListener('dragstart', (e) => {
+            habitatPicked = a.id;
+            chip.classList.add('dragging');
+            if (e.dataTransfer) e.dataTransfer.setData('text/plain', a.id);
+        });
+        chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+        // tap-to-select for touch screens
+        chip.addEventListener('click', () => {
+            if (chip.classList.contains('placed')) return;
+            playSound(560);
+            document.querySelectorAll('.hab-animal.selected').forEach(c => c.classList.remove('selected'));
+            habitatPicked = a.id;
+            chip.classList.add('selected');
+        });
+        pool.appendChild(chip);
+    });
+
+    zones.innerHTML = '';
+    usedHabitats.forEach(hKey => {
+        const h = HABITATS[hKey];
+        const zone = document.createElement('div');
+        zone.className = 'hab-zone';
+        zone.dataset.habitat = hKey;
+        zone.style.background = h.bg;
+        zone.innerHTML = `<span class="hz-icon">${h.icon}</span><span class="hz-name">${h.name}</span>
+                          <div class="hz-drop" aria-label="${h.name} drop area"></div>`;
+
+        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('over'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('over');
+            dropAnimal(hKey, zone);
+        });
+        zone.addEventListener('click', () => dropAnimal(hKey, zone));
+        zones.appendChild(zone);
+    });
+}
+window.startHabitatGame = startHabitatGame;
+
+function dropAnimal(habitatKey, zone) {
+    if (!habitatPicked) return;
+    const a = getAnimal(habitatPicked);
+    const chip = document.querySelector(`.hab-animal[data-animal="${habitatPicked}"]`);
+    if (!a || !chip || chip.classList.contains('placed')) return;
+
+    const correct = a.habitat === habitatKey;
+    recordAnswer('habitat', correct, `${a.name} → ${HABITATS[habitatKey].name}`);
+
+    if (correct) {
+        chip.classList.add('placed');
+        chip.classList.remove('selected');
+        chip.draggable = false;
+        const drop = zone.querySelector('.hz-drop');
+        if (drop) {
+            const tag = document.createElement('span');
+            tag.className = 'hz-animal';
+            tag.innerText = a.emoji;
+            tag.title = a.name;
+            drop.appendChild(tag);
+        }
+        habitatDone++;
+        playSound(880, 'sine', 0.2);
+        launchConfetti(8);
+        speakText(`Yes! The ${a.name} lives in the ${HABITATS[habitatKey].name}.`);
+
+        const matchEl = document.getElementById('habitatMatched');
+        if (matchEl) matchEl.innerText = `${habitatDone} / ${habitatRound.length}`;
+
+        if (habitatDone === habitatRound.length) {
+            unlockBadge('habitatHero');
+            addStars(15);
+            launchConfetti(50);
+            showToast('All animals are home! 🏞️', '🎉', 4000);
+            speakText('Fantastic! Every animal found its home!');
+        }
+    } else {
+        zone.classList.add('shake');
+        setTimeout(() => zone.classList.remove('shake'), 500);
+        playSound(200, 'sawtooth', 0.25);
+        speakText(`The ${a.name} does not live in the ${HABITATS[habitatKey].name}. Try again!`);
+    }
+    habitatPicked = null;
+    document.querySelectorAll('.hab-animal.selected').forEach(c => c.classList.remove('selected'));
+}
+
+// ---------- GAME: ANIMAL QUIZ ----------
+let aqRounds = [], aqIdx = 0, aqScore = 0, aqLocked = false;
+
+function buildAnimalQuestions() {
+    const pool = [];
+    shuffleArray(ANIMALS).slice(0, 14).forEach(a => {
+        const hab = HABITATS[a.habitat];
+        pool.push({
+            q: `Where does the ${a.name} live?`, icon: a.emoji,
+            correct: hab.name,
+            options: shuffleArray([hab.name,
+                ...shuffleArray(Object.values(HABITATS).filter(h => h.name !== hab.name)).slice(0, 3).map(h => h.name)])
+        });
+        pool.push({
+            q: `What does a ${a.name} eat?`, icon: a.emoji,
+            correct: a.diet,
+            options: shuffleArray([...new Set([a.diet, 'Carnivore', 'Herbivore', 'Omnivore'])]).slice(0, 3)
+        });
+        pool.push({
+            q: `What is a baby ${a.name} called?`, icon: a.emoji,
+            correct: a.baby,
+            options: shuffleArray([a.baby,
+                ...shuffleArray([...new Set(ANIMALS.map(x => x.baby))].filter(b => b !== a.baby)).slice(0, 3)])
+        });
+    });
+    return shuffleArray(pool).slice(0, 10);
+}
+
+function startAnimalQuiz() {
+    aqRounds = buildAnimalQuestions();
+    aqIdx = 0; aqScore = 0; aqLocked = false;
+    renderAnimalQuestion();
+}
+window.startAnimalQuiz = startAnimalQuiz;
+
+function renderAnimalQuestion() {
+    const box = document.getElementById('aqContainer');
+    const scoreEl = document.getElementById('aqScore');
+    const progEl = document.getElementById('aqProgress');
+    if (!box) return;
+    if (scoreEl) scoreEl.innerText = aqScore;
+
+    if (aqIdx >= aqRounds.length) {
+        if (progEl) progEl.innerText = 'Finished!';
+        box.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">${aqScore === aqRounds.length ? '🏆' : '🎉'}</div>
+                <h3>You scored ${aqScore} / ${aqRounds.length}!</h3>
+                <button class="restart-btn" onclick="startAnimalQuiz()">🔄 Play Again</button>
+            </div>`;
+        recordRoundScore('animalquiz', aqScore, aqRounds.length);
+        addStars(aqScore * 2);
+        if (aqScore === aqRounds.length) { unlockBadge('animalExpert'); launchConfetti(50); }
+        speakText(`Quiz finished! You scored ${aqScore} out of ${aqRounds.length}.`);
+        return;
+    }
+
+    const cur = aqRounds[aqIdx];
+    if (progEl) progEl.innerText = `${aqIdx + 1} / ${aqRounds.length}`;
+
+    box.innerHTML = `
+        <div class="quiz-question">
+            <div class="quiz-question-icon">${cur.icon}</div>
+            <h3>${cur.q}</h3>
+        </div>
+        <div class="quiz-options" id="aqOptions"></div>`;
+
+    const optBox = document.getElementById('aqOptions');
+    cur.options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'quiz-option';
+        b.innerText = opt;
+        b.onclick = () => answerAnimalQuiz(opt, b, cur.correct);
+        optBox.appendChild(b);
+    });
+
+    aqLocked = false;
+    speakText(cur.q);
+}
+
+function answerAnimalQuiz(choice, btn, correct) {
+    if (aqLocked) return;
+    aqLocked = true;
+
+    const all = [...document.querySelectorAll('#aqOptions .quiz-option')];
+    all.forEach(b => b.onclick = null);
+
+    const isRight = choice === correct;
+    recordAnswer('animalquiz', isRight, aqRounds[aqIdx] ? aqRounds[aqIdx].q : '');
+
+    if (isRight) {
+        btn.classList.add('correct');
+        aqScore++;
+        playSound(880, 'sine', 0.2);
+        launchConfetti(8);
+    } else {
+        btn.classList.add('incorrect');
+        const right = all.find(b => b.innerText === correct);
+        if (right) right.classList.add('correct');
+        playSound(200, 'sawtooth', 0.25);
+        speakText(`The answer is ${correct}.`);
+    }
+
+    const scoreEl = document.getElementById('aqScore');
+    if (scoreEl) scoreEl.innerText = aqScore;
+    setTimeout(() => { aqIdx++; renderAnimalQuestion(); }, 1600);
+}
+window.answerAnimalQuiz = answerAnimalQuiz;
+
 
 // ============================================================
 // SOLAR SYSTEM EXPLORER
@@ -3527,6 +3939,477 @@ function answerPlanetQuiz(choice, btn, correct) {
     setTimeout(() => { pqIndex++; renderPlanetQuestion(); }, 1900);
 }
 window.answerPlanetQuiz = answerPlanetQuiz;
+
+
+// ============================================================
+// GAME 6: BODY PARTS EXPLORER
+// ============================================================
+const BODY_PARTS = [
+    { id: 'head',      name: 'Head',      icon: '🧠', fact: 'Your head protects your brain, which is the boss of your whole body! It tells you when to move, think and giggle.' },
+    { id: 'hair',      name: 'Hair',      icon: '💇', fact: 'Hair keeps your head warm and grows about 1 centimetre every month. You have around 100,000 hairs up there!' },
+    { id: 'eyes',      name: 'Eyes',      icon: '👀', fact: 'Your two eyes let you see colours and shapes. You blink about 15 times a minute to keep them clean and wet!' },
+    { id: 'ears',      name: 'Ears',      icon: '👂', fact: 'Ears catch sounds and also help you keep your balance so you do not fall over when you spin!' },
+    { id: 'nose',      name: 'Nose',      icon: '👃', fact: 'Your nose warms up the air you breathe and can remember over 1 trillion different smells!' },
+    { id: 'mouth',     name: 'Mouth',     icon: '👄', fact: 'Your mouth helps you eat, talk and smile. Kids have 20 baby teeth hiding inside!' },
+    { id: 'neck',      name: 'Neck',      icon: '🧣', fact: 'Your neck holds your head up and lets you nod yes and shake no. It has 7 bones inside!' },
+    { id: 'shoulders', name: 'Shoulders', icon: '🤷', fact: 'Shoulders are the most bendy joints in your body. They let your arms swing in a big circle!' },
+    { id: 'chest',     name: 'Chest',     icon: '❤️', fact: 'Your chest protects your heart and lungs behind a cage of 24 ribs!' },
+    { id: 'arms',      name: 'Arms',      icon: '💪', fact: 'Arms let you hug, throw and carry things. The muscle on top is called the biceps!' },
+    { id: 'hands',     name: 'Hands',     icon: '🖐️', fact: 'Each hand has 27 bones and 5 fingers. Your fingerprints are special — nobody else has the same ones!' },
+    { id: 'tummy',     name: 'Tummy',     icon: '🍎', fact: 'Your tummy holds your stomach, which turns your breakfast into energy for playing!' },
+    { id: 'knees',     name: 'Knees',     icon: '🦵', fact: 'Knees are hinges like a door. They bend so you can run, jump and sit down!' },
+    { id: 'legs',      name: 'Legs',      icon: '🏃', fact: 'Your legs have the longest bone in your body — the femur — and they carry you everywhere!' },
+    { id: 'feet',      name: 'Feet',      icon: '🦶', fact: 'Feet keep you balanced. Each foot has 26 bones and lots of tickly nerve endings!' },
+    { id: 'back',      name: 'Back',      icon: '🔙', fact: 'Your back has a bendy spine made of 33 little bones so you can twist and bend over!' },
+    { id: 'elbows',    name: 'Elbows',    icon: '💪', fact: 'Elbows let your arms fold up. The tingly funny bone spot is really a nerve!' },
+    { id: 'heels',     name: 'Heels',     icon: '🦶', fact: 'Your heel bone is the biggest bone in your foot and takes your weight when you walk!' }
+];
+
+// The figure has two faces (front / back). These helpers keep every
+// lookup view-aware so nothing has to know which SVG it is dealing with.
+function getBodySvgs() {
+    return [document.getElementById('bodySvgFront'), document.getElementById('bodySvgBack')].filter(Boolean);
+}
+
+function getActiveBodySvg() {
+    return document.getElementById(bodyView === 'front' ? 'bodySvgFront' : 'bodySvgBack');
+}
+
+// Which view(s) can show a given part
+function getViewsForPart(id) {
+    const views = [];
+    const front = document.getElementById('bodySvgFront');
+    const back  = document.getElementById('bodySvgBack');
+    if (front && front.querySelector(`.body-part[data-part="${id}"]`)) views.push('front');
+    if (back  && back.querySelector(`.body-part[data-part="${id}"]`))  views.push('back');
+    return views;
+}
+
+// Unique parts across BOTH views (a part on both faces counts once)
+function getBodyHotspotIds() {
+    const ids = new Set();
+    getBodySvgs().forEach(svg =>
+        svg.querySelectorAll('.body-part').forEach(g => ids.add(g.dataset.part)));
+    return ids.size ? [...ids] : BODY_PARTS.map(p => p.id);
+}
+
+function getBodyTotal() {
+    return getBodyHotspotIds().length;
+}
+
+let bodyMode = 'explore';
+let bodyScore = 0;
+let bodyDiscovered = new Set();
+let bodyTargetId = null;
+let bodyRoundQueue = [];
+let bodyLocked = false;
+let bodyLastSpoken = '';
+let bodyView = 'front';
+
+function getBodyPart(id) {
+    return BODY_PARTS.find(p => p.id === id);
+}
+
+function initBodyGame() {
+    const svgs = getBodySvgs();
+    if (!svgs.length) return;
+
+    bodyScore = 0;
+    bodyDiscovered = new Set();
+    bodyTargetId = null;
+    bodyLocked = false;
+
+    // Wire up hotspots once on both faces (click + keyboard for accessibility)
+    svgs.forEach(svg => {
+        svg.querySelectorAll('.body-part').forEach(group => {
+            if (group.dataset.wired === 'yes') return;
+            group.dataset.wired = 'yes';
+            group.addEventListener('click', () => handleBodyPartClick(group.dataset.part));
+            group.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleBodyPartClick(group.dataset.part);
+                }
+            });
+        });
+    });
+
+    setBodyView(bodyView, { silent: true, instant: true });
+    clearBodyHighlights();
+    renderBodyChecklist();
+    updateBodyStats();
+
+    if (bodyMode === 'explore') {
+        setBodyPrompt('Tap any part, then press Turn Around to see the back! 🔍');
+        showBodyInfo(null);
+        clearBodyChoices();
+    } else {
+        startBodyRound();
+    }
+}
+window.initBodyGame = initBodyGame;
+
+function setBodyMode(mode, evt) {
+    playSound(450);
+    bodyMode = mode;
+
+    document.querySelectorAll('.body-mode-btn').forEach(b => b.classList.remove('active'));
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+
+    const label = document.getElementById('bodyModeLabel');
+    if (label) {
+        label.innerText = mode === 'explore' ? 'Explore' : (mode === 'find' ? 'Find the Part' : 'Label It');
+    }
+    initBodyGame();
+
+    // Explain the mode out loud so kids who cannot read yet still know what to do.
+    const intros = {
+        explore: 'Explore mode! Tap any part of the body and I will tell you all about it.',
+        find:    'Find the part! I will name a body part, and you tap it on the picture.',
+        spell:   'Label it! Look at the glowing part, then choose its correct name.'
+    };
+    setTimeout(() => speakText(intros[mode] || ''), 220);
+}
+window.setBodyMode = setBodyMode;
+
+function updateBodyStats() {
+    const foundElem = document.getElementById('bodyFound');
+    const scoreElem = document.getElementById('bodyScore');
+    if (foundElem) foundElem.innerText = `${bodyDiscovered.size} / ${getBodyTotal()}`;
+    if (scoreElem) scoreElem.innerText = bodyScore;
+}
+
+function setBodyPrompt(text) {
+    const el = document.getElementById('bodyPrompt');
+    if (el) el.innerText = text;
+}
+
+function clearBodyChoices() {
+    const box = document.getElementById('bodyChoices');
+    if (box) box.innerHTML = '';
+}
+
+function clearBodyHighlights() {
+    getBodySvgs().forEach(svg => {
+        svg.classList.remove('has-target');
+        svg.querySelectorAll('.body-part').forEach(g => {
+            g.classList.remove('selected', 'correct-flash', 'wrong-flash', 'target-glow');
+            g.classList.toggle('found-mark', bodyDiscovered.has(g.dataset.part));
+        });
+    });
+    removeBodyTargetRing();
+}
+
+// ---- Rotation ----
+function setBodyView(view, opts = {}) {
+    if (view !== 'front' && view !== 'back') return;
+    const changed = bodyView !== view;
+    bodyView = view;
+
+    const stage = document.getElementById('bodyStage');
+    if (stage) stage.classList.toggle('flipped', view === 'back');
+
+    const pill = document.getElementById('bodyViewPill');
+    if (pill) pill.innerText = view === 'front' ? 'Front' : 'Back';
+
+    const label = document.getElementById('bodyRotateLabel');
+    if (label) label.innerText = view === 'front' ? 'Turn Around' : 'Turn Back';
+
+    // hidden face must not be reachable by keyboard
+    getBodySvgs().forEach(svg => {
+        const isActive = (svg.id === 'bodySvgFront') === (view === 'front');
+        svg.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        svg.querySelectorAll('.body-part').forEach(g =>
+            g.setAttribute('tabindex', isActive ? '0' : '-1'));
+    });
+
+    if (changed && !opts.silent) {
+        playSound(520, 'triangle', 0.18);
+        speakText(view === 'front' ? 'Now you see the front of the body.'
+                                   : 'Now you see the back of the body.');
+    }
+    // ring is positioned per-face, so redraw after the flip settles
+    if (bodyTargetId && bodyMode === 'spell') {
+        removeBodyTargetRing();
+        setTimeout(() => drawBodyTargetRing(bodyTargetId), opts.instant ? 0 : 700);
+    }
+}
+window.setBodyView = setBodyView;
+
+function flipBodyView() {
+    setBodyView(bodyView === 'front' ? 'back' : 'front');
+}
+window.flipBodyView = flipBodyView;
+
+// ---- Target ring overlay (Label It mode) ----
+function removeBodyTargetRing() {
+    document.querySelectorAll('.body-target-ring, .body-target-arrow').forEach(el => el.remove());
+}
+
+function drawBodyTargetRing(partId) {
+    removeBodyTargetRing();
+    const holder = document.querySelector('.body-svg-holder');
+    const svg = getActiveBodySvg();
+    if (!holder || !svg) return;
+
+    const group = svg.querySelector(`.body-part[data-part="${partId}"]`);
+    if (!group || typeof group.getBoundingClientRect !== 'function') return;
+
+    const gb = group.getBoundingClientRect();
+    const hb = holder.getBoundingClientRect();
+    if (!gb.width && !gb.height) return;
+
+    const pad = 14;
+    const size = Math.max(gb.width, gb.height) + pad * 2;
+    const cx = gb.left - hb.left + gb.width / 2;
+    const cy = gb.top - hb.top + gb.height / 2;
+
+    const ring = document.createElement('div');
+    ring.className = 'body-target-ring';
+    ring.style.width = `${size}px`;
+    ring.style.height = `${size}px`;
+    ring.style.left = `${cx - size / 2}px`;
+    ring.style.top = `${cy - size / 2}px`;
+    holder.appendChild(ring);
+
+    const arrow = document.createElement('div');
+    arrow.className = 'body-target-arrow';
+    arrow.innerText = '👉';
+    arrow.style.left = `${cx - size / 2 - 34}px`;
+    arrow.style.top = `${cy - 16}px`;
+    holder.appendChild(arrow);
+}
+
+function renderBodyChecklist() {
+    const box = document.getElementById('bodyChecklist');
+    if (!box) return;
+    box.innerHTML = '';
+    getBodyHotspotIds().forEach(id => {
+        const part = getBodyPart(id);
+        if (!part) return;
+        const chip = document.createElement('span');
+        chip.className = 'body-chip' + (bodyDiscovered.has(id) ? ' found' : '');
+        chip.innerText = bodyDiscovered.has(id) ? `${part.icon} ${part.name}` : `❔ ${part.name}`;
+        box.appendChild(chip);
+    });
+}
+
+function showBodyInfo(partId) {
+    const iconEl = document.getElementById('bodyInfoIcon');
+    const titleEl = document.getElementById('bodyInfoTitle');
+    const factEl = document.getElementById('bodyInfoFact');
+    if (!iconEl || !titleEl || !factEl) return;
+
+    if (!partId) {
+        iconEl.innerText = '👋';
+        titleEl.innerText = 'Meet your body!';
+        factEl.innerText = 'Click or tap a body part on the picture to hear its name and learn a cool fact about it.';
+        bodyLastSpoken = '';
+        return;
+    }
+
+    const part = getBodyPart(partId);
+    if (!part) return;
+    iconEl.innerText = part.icon;
+    titleEl.innerText = `This is the ${part.name}!`;
+    factEl.innerText = part.fact;
+    bodyLastSpoken = `${part.name}. ${part.fact}`;
+}
+
+function sayBodyPart() {
+    const text = bodyLastSpoken || 'Tap a body part to begin!';
+    speakText(text);
+}
+window.sayBodyPart = sayBodyPart;
+
+function markBodyDiscovered(partId) {
+    if (bodyDiscovered.has(partId)) return;
+    bodyDiscovered.add(partId);
+    renderBodyChecklist();
+    updateBodyStats();
+
+    if (bodyDiscovered.size === 1) {
+        unlockBadge('bodyExplorer');
+    }
+    if (bodyDiscovered.size >= getBodyTotal()) {
+        unlockBadge('bodyDoctor');
+        addStars(20);
+        launchConfetti(45);
+        playChime([523, 659, 784, 1046]);
+        showToast('You found every body part! 🧍✨', '🩺', 4200);
+        setBodyPrompt('Amazing! You know your whole body! 🎉');
+        setTimeout(() => speakText('Amazing work! You found every single body part. You are a little doctor now!'), 500);
+    }
+}
+
+function handleBodyPartClick(partId) {
+    if (bodyLocked) return;
+    const part = getBodyPart(partId);
+    if (!part) return;
+
+    const svg = getActiveBodySvg();
+    const group = svg ? svg.querySelector(`.body-part[data-part="${partId}"]`) : null;
+
+    if (bodyMode === 'explore') {
+        playSound(620);
+        getBodySvgs().forEach(s2 => s2.querySelectorAll('.body-part').forEach(g => g.classList.remove('selected')));
+        if (group) group.classList.add('selected');
+        showBodyInfo(partId);
+        const isNew = !bodyDiscovered.has(partId);
+        speakText(`${part.name}! ${part.fact}${isNew ? ' Great discovery!' : ''}`);
+        markBodyDiscovered(partId);
+        addStars(2);
+        return;
+    }
+
+    if (bodyMode === 'find') {
+        if (partId === bodyTargetId) {
+            bodyLocked = true;
+            playSound(900, 'sine', 0.2);
+            if (group) group.classList.add('correct-flash');
+            showBodyInfo(partId);
+            speakText(`Yes! That is the ${part.name}. ${part.fact}`);
+            bodyScore += 10;
+            markBodyDiscovered(partId);
+            addStars(3);
+            setBodyPrompt(`✅ Correct! That is the ${part.name}!`);
+            updateBodyStats();
+            launchConfetti(12);
+            setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2200);
+        } else {
+            playSound(200, 'sawtooth', 0.25);
+            if (group) {
+                group.classList.add('wrong-flash');
+                setTimeout(() => group.classList.remove('wrong-flash'), 520);
+            }
+            setBodyPrompt(`Oops, that is the ${part.name}. Try again! 🔍`);
+            speakText(`That is the ${part.name}. Try again!`);
+        }
+        return;
+    }
+
+    // In 'spell' (Label It) mode the picture is not the answer surface,
+    // but tapping still reads out the part for extra learning.
+    playSound(500);
+    speakText(`${part.name}. ${part.fact}`);
+}
+window.handleBodyPartClick = handleBodyPartClick;
+
+function startBodyRound() {
+    clearBodyHighlights();
+    clearBodyChoices();
+
+    const ids = getBodyHotspotIds();
+    if (!bodyRoundQueue.length) {
+        bodyRoundQueue = shuffleArray(ids);
+    }
+    // Avoid immediately repeating the same target
+    let next = bodyRoundQueue.pop();
+    if (next === bodyTargetId && bodyRoundQueue.length) {
+        bodyRoundQueue.unshift(next);
+        next = bodyRoundQueue.pop();
+    }
+    bodyTargetId = next;
+
+    const target = getBodyPart(bodyTargetId);
+    if (!target) return;
+
+    if (bodyMode === 'find') {
+        const views = getViewsForPart(bodyTargetId);
+        const hint = (views.length === 1 && views[0] !== bodyView)
+            ? ' (try turning around!)' : '';
+        setBodyPrompt(`🎯 Can you tap the ${target.name}?${hint}`);
+        speakText(`Where is the ${target.name}?`);
+        showBodyInfo(null);
+        const titleEl = document.getElementById('bodyInfoTitle');
+        const iconEl = document.getElementById('bodyInfoIcon');
+        const factEl = document.getElementById('bodyInfoFact');
+        if (titleEl) titleEl.innerText = `Find the ${target.name}!`;
+        if (iconEl) iconEl.innerText = '🎯';
+        if (factEl) factEl.innerText = 'Tap the matching part on the picture. Take your time!';
+        bodyLastSpoken = `Where is the ${target.name}?`;
+    } else {
+        // Label It: make sure the target is on the face we are showing,
+        // then glow it hard and ring it so it cannot be missed.
+        const views = getViewsForPart(bodyTargetId);
+        if (views.length && !views.includes(bodyView)) {
+            setBodyView(views[0], { silent: true });
+        }
+
+        const svg = getActiveBodySvg();
+        const group = svg ? svg.querySelector(`.body-part[data-part="${bodyTargetId}"]`) : null;
+        if (group) group.classList.add('target-glow');
+        if (svg) svg.classList.add('has-target');
+        setTimeout(() => drawBodyTargetRing(bodyTargetId), 60);
+
+        setBodyPrompt('🔤 What is the glowing part called?');
+        const iconEl = document.getElementById('bodyInfoIcon');
+        const titleEl = document.getElementById('bodyInfoTitle');
+        const factEl = document.getElementById('bodyInfoFact');
+        if (iconEl) iconEl.innerText = '❓';
+        if (titleEl) titleEl.innerText = 'Name that part!';
+        if (factEl) factEl.innerText = 'Look at the glowing spot, then pick the right name below.';
+        bodyLastSpoken = 'What is the glowing part called?';
+
+        const wrongPool = shuffleArray(ids.filter(i => i !== bodyTargetId)).slice(0, 3);
+        const choices = shuffleArray([bodyTargetId, ...wrongPool]);
+        renderBodyChoices(choices);
+    }
+}
+
+function renderBodyChoices(choiceIds) {
+    const box = document.getElementById('bodyChoices');
+    if (!box) return;
+    box.innerHTML = '';
+
+    choiceIds.forEach(id => {
+        const part = getBodyPart(id);
+        if (!part) return;
+        const btn = document.createElement('button');
+        btn.className = 'body-choice-btn';
+        btn.innerText = `${part.icon} ${part.name}`;
+        btn.onclick = () => answerBodyLabel(id, btn);
+        box.appendChild(btn);
+    });
+}
+
+function answerBodyLabel(chosenId, btn) {
+    if (bodyLocked) return;
+    bodyLocked = true;
+
+    const box = document.getElementById('bodyChoices');
+    const buttons = box ? [...box.querySelectorAll('.body-choice-btn')] : [];
+    buttons.forEach(b => b.disabled = true);
+
+    const target = getBodyPart(bodyTargetId);
+
+    if (chosenId === bodyTargetId) {
+        playSound(900, 'sine', 0.2);
+        btn.classList.add('correct');
+        bodyScore += 10;
+        markBodyDiscovered(bodyTargetId);
+        addStars(3);
+        setBodyPrompt(`✅ Yes! That is the ${target.name}!`);
+        showBodyInfo(bodyTargetId);
+        speakText(`Correct! ${target.name}. ${target.fact}`);
+        launchConfetti(12);
+    } else {
+        playSound(200, 'sawtooth', 0.25);
+        btn.classList.add('wrong');
+        const correctBtn = buttons.find(b => b.innerText.includes(target.name));
+        if (correctBtn) correctBtn.classList.add('correct');
+        setBodyPrompt(`Not quite — that was the ${target.name}. 💡`);
+        showBodyInfo(bodyTargetId);
+        speakText(`Almost! It was the ${target.name}.`);
+    }
+
+    getBodySvgs().forEach(sv => sv.classList.remove('has-target'));
+    removeBodyTargetRing();
+    updateBodyStats();
+    setTimeout(() => { bodyLocked = false; startBodyRound(); }, 2400);
+}
+window.answerBodyLabel = answerBodyLabel;
+
 
 // ============================================================
 // LAB EXPERIMENTS CONTROLLER
