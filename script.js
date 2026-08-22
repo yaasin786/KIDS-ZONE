@@ -3160,7 +3160,7 @@ function renderSafeAdminPanel() {
 function renderSafePostCard(p) {
     const liked = (p.likes || []).includes(currentActiveId);
     const isNote = p.audienceId && p.audienceId !== 'everyone';
-    const visibleComments = (p.comments || []).filter(c => currentRole === 'admin' || c.status === 'approved' || c.authorId === currentActiveId);
+    const visibleComments = (p.comments || []).filter(c => c && c.status !== 'deleted');
     const pendingClass = p.status === 'pending' ? ' pending' : '';
     const targetName = isNote ? (cachedKidProfiles.find(k => k.id === p.audienceId)?.name || 'a friend') : 'Everyone';
     return `<article class="safe-post${pendingClass}" id="safePost_${p.id}">
@@ -3181,7 +3181,7 @@ function renderSafePostCard(p) {
             ${currentRole === 'admin' ? `<button class="safe-action-btn" onclick="safeApprovePost('${p.id}')">✅ Approve</button><button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
         </div>
         <div class="safe-comments">
-            ${visibleComments.map(c => `<div class="safe-comment ${c.status === 'pending' ? 'pending' : ''}"><strong>${escapeHtml(c.authorAvatar || '🚀')} ${escapeHtml(c.authorName || 'Explorer')}:</strong> ${escapeHtml(c.text || '')} ${c.status === 'pending' ? '<em>⏳ waiting</em>' : ''}${currentRole === 'admin' && c.status === 'pending' ? ` <button class="book-btn" onclick="safeApproveComment('${p.id}','${c.id}')">Approve</button>` : ''}</div>`).join('')}
+            ${visibleComments.map(c => `<div class="safe-comment"><strong>${escapeHtml(c.authorAvatar || '🚀')} ${escapeHtml(c.authorName || 'Explorer')}:</strong> ${escapeHtml(c.text || '')}</div>`).join('')}
         </div>
         ${currentRole === 'kid' || currentRole === 'admin' ? `<div class="safe-comment-box"><input id="comment_${p.id}" maxlength="220" placeholder="Write a kind comment..."><button class="book-btn" onclick="submitSafeComment('${p.id}')">Send 💬</button></div>` : ''}
     </article>`;
@@ -3807,12 +3807,27 @@ async function submitSafeComment(postId) {
         id: 'c_' + Date.now(), text, createdAt: Date.now(), authorId: currentActiveId,
         authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
         authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
-        status: currentRole === 'admin' ? 'approved' : 'pending'
+        status: 'approved'
     });
     try {
-        await setDoc(doc(db, 'safeZonePosts', postId), { comments }, { merge: true });
+        // Update local copy immediately
+        const localPosts = getLocalSafePosts();
+        const localPost = localPosts.find(x => x.id === postId);
+        if (localPost) {
+            localPost.comments = comments;
+            saveLocalSafePosts(localPosts);
+        }
+        renderSafeZone();
+
+        // Sync both normal collection and profile-backed fallback when possible.
+        await setDoc(doc(db, 'safeZonePosts', postId), { comments }, { merge: true }).catch(e => {
+            console.warn('[KidZone] comment collection sync failed:', e && (e.code || e.message || e));
+        });
+        await updateSafeProfilePostFallback(postId, { comments }).catch(e => {
+            console.warn('[KidZone] comment profile fallback sync skipped/failed:', e && (e.code || e.message || e));
+        });
         if (input) input.value = '';
-        showToast(currentRole === 'admin' ? 'Comment posted.' : 'Comment sent for approval.', '💬', 2600);
+        showToast('Comment posted.', '💬', 2200);
     } catch (e) { console.error(e); showToast('Could not comment.', '❌', 3000); }
 }
 window.submitSafeComment = submitSafeComment;
