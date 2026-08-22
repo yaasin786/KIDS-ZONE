@@ -2905,6 +2905,7 @@ window.resetKidStats = resetKidStats;
 // ============================================================
 let safeZonePosts = [];
 let safeZoneProfilePosts = []; // post fallback stored in kidProfiles so posting works even when safeZonePosts is blocked
+let safeZoneLocalPostsMemory = []; // instant in-memory posts if localStorage quota is full
 let safeZoneChats = [];
 let safeZoneProfileChats = []; // chat fallback stored in kidProfiles so it syncs across devices
 let safeZoneProgressChats = []; // chat fallback stored in kidProgress inbox
@@ -2969,12 +2970,18 @@ function safeZoneContainsBadWords(text) {
 
 function localSafePostKey() { return 'kidzone_safe_posts_v1'; }
 function getLocalSafePosts() {
-    try { return JSON.parse(localStorage.getItem(localSafePostKey()) || '[]'); }
-    catch (e) { return []; }
+    let stored = [];
+    try { stored = JSON.parse(localStorage.getItem(localSafePostKey()) || '[]'); }
+    catch (e) { stored = []; }
+    const map = new Map();
+    [...stored, ...safeZoneLocalPostsMemory].forEach(p => { if (p && p.id) map.set(p.id, p); });
+    return [...map.values()];
 }
 function saveLocalSafePosts(list) {
-    try { localStorage.setItem(localSafePostKey(), JSON.stringify((list || []).slice(-120))); }
-    catch (e) { console.warn('[KidZone] local safe post save failed:', e); }
+    const capped = (list || []).slice(-120);
+    safeZoneLocalPostsMemory = capped;
+    try { localStorage.setItem(localSafePostKey(), JSON.stringify(capped)); }
+    catch (e) { console.warn('[KidZone] local safe post storage is full; keeping post in memory:', e && (e.name || e.message || e)); }
 }
 function upsertLocalSafePost(post) {
     const list = getLocalSafePosts().filter(p => p && p.id !== post.id);
@@ -3019,10 +3026,7 @@ function listenToSafeZone() {
 
 function buildSafeZone() {
     safeZoneBuilt = true;
-    safeZoneFilter = 'all';
-    document.querySelectorAll('.safe-chip').forEach(c => c.classList.remove('active'));
-    const firstSafeChip = document.querySelector('.safe-chip');
-    if (firstSafeChip) firstSafeChip.classList.add('active');
+    setSafeFeedFilterUI('all');
     populateSafeAudience();
     populateSafeChatFriends();
     renderSafeZone();
@@ -3054,6 +3058,13 @@ function populateSafeAudience() {
         sel.appendChild(opt);
     }
     if ([...sel.options].some(o => o.value === oldVal)) sel.value = oldVal;
+}
+
+function setSafeFeedFilterUI(filter = 'all') {
+    safeZoneFilter = filter;
+    document.querySelectorAll('.safe-chip').forEach(c => c.classList.remove('active'));
+    const chip = [...document.querySelectorAll('.safe-chip')].find(c => (c.getAttribute('onclick') || '').includes(`'${filter}'`));
+    if (chip) chip.classList.add('active');
 }
 
 function filterSafeZone(filter, evt) {
@@ -3687,9 +3698,18 @@ async function submitSafePost() {
 
     // Show the post immediately so the child never sees “Could not post”.
     upsertLocalSafePost({ ...data, instantLocal: true });
+    setSafeFeedFilterUI('all');
+    const searchBox = document.getElementById('safezoneSearch');
+    if (searchBox) searchBox.value = '';
     if (textEl) textEl.value = '';
     clearSafePostAttachment();
     renderSafeZone();
+    // Extra guarantee: if a browser storage quota or render timing issue happens,
+    // directly place the new card into the feed immediately.
+    const feed = document.getElementById('safezoneFeed');
+    if (feed && !document.getElementById('safePost_' + data.id)) {
+        feed.insertAdjacentHTML('afterbegin', renderSafePostCard(data));
+    }
     launchConfetti(16);
     playSound(760, 'triangle', 0.15);
     if (currentRole === 'kid') {
