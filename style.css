@@ -4281,3 +4281,25 @@ input {
     .error-logs-modal-content { padding: 16px 12px !important; }
     .error-log-row { padding: 10px; }
 }
+
+.safe-attachment-notice {
+    background: #fff8e7;
+    border: 2px dashed var(--accent-yellow);
+    border-radius: var(--radius-md);
+    padding: 9px 11px;
+    color: #92400e;
+    font-weight: 800;
+    font-size: .86rem;
+    margin: 8px 0 12px;
+}
+
+.safe-attachment-notice {
+    background: #fff8e7;
+    border: 2px dashed var(--accent-yellow);
+    border-radius: var(--radius-md);
+    padding: 9px 11px;
+    color: #92400e;
+    font-weight: 800;
+    font-size: .86rem;
+    margin: 8px 0 12px;
+}
