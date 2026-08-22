@@ -88,6 +88,7 @@
             <button id="addKidBtn" class="add-account-btn" style="display: none;" onclick="openCreateAccountModal()" title="Add Kid Profile">➕ Add Kid</button>
             <button id="manageProfilesBtn" class="add-account-btn" style="display: none; background: #ff9600;" onclick="openAdminPortalModal()" title="Manage & Remove Profiles">⚙️ Manage Profiles</button>
             <button id="reportsBtn" class="add-account-btn" style="display: none; background: #ce82ff;" onclick="openReportsModal()" title="See each kid's scores and answers">📊 Reports</button>
+            <button id="errorLogsBtn" class="add-account-btn" style="display: none; background: #ef4444;" onclick="openErrorLogsModal()" title="See website errors reported from kids devices">🧯 Error Logs</button>
 
             <button class="stats-btn" onclick="openBadgesModal()" title="My Badges" aria-label="View Badges">🏅 <span id="badgeCount">0</span></button>
             <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
@@ -435,7 +436,7 @@
 
             <div class="safezone-safety-strip">
                 <div class="safe-rule"><span>👀</span><strong>Admin sees everything</strong><small>No hidden private chats.</small></div>
-                <div class="safe-rule"><span>✅</span><strong>Approval before public</strong><small>Kids' posts wait for admin.</small></div>
+                <div class="safe-rule"><span>🚀</span><strong>Instant posting</strong><small>Kids can post freely; Admin can remove anything unkind.</small></div>
                 <div class="safe-rule"><span>💬</span><strong>Kind words only</strong><small>Friendly comments and likes.</small></div>
                 <div class="safe-rule"><span>🔒</span><strong>Closed family/class club</strong><small>Only created profiles can post.</small></div>
             </div>
@@ -516,8 +517,13 @@
                         </select>
                     </div>
                     <textarea id="safePostText" rows="3" maxlength="500" placeholder="Share something kind, fun, or clever! Example: I learned about the Nile River today! 🌊"></textarea>
+                    <div class="safe-post-attach-row">
+                        <label class="safe-post-attach-btn" for="safePostAttachment">📎 Add picture/file</label>
+                        <input type="file" id="safePostAttachment" class="safe-chat-file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt">
+                        <div id="safePostAttachmentPreview" class="safe-chat-attachment-preview"></div>
+                    </div>
                     <div class="safe-composer-footer">
-                        <small id="safeComposerHint">Posts are sent to Admin for approval before everyone sees them.</small>
+                        <small id="safeComposerHint">Kids can post instantly. Admin can still monitor and remove anything unkind.</small>
                         <button class="login-submit-btn" onclick="submitSafePost()">Post Safely 🚀</button>
                     </div>
                 </div>
@@ -1267,6 +1273,23 @@
         </div>
     </div>
 
+
+    <!-- Modal Popup: Admin Website Error Logs (ADMIN ONLY) -->
+    <div id="errorLogsModal" class="modal" onclick="closeErrorLogsModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="errorLogsTitle">
+        <div class="modal-content error-logs-modal-content">
+            <button class="close-btn" onclick="closeErrorLogsModal()" aria-label="Close error logs">&times;</button>
+            <div class="modal-icon">🧯</div>
+            <h2 id="errorLogsTitle">Website Error Logs</h2>
+            <p class="badges-subtitle">When a kid's device detects an error, it is recorded here so Admin can fix it later.</p>
+            <div class="error-log-actions">
+                <button class="solar-tool-btn active" onclick="refreshErrorLogs()">🔄 Refresh</button>
+                <button class="solar-tool-btn" onclick="downloadErrorLogs()">⬇️ Download JSON</button>
+                <button class="book-btn danger" onclick="clearLocalErrorLogs()">🧹 Clear Local</button>
+            </div>
+            <div id="errorLogsBody" class="error-logs-body"></div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Admin Kid Reports (ADMIN ONLY) -->
     <div id="reportsModal" class="modal" onclick="closeReportsModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="reportsTitle">
         <div class="modal-content reports-modal-content">
@@ -1383,5 +1406,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ebda743c555ec4',t:'MTc4NzMzODU0MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f1bcb19fef5ec4',t:'MTc4NzQwMDIzNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
