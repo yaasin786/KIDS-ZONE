@@ -3035,6 +3035,7 @@ function listenToSafeZone() {
         snapshot.forEach(docSnap => safeZoneChats.push(docSnap.data()));
         safeZoneChats.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
         renderSafeChat();
+        renderSafeGroupChat();
         renderSafeAdminPanel();
         updateNotifications();
     }, (error) => console.error('Safe Zone chat sync error:', error));
@@ -3051,9 +3052,11 @@ function buildSafeZone() {
     populateSafeAudience();
     populateSafeChatFriends();
     renderSafeZone();
+    renderSafeGroupChat();
     renderSafeChat();
     updateNotifications();
     wireSafeChatAttachmentPreview();
+    wireSafeGroupChatAttachmentPreview();
     wireSafePostAttachmentPreview();
     syncLocalSafeChatsToCloud();
 }
@@ -3274,6 +3277,118 @@ function chatVisibleToCurrent(m) {
     return m.status === 'approved' || m.fromId === currentActiveId;
 }
 
+
+
+function wireSafeGroupChatAttachmentPreview() {
+    const input = document.getElementById('safeGroupChatAttachment');
+    if (!input || input.dataset.wired === 'yes') return;
+    input.dataset.wired = 'yes';
+    input.addEventListener('change', () => {
+        const box = document.getElementById('safeGroupChatAttachmentPreview');
+        const f = input.files && input.files[0];
+        if (!box) return;
+        if (!f) { box.innerHTML = ''; return; }
+        const sizeKb = Math.round(f.size / 1024);
+        if ((f.type || '').startsWith('image/')) {
+            const url = URL.createObjectURL(f);
+            box.innerHTML = `<div class="safe-attachment-preview-card"><img src="${url}" alt="Group attachment preview"><div><strong>📎 ${escapeHtml(f.name)}</strong><small>${sizeKb} KB · image preview</small></div><button type="button" class="safe-remove-attachment" onclick="clearSafeGroupChatAttachment()">✖</button></div>`;
+        } else {
+            box.innerHTML = `<div class="safe-attachment-preview-card file"><span class="safe-file-big">📎</span><div><strong>${escapeHtml(f.name)}</strong><small>${sizeKb} KB · downloadable file</small></div><button type="button" class="safe-remove-attachment" onclick="clearSafeGroupChatAttachment()">✖</button></div>`;
+        }
+    });
+}
+
+function clearSafeGroupChatAttachment() {
+    const input = document.getElementById('safeGroupChatAttachment');
+    const box = document.getElementById('safeGroupChatAttachmentPreview');
+    if (input) input.value = '';
+    if (box) box.innerHTML = '';
+}
+window.clearSafeGroupChatAttachment = clearSafeGroupChatAttachment;
+
+function addSafeGroupChatEmoji(emoji) {
+    const input = document.getElementById('safeGroupChatInput');
+    if (!input) return;
+    const start = (typeof input.selectionStart === 'number') ? input.selectionStart : input.value.length;
+    const end = (typeof input.selectionEnd === 'number') ? input.selectionEnd : input.value.length;
+    input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+    try { input.selectionStart = input.selectionEnd = start + emoji.length; } catch (e) {}
+}
+window.addSafeGroupChatEmoji = addSafeGroupChatEmoji;
+
+function renderSafeGroupChat() {
+    const win = document.getElementById('safeGroupChatWindow');
+    if (!win) return;
+    const panel = document.getElementById('safezoneGroupChatPanel');
+    if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
+    const pageY = window.scrollY || document.documentElement.scrollTop || 0;
+    const chatY = win.scrollTop || 0;
+    const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && m.groupId === 'main').sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    if (!messages.length) {
+        win.innerHTML = '<div class="safe-empty">👋 No group messages yet. Say hello to everyone!</div>';
+        preserveSafeZoneScroll(pageY, chatY);
+        return;
+    }
+    win.innerHTML = messages.map(m => {
+        const isMe = m.fromId === currentActiveId;
+        return `<div class="safe-chat-bubble ${isMe ? 'group-me' : 'group-friend'}">
+            ${escapeHtml(m.text || '')}
+            ${renderSafeChatAttachment(m.attachment)}
+            <small>${escapeHtml(m.fromAvatar || '🚀')} ${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}</small>
+        </div>`;
+    }).join('');
+    preserveSafeZoneScroll(pageY, chatY);
+}
+window.renderSafeGroupChat = renderSafeGroupChat;
+
+async function sendSafeGroupQuickMessage(text) {
+    await sendSafeGroupMessage(text, true);
+}
+window.sendSafeGroupQuickMessage = sendSafeGroupQuickMessage;
+
+async function sendSafeGroupMessage(forcedText = null, quick = false) {
+    if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 2500); return; }
+    if (safeZonePaused && currentRole !== 'admin') { showToast('Group chat is paused by Admin right now.', '⏸️', 3000); return; }
+    const input = document.getElementById('safeGroupChatInput');
+    const text = String(forcedText || input?.value || '').trim();
+    const attachmentInput = document.getElementById('safeGroupChatAttachment');
+    const attachmentFile = (!forcedText && attachmentInput && attachmentInput.files) ? attachmentInput.files[0] : null;
+    if (!text && !attachmentFile) return;
+    if (safeZoneContainsBadWords(text)) { showToast('Kind group chat only please.', '🛡️', 3000); return; }
+    let attachment = null;
+    try { attachment = attachmentFile ? await safeChatFileToDataUrl(attachmentFile) : null; }
+    catch (e) { showToast(e.message || 'Attachment is too large.', '📎', 3600); return; }
+    const me = getActiveKidProfile() || {};
+    const id = 'group_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const data = {
+        id, text, createdAt: Date.now(), quick: !!quick,
+        groupId: 'main',
+        fromId: currentActiveId,
+        fromName: currentRole === 'admin' ? 'Admin' : (me.name || 'Explorer'),
+        fromAvatar: currentRole === 'admin' ? '🛠️' : (me.avatar || '🚀'),
+        toId: 'group_main',
+        toName: 'Everyone',
+        toAvatar: '👨‍👩‍👧‍👦',
+        status: 'approved',
+        attachment
+    };
+    upsertLocalSafeChat({ ...data, instantLocal: true });
+    if (input && !forcedText) input.value = '';
+    if (attachmentInput && !forcedText) attachmentInput.value = '';
+    clearSafeGroupChatAttachment();
+    renderSafeGroupChat();
+    playSound(720, 'triangle', 0.12);
+    try {
+        await saveSafeChatToOwnProfileOutbox(data);
+        setDoc(doc(db, 'safeZoneChats', id), data).catch(e => console.warn('[KidZone] group chat collection mirror failed:', e && (e.code || e.message || e)));
+        showToast('Sent to group!', '👨‍👩‍👧‍👦', 1800);
+        if (currentRole === 'kid') unlockBadge('safeFriend');
+    } catch (e) {
+        console.warn('[KidZone] group chat sync failed:', e && (e.code || e.message || e));
+        showToast('Group message saved here. Cloud sync may update later.', '👨‍👩‍👧‍👦', 3200);
+    }
+}
+window.sendSafeGroupMessage = sendSafeGroupMessage;
 
 function wireSafeChatAttachmentPreview() {
     const input = document.getElementById('safeChatAttachment');
@@ -3523,6 +3638,7 @@ function setupSafeProgressChatListener() {
         const data = snap.exists() ? (snap.data() || {}) : {};
         safeZoneProgressChats = Array.isArray(data.safeChats) ? data.safeChats.filter(m => m && m.id) : [];
         if (typeof renderSafeChat === 'function') renderSafeChat();
+        if (typeof renderSafeGroupChat === 'function') renderSafeGroupChat();
     }, (err) => console.warn('[KidZone] safe progress chat listener failed:', err && (err.code || err.message || err)));
 }
 
@@ -3999,6 +4115,20 @@ function buildNotifications() {
         }
     });
 
+    // New group chat messages from other kids.
+    getAllSafeZoneChats().forEach(m => {
+        if (!m || m.status === 'deleted') return;
+        if (m.groupId === 'main' && m.fromId !== currentActiveId) {
+            notes.push({
+                id: 'group_' + m.id,
+                type: 'groupchat', icon: '👨‍👩‍👧‍👦', at: m.createdAt || 0,
+                title: `${m.fromAvatar || '🚀'} ${m.fromName || 'Friend'} posted in Group Chat`,
+                text: m.text || (m.attachment ? 'Sent an attachment to the group.' : ''),
+                groupChat: true
+            });
+        }
+    });
+
     // New Safe Zone posts by other kids.
     getAllSafeZonePosts().forEach(p => {
         if (!p || p.status === 'deleted' || p.authorId === currentActiveId) return;
@@ -4091,7 +4221,9 @@ function openNotificationTarget(id) {
     const safeBtn = [...document.querySelectorAll('.nav-btn')].find(b => (b.getAttribute('onclick') || '').includes("'safezone'"));
     switchTab('safezone', { currentTarget: safeBtn });
     setTimeout(() => {
-        if (note && note.type === 'chat' && note.friendId) {
+        if (note && note.type === 'groupchat') {
+            document.getElementById('safezoneGroupChatPanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (note && note.type === 'chat' && note.friendId) {
             selectSafeChatFriend(note.friendId);
             document.getElementById('safezoneChatPanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else if (note && note.postId) {
