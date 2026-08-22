@@ -2992,9 +2992,13 @@ function upsertLocalSafePost(post) {
     saveLocalSafePosts(list);
 }
 function getAllSafeZonePosts() {
+    const all = [...getLocalSafePosts(), ...safeZoneProfilePosts, ...safeZonePosts].filter(p => p && p.id);
+    // Deletion must win over older local/profile copies. This fixes posts that
+    // reappeared after Admin deleted them because another fallback copy still existed.
+    const deletedIds = new Set(all.filter(p => p.status === 'deleted').map(p => p.id));
     const map = new Map();
-    [...getLocalSafePosts(), ...safeZoneProfilePosts, ...safeZonePosts].forEach(p => {
-        if (!p || !p.id || p.status === 'deleted') return;
+    all.forEach(p => {
+        if (!p || !p.id || deletedIds.has(p.id)) return;
         // No more approval system: treat old pending posts/comments as approved.
         const clean = {
             ...p,
@@ -3723,6 +3727,25 @@ async function updateSafeProfilePostFallback(postId, patch) {
     }, { merge: true });
 }
 
+async function saveSafePostDeleteTombstone(postId, authorId) {
+    if (!authorId) return;
+    const tombstone = {
+        id: postId,
+        kind: 'safePost',
+        status: 'deleted',
+        deletedAt: Date.now(),
+        authorId,
+        fromId: authorId
+    };
+    // arrayUnion tombstone is important because Firestore client rules may allow
+    // appending to safeOutbox but not replacing/removing array items.
+    await setDoc(doc(db, 'kidProfiles', authorId), {
+        safeOutbox: arrayUnion(tombstone),
+        latestSafePost: tombstone,
+        lastSafePostAt: Date.now()
+    }, { merge: true });
+}
+
 async function submitSafePost() {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 3000); return; }
     if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
@@ -3865,13 +3888,34 @@ window.safeHidePost = safeHidePost;
 
 async function safeDeletePost(postId) {
     if (currentRole !== 'admin') return;
-    if (!confirm('Delete this Safe Zone post?')) return;
+    if (!confirm('Delete this Safe Zone post for everyone?')) return;
+    const post = getSafePost(postId);
+    const authorId = post ? post.authorId : '';
     const patch = { status: 'deleted', deletedAt: Date.now() };
-    try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
-    catch(e) { console.warn('[KidZone] delete post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
-    try { await updateSafeProfilePostFallback(postId, patch); } catch(e2) {}
-    showToast('Post deleted.', '🗑️', 2200);
+
+    // 1) Remove/mark local copies immediately on the admin device.
+    const localPosts = getLocalSafePosts().map(p => p && p.id === postId ? { ...p, ...patch } : p);
+    saveLocalSafePosts(localPosts);
+    safeZoneProfilePosts = safeZoneProfilePosts.map(p => p && p.id === postId ? { ...p, ...patch } : p);
+    safeZonePosts = safeZonePosts.map(p => p && p.id === postId ? { ...p, ...patch } : p);
+    renderSafeZone();
+
+    // 2) Delete from all cloud/fallback places. Any one of these succeeding will
+    // create a tombstone that makes children hide the post too.
+    const jobs = [];
+    jobs.push(setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }).catch(e =>
+        console.warn('[KidZone] delete post collection failed:', e && (e.code || e.message || e))));
+    if (authorId) {
+        jobs.push(updateSafeProfilePostFallback(postId, patch).catch(e =>
+            console.warn('[KidZone] update fallback delete failed:', e && (e.code || e.message || e))));
+        jobs.push(saveSafePostDeleteTombstone(postId, authorId).catch(e =>
+            console.warn('[KidZone] tombstone delete failed:', e && (e.code || e.message || e))));
+    }
+    await Promise.all(jobs);
+    renderSafeZone();
+    showToast('Post deleted for kids.', '🗑️', 2600);
 }
+
 window.safeDeletePost = safeDeletePost;
 
 async function safeApproveComment(postId, commentId) {
