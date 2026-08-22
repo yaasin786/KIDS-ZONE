@@ -664,26 +664,42 @@ function listenToKidProfiles() {
         safeZoneProfilePosts = [];
         safeZoneProfileChats = [];
         snapshot.forEach(docSnap => {
-            const data = docSnap.data() || {};
-            if (data.kind === 'safeChat') {
+            // Always keep the Firestore document id. Some older profiles may not
+            // have an `id` field saved inside the document, which made them vanish
+            // from the mobile login dropdown after the Safe Zone additions.
+            const raw = docSnap.data() || {};
+            const data = { ...raw, id: raw.id || docSnap.id };
+            const docId = String(docSnap.id || data.id || '');
+
+            // Standalone fallback chat documents stored in kidProfiles.
+            if (data.kind === 'safeChat' || docId.startsWith('safechat_')) {
                 safeZoneProfileChats.push(data);
-            } else if (data.id && (data.pinHash || data.pin || String(data.id).startsWith('kid_'))) {
-                cachedKidProfiles.push(data);
-                // Chat fallback: each kid can usually write to their OWN profile,
-                // and everyone already reads kidProfiles for login/friend lists.
-                if (Array.isArray(data.safeOutbox)) {
-                    data.safeOutbox.forEach(item => {
-                        if (!item || !item.id) return;
-                        if (item.kind === 'safePost') safeZoneProfilePosts.push(item);
-                        else safeZoneProfileChats.push(item);
-                    });
-                }
-                if (Array.isArray(data.safePostOutbox)) {
-                    data.safePostOutbox.forEach(post => { if (post && post.id) safeZoneProfilePosts.push(post); });
-                }
-                if (Array.isArray(data.errorOutbox)) {
-                    data.errorOutbox.forEach(log => { if (log && log.id) collectedErrorLogs.push(log); });
-                }
+                return;
+            }
+
+            // A real kid profile has at least a name/avatar or a PIN/hash. Do not
+            // require the id to start with kid_, because older/mobile-created
+            // profiles may use a different document id.
+            const isKidProfile = !!(
+                data.name || data.avatar || data.pinHash || data.pin || docId.startsWith('kid_')
+            );
+            if (!isKidProfile) return;
+
+            cachedKidProfiles.push(data);
+            // Chat/post fallback: each kid can usually write to their OWN profile,
+            // and everyone already reads kidProfiles for login/friend lists.
+            if (Array.isArray(data.safeOutbox)) {
+                data.safeOutbox.forEach(item => {
+                    if (!item || !item.id) return;
+                    if (item.kind === 'safePost') safeZoneProfilePosts.push(item);
+                    else safeZoneProfileChats.push(item);
+                });
+            }
+            if (Array.isArray(data.safePostOutbox)) {
+                data.safePostOutbox.forEach(post => { if (post && post.id) safeZoneProfilePosts.push(post); });
+            }
+            if (Array.isArray(data.errorOutbox)) {
+                data.errorOutbox.forEach(log => { if (log && log.id) collectedErrorLogs.push(log); });
             }
         });
         populateKidSelect();
