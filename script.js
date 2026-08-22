@@ -3651,29 +3651,50 @@ window.safeDeleteChat = safeDeleteChat;
 
 
 async function saveSafePostToOwnProfileOutbox(data) {
-    // Make posts sync the SAME way chat syncs: append a small object to
-    // kidProfiles/{kidId}.safeOutbox with arrayUnion. The receiver already
-    // listens to kidProfiles, so this is the proven working channel.
-    const fullPost = { ...data, kind: 'safePost', profilePostFallback: true };
+    // Posts now use the EXACT chat-safe shape because your Firebase rules allow
+    // chat objects in kidProfiles.safeOutbox. The feed reads kind="safePost" and
+    // displays it as a post, while Firebase sees familiar chat-like fields.
+    const makeOutboxPost = (payload) => ({
+        id: payload.id,
+        kind: 'safePost',
+        text: payload.text || '',
+        createdAt: payload.createdAt || Date.now(),
+        quick: true,
+        fromId: payload.authorId,
+        fromName: payload.authorName,
+        fromAvatar: payload.authorAvatar,
+        toId: 'everyone',
+        toName: 'Everyone',
+        toAvatar: '🌍',
+        status: 'approved',
+        // Feed-specific duplicate fields for display
+        authorId: payload.authorId,
+        authorName: payload.authorName,
+        authorAvatar: payload.authorAvatar,
+        mood: payload.mood || '😊',
+        audienceId: payload.audienceId || 'everyone',
+        likes: Array.isArray(payload.likes) ? payload.likes : [],
+        comments: Array.isArray(payload.comments) ? payload.comments : [],
+        attachment: payload.attachment || null,
+        attachmentNotice: payload.attachmentNotice || '',
+        profilePostFallback: true
+    });
+
+    const fullPost = makeOutboxPost(data);
     try {
         await setDoc(doc(db, 'kidProfiles', data.authorId), {
             safeOutbox: arrayUnion(fullPost)
         }, { merge: true });
     } catch (e) {
-        // If the attachment makes the profile document too large, still sync the
-        // text post so other kids see it. The sender keeps the attachment locally.
-        if (data.attachment) {
-            const lightPost = {
-                ...fullPost,
-                attachment: null,
-                attachmentNotice: 'Picture/file was too large to sync to other devices.'
-            };
-            await setDoc(doc(db, 'kidProfiles', data.authorId), {
-                safeOutbox: arrayUnion(lightPost)
-            }, { merge: true });
-            return;
-        }
-        throw e;
+        // If an attachment or object size is blocked, retry with only text.
+        const lightPost = makeOutboxPost({
+            ...data,
+            attachment: null,
+            attachmentNotice: data.attachment ? 'Picture/file was too large to sync to other devices.' : ''
+        });
+        await setDoc(doc(db, 'kidProfiles', data.authorId), {
+            safeOutbox: arrayUnion(lightPost)
+        }, { merge: true });
     }
 }
 
