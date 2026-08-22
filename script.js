@@ -424,6 +424,7 @@ window.addEventListener('keydown', (e) => {
         if (typeof closeGeoModal === 'function') closeGeoModal();
         if (typeof closeHomeworkModal === 'function') closeHomeworkModal();
         if (typeof closeErrorLogsModal === 'function') closeErrorLogsModal();
+        if (typeof closeNotificationsModal === 'function') closeNotificationsModal();
     }
 });
 
@@ -713,6 +714,7 @@ function listenToKidProfiles() {
         if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
     wireSafePostAttachmentPreview();
         if (typeof renderSafeZone === 'function') renderSafeZone();
+        if (typeof updateNotifications === 'function') updateNotifications();
         if (typeof renderErrorLogs === 'function' && document.getElementById('errorLogsModal')?.style.display === 'flex') renderErrorLogs();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
@@ -3034,6 +3036,7 @@ function listenToSafeZone() {
         safeZoneChats.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
         renderSafeChat();
         renderSafeAdminPanel();
+        updateNotifications();
     }, (error) => console.error('Safe Zone chat sync error:', error));
 
     onSnapshot(doc(db, 'safeZoneSettings', 'main'), (snap) => {
@@ -3049,6 +3052,7 @@ function buildSafeZone() {
     populateSafeChatFriends();
     renderSafeZone();
     renderSafeChat();
+    updateNotifications();
     wireSafeChatAttachmentPreview();
     wireSafePostAttachmentPreview();
     syncLocalSafeChatsToCloud();
@@ -3950,6 +3954,161 @@ async function toggleSafeZonePause() {
     catch(e) { console.error(e); showToast('Could not update Safe Zone settings.', '❌', 3000); }
 }
 window.toggleSafeZonePause = toggleSafeZonePause;
+
+// ============================================================
+// NOTIFICATIONS
+// In-app notifications for new buddy chats, Safe Zone posts, comments and likes.
+// ============================================================
+let currentNotifications = [];
+
+function notificationReadKey() {
+    return 'kidzone_notifications_read_' + (currentActiveId || 'guest');
+}
+function getReadNotificationIds() {
+    try { return new Set(JSON.parse(localStorage.getItem(notificationReadKey()) || '[]')); }
+    catch (e) { return new Set(); }
+}
+function saveReadNotificationIds(set) {
+    try { localStorage.setItem(notificationReadKey(), JSON.stringify([...set].slice(-600))); }
+    catch (e) {}
+}
+function notificationTime(ms) {
+    if (!ms) return '';
+    const diff = Date.now() - ms;
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+    return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function buildNotifications() {
+    const notes = [];
+    if (!currentActiveId) return notes;
+
+    // New direct chat messages to this kid.
+    getAllSafeZoneChats().forEach(m => {
+        if (!m || m.status === 'deleted') return;
+        if (m.toId === currentActiveId && m.fromId !== currentActiveId) {
+            notes.push({
+                id: 'chat_' + m.id,
+                type: 'chat', icon: '💬', at: m.createdAt || 0,
+                title: `${m.fromAvatar || '🚀'} ${m.fromName || 'Friend'} sent you a message`,
+                text: m.text || (m.attachment ? 'Sent an attachment.' : ''),
+                friendId: m.fromId
+            });
+        }
+    });
+
+    // New Safe Zone posts by other kids.
+    getAllSafeZonePosts().forEach(p => {
+        if (!p || p.status === 'deleted' || p.authorId === currentActiveId) return;
+        notes.push({
+            id: 'post_' + p.id,
+            type: 'post', icon: p.attachment ? '🖼️' : '📝', at: p.createdAt || 0,
+            title: `${p.authorAvatar || '🚀'} ${p.authorName || 'Explorer'} posted in Safe Zone`,
+            text: p.text || (p.attachment ? 'Shared a picture or file.' : ''),
+            postId: p.id
+        });
+    });
+
+    // Comments on my posts by other people.
+    getAllSafeZonePosts().forEach(p => {
+        if (!p || p.authorId !== currentActiveId) return;
+        (p.comments || []).forEach(c => {
+            if (!c || c.status === 'deleted' || c.authorId === currentActiveId) return;
+            notes.push({
+                id: 'comment_' + p.id + '_' + c.id,
+                type: 'comment', icon: '💭', at: c.createdAt || p.createdAt || 0,
+                title: `${c.authorAvatar || '🚀'} ${c.authorName || 'Someone'} commented on your post`,
+                text: c.text || '', postId: p.id
+            });
+        });
+    });
+
+    return notes.sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 80);
+}
+
+function updateNotifications() {
+    const countEl = document.getElementById('notificationCount');
+    const btn = document.querySelector('.notify-btn');
+    if (!countEl || !btn) return;
+    currentNotifications = buildNotifications();
+    const read = getReadNotificationIds();
+    const unread = currentNotifications.filter(n => !read.has(n.id)).length;
+    countEl.innerText = unread;
+    btn.classList.toggle('has-unread', unread > 0);
+    if (document.getElementById('notificationsModal')?.style.display === 'flex') renderNotificationsList();
+}
+window.updateNotifications = updateNotifications;
+
+function renderNotificationsList() {
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+    const read = getReadNotificationIds();
+    const notes = currentNotifications.length ? currentNotifications : buildNotifications();
+    if (!notes.length) {
+        list.innerHTML = '<div class="notification-empty">🔕 No notifications yet.</div>';
+        return;
+    }
+    list.innerHTML = notes.map(n => `
+        <div class="notification-item ${read.has(n.id) ? '' : 'unread'}" onclick="openNotificationTarget('${n.id}')">
+            <div class="notification-icon">${n.icon}</div>
+            <div class="notification-body"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(String(n.text || '').slice(0, 120))}</p></div>
+            <div class="notification-time">${notificationTime(n.at)}</div>
+        </div>`).join('');
+}
+window.renderNotificationsList = renderNotificationsList;
+
+function openNotificationsModal() {
+    currentNotifications = buildNotifications();
+    renderNotificationsList();
+    const m = document.getElementById('notificationsModal');
+    if (m) m.style.display = 'flex';
+}
+window.openNotificationsModal = openNotificationsModal;
+function closeNotificationsModal() { const m = document.getElementById('notificationsModal'); if (m) m.style.display = 'none'; }
+window.closeNotificationsModal = closeNotificationsModal;
+function closeNotificationsModalOnBg(e) { if (e.target.id === 'notificationsModal') closeNotificationsModal(); }
+window.closeNotificationsModalOnBg = closeNotificationsModalOnBg;
+
+function markAllNotificationsRead() {
+    const read = getReadNotificationIds();
+    buildNotifications().forEach(n => read.add(n.id));
+    saveReadNotificationIds(read);
+    updateNotifications();
+    renderNotificationsList();
+    showToast('Notifications marked as read.', '✅', 2000);
+}
+window.markAllNotificationsRead = markAllNotificationsRead;
+
+function openNotificationTarget(id) {
+    const note = buildNotifications().find(n => n.id === id);
+    const read = getReadNotificationIds();
+    read.add(id);
+    saveReadNotificationIds(read);
+    closeNotificationsModal();
+    updateNotifications();
+    const safeBtn = [...document.querySelectorAll('.nav-btn')].find(b => (b.getAttribute('onclick') || '').includes("'safezone'"));
+    switchTab('safezone', { currentTarget: safeBtn });
+    setTimeout(() => {
+        if (note && note.type === 'chat' && note.friendId) {
+            selectSafeChatFriend(note.friendId);
+            document.getElementById('safezoneChatPanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (note && note.postId) {
+            const el = document.getElementById('safePost_' + note.postId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 250);
+}
+window.openNotificationTarget = openNotificationTarget;
+
+function requestBrowserNotifications() {
+    if (!('Notification' in window)) { showToast('Phone/browser notifications are not supported here.', '🔕', 3000); return; }
+    Notification.requestPermission().then(permission => {
+        showToast(permission === 'granted' ? 'Phone alerts enabled for this browser.' : 'Phone alerts not enabled.', permission === 'granted' ? '🔔' : '🔕', 3000);
+    });
+}
+window.requestBrowserNotifications = requestBrowserNotifications;
 
 
 // ============================================================
