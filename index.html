@@ -460,6 +460,44 @@
             </div>
 
 
+
+            <div id="safezoneGroupChatPanel" class="safezone-chat-panel safezone-group-chat-panel">
+                <div class="safezone-chat-head">
+                    <div>
+                        <span class="safe-kicker">👨‍👩‍👧‍👦 Safe Group Chat</span>
+                        <h2>Everyone Chat Room</h2>
+                        <p>All kids can chat together here. Admin can see everything and delete anything unkind.</p>
+                    </div>
+                    <span class="safe-group-live-pill">🟢 Safe Room</span>
+                </div>
+                <div id="safeGroupChatWindow" class="safe-chat-window safe-group-chat-window">
+                    <div class="safe-empty">👋 No group messages yet. Say hello to everyone!</div>
+                </div>
+                <div class="safe-quick-messages safe-group-quick">
+                    <button type="button" onclick="sendSafeGroupQuickMessage('Hello everyone! 👋')">Hello 👋</button>
+                    <button type="button" onclick="sendSafeGroupQuickMessage('Great job friends! 🌟')">Great job 🌟</button>
+                    <button type="button" onclick="sendSafeGroupQuickMessage('Who wants to learn together? 📚')">Learn 📚</button>
+                    <button type="button" onclick="sendSafeGroupQuickMessage('Let’s play a quiz! 🧠')">Quiz 🧠</button>
+                </div>
+                <div class="safe-emoji-row" aria-label="Group chat emoji picker">
+                    <button type="button" onclick="addSafeGroupChatEmoji('😀')">😀</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('😂')">😂</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('😍')">😍</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('🥳')">🥳</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('👍')">👍</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('❤️')">❤️</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('🌟')">🌟</button>
+                    <button type="button" onclick="addSafeGroupChatEmoji('📚')">📚</button>
+                </div>
+                <div class="safe-chat-input-row">
+                    <input id="safeGroupChatInput" maxlength="220" placeholder="Message everyone kindly..." onkeydown="if(event.key==='Enter'){sendSafeGroupMessage();}">
+                    <label class="safe-attach-btn" for="safeGroupChatAttachment" title="Attach a picture or file">📎</label>
+                    <input type="file" id="safeGroupChatAttachment" class="safe-chat-file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt">
+                    <button type="button" class="book-btn" onclick="sendSafeGroupMessage()">Send to Group 💬</button>
+                </div>
+                <div id="safeGroupChatAttachmentPreview" class="safe-chat-attachment-preview"></div>
+            </div>
+
             <div id="safezoneChatPanel" class="safezone-chat-panel">
                 <div class="safezone-chat-head">
                     <div>
@@ -1423,5 +1461,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f22eb10b023878',t:'MTc4NzQwNDkwNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f26dab9d1c3111',t:'MTc4NzQwNzQ4NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
