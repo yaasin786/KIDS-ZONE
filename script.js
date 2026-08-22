@@ -2993,7 +2993,18 @@ function upsertLocalSafePost(post) {
 }
 function getAllSafeZonePosts() {
     const map = new Map();
-    [...getLocalSafePosts(), ...safeZoneProfilePosts, ...safeZonePosts].forEach(p => { if (p && p.id && p.status !== 'deleted') map.set(p.id, p); });
+    [...getLocalSafePosts(), ...safeZoneProfilePosts, ...safeZonePosts].forEach(p => {
+        if (!p || !p.id || p.status === 'deleted') return;
+        // No more approval system: treat old pending posts/comments as approved.
+        const clean = {
+            ...p,
+            status: 'approved',
+            comments: Array.isArray(p.comments)
+                ? p.comments.filter(c => c && c.status !== 'deleted').map(c => ({ ...c, status: 'approved' }))
+                : []
+        };
+        map.set(clean.id, clean);
+    });
     return [...map.values()].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 function getSafePost(id) { return getAllSafeZonePosts().find(p => p.id === id); }
@@ -3113,7 +3124,7 @@ function renderSafeZone() {
     }
     if (safeZoneFilter === 'mine') list = list.filter(p => p.authorId === currentActiveId);
     if (safeZoneFilter === 'notes') list = list.filter(p => p.audienceId && p.audienceId !== 'everyone');
-    if (safeZoneFilter === 'pending') list = list.filter(p => p.status === 'pending' || (p.comments || []).some(c => c.status === 'pending'));
+    if (safeZoneFilter === 'pending') list = [];
     if (q) list = list.filter(p => (p.text || '').toLowerCase().includes(q) || (p.authorName || '').toLowerCase().includes(q));
 
     if (!list.length) {
@@ -3131,8 +3142,8 @@ function renderSafeAdminPanel() {
     const stats = document.getElementById('safezoneAdminStats');
     const pendingBox = document.getElementById('safezonePendingQueue');
     const allPosts = getAllSafeZonePosts();
-    const pendingPosts = allPosts.filter(p => p.status === 'pending');
-    const pendingComments = allPosts.reduce((n,p)=> n + (p.comments || []).filter(c => c.status === 'pending').length, 0);
+    const pendingPosts = [];
+    const pendingComments = 0;
     const allChats = getAllSafeZoneChats();
     const pendingChats = allChats.filter(m => m.status === 'pending').length;
     const approved = allPosts.filter(p => p.status === 'approved').length;
@@ -3161,13 +3172,13 @@ function renderSafePostCard(p) {
     const liked = (p.likes || []).includes(currentActiveId);
     const isNote = p.audienceId && p.audienceId !== 'everyone';
     const visibleComments = (p.comments || []).filter(c => c && c.status !== 'deleted');
-    const pendingClass = p.status === 'pending' ? ' pending' : '';
+    const pendingClass = '';
     const targetName = isNote ? (cachedKidProfiles.find(k => k.id === p.audienceId)?.name || 'a friend') : 'Everyone';
-    return `<article class="safe-post${pendingClass}" id="safePost_${p.id}">
+    return `<article class="safe-post" id="safePost_${p.id}">
         <div class="safe-post-head">
             <div class="safe-author"><span class="safe-author-avatar">${escapeHtml(p.authorAvatar || '🚀')}</span><div><strong>${escapeHtml(p.authorName || 'Explorer')}</strong><small>${escapeHtml(safePostTime(p.createdAt))}</small></div></div>
             <div class="safe-post-badges">
-                <span class="safe-badge ${p.status === 'approved' ? 'approved' : 'pending'}">${p.status === 'approved' ? '✅ Approved' : '⏳ Waiting'}</span>
+                <span class="safe-badge approved">🚀 Posted</span>
                 ${isNote ? `<span class="safe-badge note">💌 To ${escapeHtml(targetName)}</span>` : '<span class="safe-badge">🏠 Club Feed</span>'}
                 <span class="safe-badge">${escapeHtml(p.mood || '😊')}</span>
             </div>
@@ -3178,7 +3189,7 @@ function renderSafePostCard(p) {
         <div class="safe-post-actions">
             <button class="safe-action-btn ${liked ? 'liked' : ''}" onclick="toggleSafeLike('${p.id}')">❤️ ${(p.likes || []).length} Like</button>
             <button class="safe-action-btn" onclick="focusSafeComment('${p.id}')">💬 ${visibleComments.length} Comment</button>
-            ${currentRole === 'admin' ? `<button class="safe-action-btn" onclick="safeApprovePost('${p.id}')">✅ Approve</button><button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
+            ${currentRole === 'admin' ? `<button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
         </div>
         <div class="safe-comments">
             ${visibleComments.map(c => `<div class="safe-comment"><strong>${escapeHtml(c.authorAvatar || '🚀')} ${escapeHtml(c.authorName || 'Explorer')}:</strong> ${escapeHtml(c.text || '')}</div>`).join('')}
