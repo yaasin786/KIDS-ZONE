@@ -4169,3 +4169,115 @@ input {
     .safe-attachment-preview-card { max-width: 100%; }
     .safe-attachment-preview-card img { width: 54px; height: 54px; }
 }
+
+/* Safe Zone post attachments */
+.safe-post-attach-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.safe-post-attach-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #ede9fe;
+    color: #5b21b6;
+    border: 2px solid #c4b5fd;
+    border-bottom: 4px solid #a78bfa;
+    border-radius: var(--radius-full);
+    padding: 9px 14px;
+    font-family: var(--font-heading);
+    font-size: .85rem;
+    cursor: pointer;
+}
+.safe-post .safe-chat-attachment {
+    margin: 8px 0 12px;
+}
+.safe-post .safe-chat-attachment img {
+    max-width: min(360px, 100%);
+    max-height: 260px;
+    border-color: var(--border-color);
+}
+.safe-post .safe-chat-download,
+.safe-post .safe-chat-file-link {
+    background: #eef2ff;
+    color: #4338ca;
+    border-color: #c7d2fe;
+}
+@media (max-width: 768px) {
+    .safe-post-attach-btn { width: 100%; }
+}
+
+/* ============================================================
+   26. ADMIN ERROR LOGS
+   ============================================================ */
+.error-logs-modal-content {
+    max-width: 820px;
+    width: 95%;
+    max-height: 88vh;
+    overflow-y: auto;
+    text-align: center;
+}
+.error-log-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 14px 0;
+}
+.error-logs-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    margin-top: 12px;
+}
+.error-log-row {
+    background: var(--bg-main);
+    border: 2px solid var(--border-color);
+    border-left: 6px solid #ef4444;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+}
+.error-log-row.warn { border-left-color: #f59e0b; }
+.error-log-row.info { border-left-color: var(--primary-blue); }
+.error-log-row h4 {
+    font-family: var(--font-heading);
+    font-size: .98rem;
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+}
+.error-log-row p {
+    font-size: .86rem;
+    color: var(--text-muted);
+    margin: 3px 0;
+    overflow-wrap: anywhere;
+}
+.error-log-row pre {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: #0f172a;
+    color: #e5e7eb;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: .76rem;
+    max-height: 160px;
+    overflow-y: auto;
+}
+.error-log-pill {
+    display: inline-block;
+    font-size: .7rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #fee2e2;
+    color: #b91c1c;
+    margin-right: 6px;
+}
+@media (max-width: 768px) {
+    .error-logs-modal-content { padding: 16px 12px !important; }
+    .error-log-row { padding: 10px; }
+}
