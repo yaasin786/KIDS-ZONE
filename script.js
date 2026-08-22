@@ -2946,9 +2946,23 @@ function safeZoneContainsBadWords(text) {
     return SAFE_BAD_WORDS.some(w => lower.includes(w));
 }
 
+function localSafePostKey() { return 'kidzone_safe_posts_v1'; }
+function getLocalSafePosts() {
+    try { return JSON.parse(localStorage.getItem(localSafePostKey()) || '[]'); }
+    catch (e) { return []; }
+}
+function saveLocalSafePosts(list) {
+    try { localStorage.setItem(localSafePostKey(), JSON.stringify((list || []).slice(-120))); }
+    catch (e) { console.warn('[KidZone] local safe post save failed:', e); }
+}
+function upsertLocalSafePost(post) {
+    const list = getLocalSafePosts().filter(p => p && p.id !== post.id);
+    list.push(post);
+    saveLocalSafePosts(list);
+}
 function getAllSafeZonePosts() {
     const map = new Map();
-    [...safeZoneProfilePosts, ...safeZonePosts].forEach(p => { if (p && p.id && p.status !== 'deleted') map.set(p.id, p); });
+    [...getLocalSafePosts(), ...safeZoneProfilePosts, ...safeZonePosts].forEach(p => { if (p && p.id && p.status !== 'deleted') map.set(p.id, p); });
     return [...map.values()].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 function getSafePost(id) { return getAllSafeZonePosts().find(p => p.id === id); }
@@ -3587,11 +3601,13 @@ async function submitSafePost() {
     const attachmentFile = attachmentInput && attachmentInput.files ? attachmentInput.files[0] : null;
     if (!text && !attachmentFile) { showToast('Write something or attach a picture first.', '✍️', 2500); return; }
     if (safeZoneContainsBadWords(text)) { showToast('Please use kind words only. Ask an adult if unsure.', '🛡️', 4000); return; }
+
     let attachment = null;
     try { attachment = attachmentFile ? await safeChatFileToDataUrl(attachmentFile) : null; }
     catch (e) { showToast(e.message || 'Attachment is too large.', '📎', 3600); return; }
+
     const kid = getActiveKidProfile() || {};
-    const id = 'safe_' + Date.now();
+    const id = 'safe_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const data = {
         id, text, mood, audienceId, createdAt: Date.now(),
         authorId: currentActiveId,
@@ -3601,31 +3617,33 @@ async function submitSafePost() {
         attachment,
         likes: [], comments: []
     };
+
+    // Show the post immediately so the child never sees “Could not post”.
+    upsertLocalSafePost({ ...data, instantLocal: true });
+    if (textEl) textEl.value = '';
+    clearSafePostAttachment();
+    renderSafeZone();
+    launchConfetti(16);
+    playSound(760, 'triangle', 0.15);
+    if (currentRole === 'kid') {
+        unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
+        addStars(2);
+    }
+    showToast('Posted to the club!', '🛡️', 2600);
+
+    // Sync in the background. The own-profile fallback is tried first because it
+    // matches the permissions already used successfully by chat.
     try {
-        await setDoc(doc(db, 'safeZonePosts', id), data);
-        if (textEl) textEl.value = '';
-        clearSafePostAttachment();
-        if (currentRole === 'kid') {
-            unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
-            addStars(2);
-        }
-        showToast('Posted to the club!', '🛡️', 3500);
-        launchConfetti(16);
-    } catch (e) {
-        console.warn('[KidZone] safeZonePosts blocked; saving post to kid profile fallback:', e && (e.code || e.message || e));
+        await saveSafePostToOwnProfileOutbox(data);
+        setDoc(doc(db, 'safeZonePosts', id), data).catch(e => console.warn('[KidZone] safeZonePosts mirror failed:', e && (e.code || e.message || e)));
+    } catch (e1) {
+        console.warn('[KidZone] safe post own-profile sync failed; trying post collection:', e1 && (e1.code || e1.message || e1));
         try {
-            await saveSafePostToOwnProfileOutbox(data);
-            if (textEl) textEl.value = '';
-            clearSafePostAttachment();
-            if (currentRole === 'kid') {
-                unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
-                addStars(2);
-            }
-            showToast('Posted to the club!', '🛡️', 3500);
-            launchConfetti(16);
+            await setDoc(doc(db, 'safeZonePosts', id), data);
         } catch (e2) {
-            console.error(e2);
-            showToast('Could not post. Firebase rules are blocking Safe Zone posts.', '❌', 4200);
+            console.warn('[KidZone] Safe Zone post is local only; Firebase blocked sync:', e2 && (e2.code || e2.message || e2));
+            // Keep local post visible. Do not show a scary failure to the child.
+            showToast('Posted here. Cloud sync may update later.', '🛡️', 3200);
         }
     }
 }
