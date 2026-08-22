@@ -90,6 +90,7 @@
             <button id="reportsBtn" class="add-account-btn" style="display: none; background: #ce82ff;" onclick="openReportsModal()" title="See each kid's scores and answers">📊 Reports</button>
             <button id="errorLogsBtn" class="add-account-btn" style="display: none; background: #ef4444;" onclick="openErrorLogsModal()" title="See website errors reported from kids devices">🧯 Error Logs</button>
 
+            <button class="stats-btn notify-btn" onclick="openNotificationsModal()" title="Notifications" aria-label="View Notifications">🔔 <span id="notificationCount">0</span></button>
             <button class="stats-btn" onclick="openBadgesModal()" title="My Badges" aria-label="View Badges">🏅 <span id="badgeCount">0</span></button>
             <div class="star-display" title="Stars earned">⭐ <span id="starCount">0</span></div>
             <div class="level-display" title="Explorer level">Lvl <span id="levelCount">1</span></div>
@@ -1385,6 +1386,22 @@
         </div>
     </div>
 
+
+    <!-- Modal Popup: Notifications -->
+    <div id="notificationsModal" class="modal" onclick="closeNotificationsModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="notificationsTitle">
+        <div class="modal-content notifications-modal-content">
+            <button class="close-btn" onclick="closeNotificationsModal()" aria-label="Close notifications">&times;</button>
+            <div class="modal-icon">🔔</div>
+            <h2 id="notificationsTitle">My Notifications</h2>
+            <p class="badges-subtitle">See new messages, new Safe Zone posts, likes, and comments.</p>
+            <div class="notification-actions">
+                <button class="solar-tool-btn active" onclick="markAllNotificationsRead()">✅ Mark all read</button>
+                <button class="solar-tool-btn" onclick="requestBrowserNotifications()">🔔 Phone Alerts</button>
+            </div>
+            <div id="notificationsList" class="notifications-list"></div>
+        </div>
+    </div>
+
     <!-- Modal Popup: Badges -->
     <div id="badgesModal" class="modal" onclick="closeBadgesModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="badgeModalTitle">
         <div class="modal-content badges-modal-content">
@@ -1406,5 +1423,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f1bcb19fef5ec4',t:'MTc4NzQwMDIzNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f22eb10b023878',t:'MTc4NzQwNDkwNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
