@@ -3339,6 +3339,40 @@ async function safeChatFileToDataUrl(file) {
     return fileToDataUrl(file, 520 * 1024);
 }
 
+async function safePostFileToDataUrl(file) {
+    if (!file) return null;
+    const type = file.type || '';
+    // Posts are broadcast through kidProfiles, so pictures must be much smaller
+    // than chat images to avoid Firestore's document-size limit.
+    if (type.startsWith('image/')) {
+        if (file.size > 8 * 1024 * 1024) throw new Error('Image is too large. Please choose a smaller picture.');
+        const raw = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error('Could not read image.'));
+            r.readAsDataURL(file);
+        });
+        const img = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.onload = () => resolve(im);
+            im.onerror = () => reject(new Error('Could not load image.'));
+            im.src = raw;
+        });
+        const maxSide = 420;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.45);
+        if (dataUrl.length > 280000) dataUrl = canvas.toDataURL('image/jpeg', 0.32);
+        if (dataUrl.length > 420000) throw new Error('Picture is still too large. Try cropping it or choosing a smaller image.');
+        return { name: (file.name || 'post-picture').replace(/\.[^.]+$/, '') + '.jpg', type: 'image/jpeg', size: Math.round(dataUrl.length * 0.75), dataUrl };
+    }
+    return fileToDataUrl(file, 220 * 1024);
+}
+
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
     if (!win) return;
@@ -3578,7 +3612,11 @@ window.safeDeleteChat = safeDeleteChat;
 
 async function saveSafePostToOwnProfileOutbox(data) {
     const outboxPost = { ...data, profilePostFallback: true };
-    await setDoc(doc(db, 'kidProfiles', data.authorId), { safePostOutbox: arrayUnion(outboxPost) }, { merge: true });
+    const profile = cachedKidProfiles.find(k => k.id === data.authorId) || {};
+    const existing = Array.isArray(profile.safePostOutbox) ? profile.safePostOutbox.filter(p => p && p.id !== data.id) : [];
+    // Keep the profile document small so picture posts continue to sync.
+    const next = [outboxPost, ...existing].slice(0, 12);
+    await setDoc(doc(db, 'kidProfiles', data.authorId), { safePostOutbox: next }, { merge: true });
 }
 
 async function updateSafeProfilePostFallback(postId, patch) {
@@ -3603,7 +3641,7 @@ async function submitSafePost() {
     if (safeZoneContainsBadWords(text)) { showToast('Please use kind words only. Ask an adult if unsure.', '🛡️', 4000); return; }
 
     let attachment = null;
-    try { attachment = attachmentFile ? await safeChatFileToDataUrl(attachmentFile) : null; }
+    try { attachment = attachmentFile ? await safePostFileToDataUrl(attachmentFile) : null; }
     catch (e) { showToast(e.message || 'Attachment is too large.', '📎', 3600); return; }
 
     const kid = getActiveKidProfile() || {};
