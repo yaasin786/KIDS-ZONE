@@ -672,7 +672,11 @@ function listenToKidProfiles() {
                 // Chat fallback: each kid can usually write to their OWN profile,
                 // and everyone already reads kidProfiles for login/friend lists.
                 if (Array.isArray(data.safeOutbox)) {
-                    data.safeOutbox.forEach(m => { if (m && m.id) safeZoneProfileChats.push(m); });
+                    data.safeOutbox.forEach(item => {
+                        if (!item || !item.id) return;
+                        if (item.kind === 'safePost') safeZoneProfilePosts.push(item);
+                        else safeZoneProfileChats.push(item);
+                    });
                 }
                 if (Array.isArray(data.safePostOutbox)) {
                     data.safePostOutbox.forEach(post => { if (post && post.id) safeZoneProfilePosts.push(post); });
@@ -3611,21 +3615,29 @@ window.safeDeleteChat = safeDeleteChat;
 
 
 async function saveSafePostToOwnProfileOutbox(data) {
-    const outboxPost = { ...data, profilePostFallback: true };
+    // Use safeOutbox because chat already proved this field syncs across devices.
+    // Mark the item as kind=safePost so the profile listener puts it in the feed,
+    // not in the chat list.
+    const outboxPost = { ...data, kind: 'safePost', profilePostFallback: true };
     const profile = cachedKidProfiles.find(k => k.id === data.authorId) || {};
-    const existing = Array.isArray(profile.safePostOutbox) ? profile.safePostOutbox.filter(p => p && p.id !== data.id) : [];
-    // Keep the profile document small so picture posts continue to sync.
-    const next = [outboxPost, ...existing].slice(0, 12);
-    await setDoc(doc(db, 'kidProfiles', data.authorId), { safePostOutbox: next }, { merge: true });
+    const existing = Array.isArray(profile.safeOutbox) ? profile.safeOutbox.filter(item => item && item.id !== data.id) : [];
+    // Preserve chat messages too, but keep the document from becoming too large.
+    const next = [outboxPost, ...existing].slice(0, 40);
+    await setDoc(doc(db, 'kidProfiles', data.authorId), { safeOutbox: next }, { merge: true });
 }
 
 async function updateSafeProfilePostFallback(postId, patch) {
     const post = getSafePost(postId);
     if (!post || !post.authorId) throw new Error('Fallback post not found.');
     const profile = cachedKidProfiles.find(k => k.id === post.authorId) || {};
-    const list = Array.isArray(profile.safePostOutbox) ? profile.safePostOutbox : [];
-    const updated = list.map(p => p && p.id === postId ? { ...p, ...patch } : p);
-    await setDoc(doc(db, 'kidProfiles', post.authorId), { safePostOutbox: updated }, { merge: true });
+    const safeOutbox = Array.isArray(profile.safeOutbox) ? profile.safeOutbox : [];
+    const safePostOutbox = Array.isArray(profile.safePostOutbox) ? profile.safePostOutbox : [];
+    const updatedOutbox = safeOutbox.map(item => item && item.id === postId ? { ...item, ...patch } : item);
+    const updatedLegacy = safePostOutbox.map(item => item && item.id === postId ? { ...item, ...patch } : item);
+    await setDoc(doc(db, 'kidProfiles', post.authorId), {
+        safeOutbox: updatedOutbox,
+        safePostOutbox: updatedLegacy
+    }, { merge: true });
 }
 
 async function submitSafePost() {
