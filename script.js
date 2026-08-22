@@ -953,6 +953,7 @@ function setupUIForSession() {
         }
     }
     setupSafeProgressChatListener();
+    if (currentRole === 'kid') safeZoneFilter = 'all';
     updateSafeZoneIdentity();
 }
 
@@ -3002,6 +3003,10 @@ function listenToSafeZone() {
 
 function buildSafeZone() {
     safeZoneBuilt = true;
+    safeZoneFilter = 'all';
+    document.querySelectorAll('.safe-chip').forEach(c => c.classList.remove('active'));
+    const firstSafeChip = document.querySelector('.safe-chip');
+    if (firstSafeChip) firstSafeChip.classList.add('active');
     populateSafeAudience();
     populateSafeChatFriends();
     renderSafeZone();
@@ -3616,14 +3621,10 @@ window.safeDeleteChat = safeDeleteChat;
 
 async function saveSafePostToOwnProfileOutbox(data) {
     // Use safeOutbox because chat already proved this field syncs across devices.
-    // Mark the item as kind=safePost so the profile listener puts it in the feed,
-    // not in the chat list.
+    // IMPORTANT: use arrayUnion like chat does; replacing the whole array can be
+    // rejected or overwrite newer messages from another device.
     const outboxPost = { ...data, kind: 'safePost', profilePostFallback: true };
-    const profile = cachedKidProfiles.find(k => k.id === data.authorId) || {};
-    const existing = Array.isArray(profile.safeOutbox) ? profile.safeOutbox.filter(item => item && item.id !== data.id) : [];
-    // Preserve chat messages too, but keep the document from becoming too large.
-    const next = [outboxPost, ...existing].slice(0, 40);
-    await setDoc(doc(db, 'kidProfiles', data.authorId), { safeOutbox: next }, { merge: true });
+    await setDoc(doc(db, 'kidProfiles', data.authorId), { safeOutbox: arrayUnion(outboxPost) }, { merge: true });
 }
 
 async function updateSafeProfilePostFallback(postId, patch) {
