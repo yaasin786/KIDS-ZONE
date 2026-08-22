@@ -162,6 +162,9 @@ function shuffleArray(array) {
 
 // Keep dynamic profiles cache in memory
 let cachedKidProfiles = [];
+let collectedErrorLogs = [];
+let cloudErrorLogs = [];
+let errorLoggingInstalled = false;
 
 // ============================================================
 // AUDIO & SOUND EFFECTS ENGINE
@@ -420,6 +423,7 @@ window.addEventListener('keydown', (e) => {
         if (typeof closeHistoryModal === 'function') closeHistoryModal();
         if (typeof closeGeoModal === 'function') closeGeoModal();
         if (typeof closeHomeworkModal === 'function') closeHomeworkModal();
+        if (typeof closeErrorLogsModal === 'function') closeErrorLogsModal();
     }
 });
 
@@ -656,6 +660,8 @@ function checkLoginSession() {
 function listenToKidProfiles() {
     onSnapshot(collection(db, "kidProfiles"), (snapshot) => {
         cachedKidProfiles = [];
+        collectedErrorLogs = [];
+        safeZoneProfilePosts = [];
         safeZoneProfileChats = [];
         snapshot.forEach(docSnap => {
             const data = docSnap.data() || {};
@@ -668,6 +674,12 @@ function listenToKidProfiles() {
                 if (Array.isArray(data.safeOutbox)) {
                     data.safeOutbox.forEach(m => { if (m && m.id) safeZoneProfileChats.push(m); });
                 }
+                if (Array.isArray(data.safePostOutbox)) {
+                    data.safePostOutbox.forEach(post => { if (post && post.id) safeZoneProfilePosts.push(post); });
+                }
+                if (Array.isArray(data.errorOutbox)) {
+                    data.errorOutbox.forEach(log => { if (log && log.id) collectedErrorLogs.push(log); });
+                }
             }
         });
         populateKidSelect();
@@ -676,7 +688,9 @@ function listenToKidProfiles() {
         if (typeof populateSafeAudience === 'function') populateSafeAudience();
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
         if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
+    wireSafePostAttachmentPreview();
         if (typeof renderSafeZone === 'function') renderSafeZone();
+        if (typeof renderErrorLogs === 'function' && document.getElementById('errorLogsModal')?.style.display === 'flex') renderErrorLogs();
         const adminModal = document.getElementById('adminPortalModal');
         if (adminModal && adminModal.style.display === 'flex') {
             renderAdminPortalProfiles();
@@ -904,11 +918,13 @@ function setupUIForSession() {
     const nameElem = document.getElementById('activeName');
     const logoutBtn = document.querySelector('.logout-btn[onclick="handleLogout()"]');
     const homeworkAdminPanel = document.getElementById('homeworkAdminPanel');
+    const errorLogsBtn = document.getElementById('errorLogsBtn');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
+        if (errorLogsBtn) errorLogsBtn.style.display = 'inline-block';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
@@ -920,6 +936,7 @@ function setupUIForSession() {
         if (addKidBtn) addKidBtn.style.display = 'none';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
         if (reportsBtn) reportsBtn.style.display = 'none';
+        if (errorLogsBtn) errorLogsBtn.style.display = 'none';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'none';
         if (logoutBtn) {
             logoutBtn.innerText = '🚪 Logout';
@@ -2866,6 +2883,7 @@ window.resetKidStats = resetKidStats;
 // Admin-moderated, no hidden private chats. All notes are visible to Admin.
 // ============================================================
 let safeZonePosts = [];
+let safeZoneProfilePosts = []; // post fallback stored in kidProfiles so posting works even when safeZonePosts is blocked
 let safeZoneChats = [];
 let safeZoneProfileChats = []; // chat fallback stored in kidProfiles so it syncs across devices
 let safeZoneProgressChats = []; // chat fallback stored in kidProgress inbox
@@ -2928,7 +2946,13 @@ function safeZoneContainsBadWords(text) {
     return SAFE_BAD_WORDS.some(w => lower.includes(w));
 }
 
-function getSafePost(id) { return safeZonePosts.find(p => p.id === id); }
+function getAllSafeZonePosts() {
+    const map = new Map();
+    [...safeZoneProfilePosts, ...safeZonePosts].forEach(p => { if (p && p.id && p.status !== 'deleted') map.set(p.id, p); });
+    return [...map.values()].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+function getSafePost(id) { return getAllSafeZonePosts().find(p => p.id === id); }
+
 
 function safePostTime(ms) {
     if (!ms) return '';
@@ -2965,6 +2989,7 @@ function buildSafeZone() {
     renderSafeZone();
     renderSafeChat();
     wireSafeChatAttachmentPreview();
+    wireSafePostAttachmentPreview();
     syncLocalSafeChatsToCloud();
 }
 window.buildSafeZone = buildSafeZone;
@@ -3020,15 +3045,15 @@ function renderSafeZone() {
     if (composer) composer.style.display = currentRole === 'admin' || currentRole === 'kid' ? 'flex' : 'none';
     const hint = document.getElementById('safeComposerHint');
     if (hint) hint.innerText = safeZonePaused && currentRole !== 'admin'
-        ? 'Admin has paused posting for now. You can still read approved posts.'
-        : (currentRole === 'admin' ? 'Admin posts appear immediately. Kids posts still need approval.' : 'Posts are sent to Admin for approval before everyone sees them.');
+        ? 'Admin has paused posting for now. You can still read posts.'
+        : (currentRole === 'admin' ? 'Admin posts appear immediately.' : 'Kids can post instantly. Admin can still remove anything unkind.');
     const postBtn = document.querySelector('#safezoneComposer .login-submit-btn');
     if (postBtn) postBtn.disabled = safeZonePaused && currentRole !== 'admin';
 
     renderSafeAdminPanel();
 
     const q = ((document.getElementById('safezoneSearch') || {}).value || '').trim().toLowerCase();
-    let list = safeZonePosts.filter(p => p.status !== 'deleted');
+    let list = getAllSafeZonePosts().filter(p => p.status !== 'deleted');
 
     if (currentRole !== 'admin') {
         list = list.filter(p => p.status === 'approved' || p.authorId === currentActiveId);
@@ -3052,11 +3077,12 @@ function renderSafeAdminPanel() {
     if (currentRole !== 'admin') return;
     const stats = document.getElementById('safezoneAdminStats');
     const pendingBox = document.getElementById('safezonePendingQueue');
-    const pendingPosts = safeZonePosts.filter(p => p.status === 'pending');
-    const pendingComments = safeZonePosts.reduce((n,p)=> n + (p.comments || []).filter(c => c.status === 'pending').length, 0);
+    const allPosts = getAllSafeZonePosts();
+    const pendingPosts = allPosts.filter(p => p.status === 'pending');
+    const pendingComments = allPosts.reduce((n,p)=> n + (p.comments || []).filter(c => c.status === 'pending').length, 0);
     const allChats = getAllSafeZoneChats();
     const pendingChats = allChats.filter(m => m.status === 'pending').length;
-    const approved = safeZonePosts.filter(p => p.status === 'approved').length;
+    const approved = allPosts.filter(p => p.status === 'approved').length;
     if (stats) stats.innerHTML = `
         <div class="safe-stat"><strong>${pendingPosts.length}</strong><span>Pending Posts</span></div>
         <div class="safe-stat"><strong>${pendingComments}</strong><span>Pending Comments</span></div>
@@ -3094,6 +3120,7 @@ function renderSafePostCard(p) {
             </div>
         </div>
         <div class="safe-post-text">${escapeHtml(p.text || '')}</div>
+        ${renderSafeChatAttachment(p.attachment)}
         <div class="safe-post-actions">
             <button class="safe-action-btn ${liked ? 'liked' : ''}" onclick="toggleSafeLike('${p.id}')">❤️ ${(p.likes || []).length} Like</button>
             <button class="safe-action-btn" onclick="focusSafeComment('${p.id}')">💬 ${visibleComments.length} Comment</button>
@@ -3209,6 +3236,34 @@ function clearSafeChatAttachment() {
     if (box) box.innerHTML = '';
 }
 window.clearSafeChatAttachment = clearSafeChatAttachment;
+
+function wireSafePostAttachmentPreview() {
+    const input = document.getElementById('safePostAttachment');
+    if (!input || input.dataset.wired === 'yes') return;
+    input.dataset.wired = 'yes';
+    input.addEventListener('change', () => {
+        const box = document.getElementById('safePostAttachmentPreview');
+        const f = input.files && input.files[0];
+        if (!box) return;
+        if (!f) { box.innerHTML = ''; return; }
+        const sizeKb = Math.round(f.size / 1024);
+        if ((f.type || '').startsWith('image/')) {
+            const url = URL.createObjectURL(f);
+            box.innerHTML = `<div class="safe-attachment-preview-card"><img src="${url}" alt="Post attachment preview"><div><strong>📎 ${escapeHtml(f.name)}</strong><small>${sizeKb} KB · picture preview</small></div><button type="button" class="safe-remove-attachment" onclick="clearSafePostAttachment()">✖</button></div>`;
+        } else {
+            box.innerHTML = `<div class="safe-attachment-preview-card file"><span class="safe-file-big">📎</span><div><strong>${escapeHtml(f.name)}</strong><small>${sizeKb} KB · downloadable file</small></div><button type="button" class="safe-remove-attachment" onclick="clearSafePostAttachment()">✖</button></div>`;
+        }
+    });
+}
+
+function clearSafePostAttachment() {
+    const input = document.getElementById('safePostAttachment');
+    const box = document.getElementById('safePostAttachmentPreview');
+    if (input) input.value = '';
+    if (box) box.innerHTML = '';
+}
+window.clearSafePostAttachment = clearSafePostAttachment;
+
 
 function addSafeChatEmoji(emoji) {
     const input = document.getElementById('safeChatInput');
@@ -3506,6 +3561,21 @@ async function safeDeleteChat(chatId) {
 window.safeDeleteChat = safeDeleteChat;
 
 
+
+async function saveSafePostToOwnProfileOutbox(data) {
+    const outboxPost = { ...data, profilePostFallback: true };
+    await setDoc(doc(db, 'kidProfiles', data.authorId), { safePostOutbox: arrayUnion(outboxPost) }, { merge: true });
+}
+
+async function updateSafeProfilePostFallback(postId, patch) {
+    const post = getSafePost(postId);
+    if (!post || !post.authorId) throw new Error('Fallback post not found.');
+    const profile = cachedKidProfiles.find(k => k.id === post.authorId) || {};
+    const list = Array.isArray(profile.safePostOutbox) ? profile.safePostOutbox : [];
+    const updated = list.map(p => p && p.id === postId ? { ...p, ...patch } : p);
+    await setDoc(doc(db, 'kidProfiles', post.authorId), { safePostOutbox: updated }, { merge: true });
+}
+
 async function submitSafePost() {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 3000); return; }
     if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
@@ -3513,8 +3583,13 @@ async function submitSafePost() {
     const text = (textEl?.value || '').trim();
     const mood = document.getElementById('safePostMood')?.value || '😊';
     const audienceId = document.getElementById('safePostAudience')?.value || 'everyone';
-    if (!text) { showToast('Write something kind first.', '✍️', 2500); return; }
+    const attachmentInput = document.getElementById('safePostAttachment');
+    const attachmentFile = attachmentInput && attachmentInput.files ? attachmentInput.files[0] : null;
+    if (!text && !attachmentFile) { showToast('Write something or attach a picture first.', '✍️', 2500); return; }
     if (safeZoneContainsBadWords(text)) { showToast('Please use kind words only. Ask an adult if unsure.', '🛡️', 4000); return; }
+    let attachment = null;
+    try { attachment = attachmentFile ? await safeChatFileToDataUrl(attachmentFile) : null; }
+    catch (e) { showToast(e.message || 'Attachment is too large.', '📎', 3600); return; }
     const kid = getActiveKidProfile() || {};
     const id = 'safe_' + Date.now();
     const data = {
@@ -3522,19 +3597,37 @@ async function submitSafePost() {
         authorId: currentActiveId,
         authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
         authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
-        status: currentRole === 'admin' ? 'approved' : 'pending',
+        status: 'approved',
+        attachment,
         likes: [], comments: []
     };
     try {
         await setDoc(doc(db, 'safeZonePosts', id), data);
         if (textEl) textEl.value = '';
+        clearSafePostAttachment();
         if (currentRole === 'kid') {
             unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
             addStars(2);
         }
-        showToast(currentRole === 'admin' ? 'Posted to the club!' : 'Sent to Admin for approval!', '🛡️', 3500);
+        showToast('Posted to the club!', '🛡️', 3500);
         launchConfetti(16);
-    } catch (e) { console.error(e); showToast('Could not post.', '❌', 3000); }
+    } catch (e) {
+        console.warn('[KidZone] safeZonePosts blocked; saving post to kid profile fallback:', e && (e.code || e.message || e));
+        try {
+            await saveSafePostToOwnProfileOutbox(data);
+            if (textEl) textEl.value = '';
+            clearSafePostAttachment();
+            if (currentRole === 'kid') {
+                unlockBadge(audienceId !== 'everyone' ? 'safeFriend' : 'safePoster');
+                addStars(2);
+            }
+            showToast('Posted to the club!', '🛡️', 3500);
+            launchConfetti(16);
+        } catch (e2) {
+            console.error(e2);
+            showToast('Could not post. Firebase rules are blocking Safe Zone posts.', '❌', 4200);
+        }
+    }
 }
 window.submitSafePost = submitSafePost;
 
@@ -3578,23 +3671,32 @@ window.submitSafeComment = submitSafeComment;
 
 async function safeApprovePost(postId) {
     if (currentRole !== 'admin') return;
-    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'approved', approvedAt: Date.now() }, { merge: true }); showToast('Post approved.', '✅', 2200); }
-    catch(e) { console.error(e); }
+    const patch = { status: 'approved', approvedAt: Date.now() };
+    try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
+    catch(e) { console.warn('[KidZone] approve post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
+    try { await updateSafeProfilePostFallback(postId, patch); } catch(e2) { /* not a fallback post, ignore */ }
+    showToast('Post approved.', '✅', 2200);
 }
 window.safeApprovePost = safeApprovePost;
 
 async function safeHidePost(postId) {
     if (currentRole !== 'admin') return;
-    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'hidden', hiddenAt: Date.now() }, { merge: true }); showToast('Post hidden from kids.', '🙈', 2200); }
-    catch(e) { console.error(e); }
+    const patch = { status: 'hidden', hiddenAt: Date.now() };
+    try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
+    catch(e) { console.warn('[KidZone] hide post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
+    try { await updateSafeProfilePostFallback(postId, patch); } catch(e2) {}
+    showToast('Post hidden from kids.', '🙈', 2200);
 }
 window.safeHidePost = safeHidePost;
 
 async function safeDeletePost(postId) {
     if (currentRole !== 'admin') return;
     if (!confirm('Delete this Safe Zone post?')) return;
-    try { await setDoc(doc(db, 'safeZonePosts', postId), { status: 'deleted', deletedAt: Date.now() }, { merge: true }); showToast('Post deleted.', '🗑️', 2200); }
-    catch(e) { console.error(e); }
+    const patch = { status: 'deleted', deletedAt: Date.now() };
+    try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
+    catch(e) { console.warn('[KidZone] delete post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
+    try { await updateSafeProfilePostFallback(postId, patch); } catch(e2) {}
+    showToast('Post deleted.', '🗑️', 2200);
 }
 window.safeDeletePost = safeDeletePost;
 
@@ -3630,6 +3732,143 @@ async function toggleSafeZonePause() {
     catch(e) { console.error(e); showToast('Could not update Safe Zone settings.', '❌', 3000); }
 }
 window.toggleSafeZonePause = toggleSafeZonePause;
+
+
+// ============================================================
+// ADMIN ERROR LOGGING
+// ============================================================
+function localErrorLogKey() { return 'kidzone_error_logs_v1'; }
+function getLocalErrorLogs() {
+    try { return JSON.parse(localStorage.getItem(localErrorLogKey()) || '[]'); }
+    catch (e) { return []; }
+}
+function saveLocalErrorLogs(list) {
+    try { localStorage.setItem(localErrorLogKey(), JSON.stringify((list || []).slice(-120))); }
+    catch (e) {}
+}
+function getAllErrorLogs() {
+    const map = new Map();
+    [...getLocalErrorLogs(), ...collectedErrorLogs, ...cloudErrorLogs].forEach(log => { if (log && log.id) map.set(log.id, log); });
+    return [...map.values()].sort((a,b) => (b.at || 0) - (a.at || 0)).slice(0, 150);
+}
+function makeErrorLog(kind, message, extra = {}) {
+    const activeKid = getActiveKidProfile ? getActiveKidProfile() : null;
+    return {
+        id: 'err_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+        kind: kind || 'error',
+        message: String(message || 'Unknown error').slice(0, 1000),
+        stack: String(extra.stack || '').slice(0, 4000),
+        source: String(extra.source || '').slice(0, 300),
+        line: extra.line || null,
+        column: extra.column || null,
+        url: location.href,
+        userAgent: navigator.userAgent,
+        at: Date.now(),
+        role: currentRole || 'not-logged-in',
+        activeId: currentActiveId || '',
+        kidName: currentRole === 'admin' ? 'Admin' : (activeKid ? activeKid.name : ''),
+        kidAvatar: currentRole === 'admin' ? '🛠️' : (activeKid ? activeKid.avatar : ''),
+        page: document.querySelector('.tab-content.active')?.id || ''
+    };
+}
+async function recordAppError(kind, message, extra = {}) {
+    const log = makeErrorLog(kind, message, extra);
+    const local = getLocalErrorLogs();
+    local.push(log);
+    saveLocalErrorLogs(local);
+
+    // Prefer saving under the active kid profile: Admin already reads this collection.
+    // Also try a central collection for admin sessions. Both failures are ignored so
+    // error logging never breaks the app.
+    try {
+        if (currentRole === 'kid' && currentActiveId) {
+            await setDoc(doc(db, 'kidProfiles', currentActiveId), { errorOutbox: arrayUnion(log) }, { merge: true });
+        } else if (currentRole === 'admin') {
+            await setDoc(doc(db, 'appErrorLogs', log.id), log, { merge: true });
+        }
+    } catch (e) {
+        console.warn('[KidZone] could not sync error log:', e && (e.code || e.message || e));
+    }
+    if (document.getElementById('errorLogsModal')?.style.display === 'flex') renderErrorLogs();
+}
+window.recordAppError = recordAppError;
+
+function installErrorLogging() {
+    if (errorLoggingInstalled) return;
+    errorLoggingInstalled = true;
+    window.addEventListener('error', (event) => {
+        recordAppError('error', event.message || 'JavaScript error', {
+            stack: event.error && event.error.stack,
+            source: event.filename,
+            line: event.lineno,
+            column: event.colno
+        });
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason || {};
+        recordAppError('promise', reason.message || String(reason), { stack: reason.stack || '' });
+    });
+    try {
+        onSnapshot(collection(db, 'appErrorLogs'), (snapshot) => {
+            cloudErrorLogs = [];
+            snapshot.forEach(docSnap => cloudErrorLogs.push(docSnap.data()));
+            if (document.getElementById('errorLogsModal')?.style.display === 'flex') renderErrorLogs();
+        }, () => {});
+    } catch (e) {}
+}
+
+function openErrorLogsModal() {
+    if (currentRole !== 'admin') return;
+    const m = document.getElementById('errorLogsModal');
+    if (m) m.style.display = 'flex';
+    renderErrorLogs();
+}
+window.openErrorLogsModal = openErrorLogsModal;
+function closeErrorLogsModal() { const m = document.getElementById('errorLogsModal'); if (m) m.style.display = 'none'; }
+window.closeErrorLogsModal = closeErrorLogsModal;
+function closeErrorLogsModalOnBg(e) { if (e.target.id === 'errorLogsModal') closeErrorLogsModal(); }
+window.closeErrorLogsModalOnBg = closeErrorLogsModalOnBg;
+function refreshErrorLogs() { renderErrorLogs(); showToast('Error logs refreshed', '🔄', 1800); }
+window.refreshErrorLogs = refreshErrorLogs;
+
+function renderErrorLogs() {
+    const body = document.getElementById('errorLogsBody');
+    if (!body) return;
+    const logs = getAllErrorLogs();
+    if (!logs.length) {
+        body.innerHTML = '<p class="rep-loading">✅ No errors reported yet.</p>';
+        return;
+    }
+    body.innerHTML = logs.map(log => {
+        const when = log.at ? new Date(log.at).toLocaleString() : '';
+        const cls = log.kind === 'warning' ? 'warn' : (log.kind === 'info' ? 'info' : '');
+        return `<div class="error-log-row ${cls}">
+            <h4><span class="error-log-pill">${escapeHtml(log.kind || 'error')}</span>${escapeHtml(log.message || 'Unknown error')}</h4>
+            <p>👤 ${escapeHtml(log.kidAvatar || '')} ${escapeHtml(log.kidName || log.role || 'Unknown')} · 📍 ${escapeHtml(log.page || 'unknown page')} · 🕒 ${escapeHtml(when)}</p>
+            <p>🔗 ${escapeHtml(log.source || log.url || '')}${log.line ? ' : line ' + escapeHtml(log.line) : ''}</p>
+            ${log.stack ? `<pre>${escapeHtml(log.stack)}</pre>` : ''}
+        </div>`;
+    }).join('');
+}
+window.renderErrorLogs = renderErrorLogs;
+function downloadErrorLogs() {
+    const blob = new Blob([JSON.stringify(getAllErrorLogs(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kidzone-error-logs.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+window.downloadErrorLogs = downloadErrorLogs;
+function clearLocalErrorLogs() {
+    if (!confirm('Clear only this device local error logs? Cloud/profile logs are kept.')) return;
+    saveLocalErrorLogs([]);
+    renderErrorLogs();
+}
+window.clearLocalErrorLogs = clearLocalErrorLogs;
 
 
 // ============================================================
@@ -6956,6 +7195,7 @@ window.toggleStep = toggleStep;
 // APP INITIALIZATION ENTRY POINT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
+    installErrorLogging();
     listenToKidProfiles();
     listenToHomework();
     listenToSafeZone();
