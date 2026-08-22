@@ -3651,17 +3651,30 @@ window.safeDeleteChat = safeDeleteChat;
 
 
 async function saveSafePostToOwnProfileOutbox(data) {
-    // Store the newest post in a small, fixed field. This avoids Firestore's
-    // document-size problems from growing arrays, and it uses the same kidProfiles
-    // document that already syncs profiles/chat between devices.
-    const compactPost = { ...data, kind: 'safePost', profilePostFallback: true };
-    const mirror = {
-        latestSafePost: compactPost,
-        lastSafePostAt: Date.now()
-    };
-    // Also try a tiny history array for the latest few light posts.
-    mirror.safePostOutbox = arrayUnion(compactPost);
-    await setDoc(doc(db, 'kidProfiles', data.authorId), mirror, { merge: true });
+    // Make posts sync the SAME way chat syncs: append a small object to
+    // kidProfiles/{kidId}.safeOutbox with arrayUnion. The receiver already
+    // listens to kidProfiles, so this is the proven working channel.
+    const fullPost = { ...data, kind: 'safePost', profilePostFallback: true };
+    try {
+        await setDoc(doc(db, 'kidProfiles', data.authorId), {
+            safeOutbox: arrayUnion(fullPost)
+        }, { merge: true });
+    } catch (e) {
+        // If the attachment makes the profile document too large, still sync the
+        // text post so other kids see it. The sender keeps the attachment locally.
+        if (data.attachment) {
+            const lightPost = {
+                ...fullPost,
+                attachment: null,
+                attachmentNotice: 'Picture/file was too large to sync to other devices.'
+            };
+            await setDoc(doc(db, 'kidProfiles', data.authorId), {
+                safeOutbox: arrayUnion(lightPost)
+            }, { merge: true });
+            return;
+        }
+        throw e;
+    }
 }
 
 async function updateSafeProfilePostFallback(postId, patch) {
@@ -3734,25 +3747,12 @@ async function submitSafePost() {
         await saveSafePostToOwnProfileOutbox(data);
         setDoc(doc(db, 'safeZonePosts', id), data).catch(e => console.warn('[KidZone] safeZonePosts mirror failed:', e && (e.code || e.message || e)));
     } catch (e1) {
-        console.warn('[KidZone] safe post with attachment/profile sync failed; retrying lightweight post:', e1 && (e1.code || e1.message || e1));
-        const lightData = attachment ? {
-            ...data,
-            attachment: null,
-            attachmentNotice: 'Picture/file was too large to sync to other devices.'
-        } : data;
+        console.warn('[KidZone] safeOutbox post sync failed; trying safeZonePosts collection:', e1 && (e1.code || e1.message || e1));
         try {
-            await saveSafePostToOwnProfileOutbox(lightData);
-            upsertLocalSafePost(lightData);
-            renderSafeZone();
-            showToast(attachment ? 'Post synced, but attachment was too large for other devices.' : 'Posted to the club!', '🛡️', 3600);
+            await setDoc(doc(db, 'safeZonePosts', id), data);
         } catch (e2) {
-            console.warn('[KidZone] lightweight profile sync failed; trying post collection:', e2 && (e2.code || e2.message || e2));
-            try {
-                await setDoc(doc(db, 'safeZonePosts', id), lightData);
-            } catch (e3) {
-                console.warn('[KidZone] Safe Zone post is local only; Firebase blocked sync:', e3 && (e3.code || e3.message || e3));
-                showToast('Posted here only. Firebase is blocking feed sync.', '🛡️', 4200);
-            }
+            console.warn('[KidZone] Safe Zone post is local only; Firebase blocked feed sync:', e2 && (e2.code || e2.message || e2));
+            showToast('Posted here only. Firebase is blocking feed sync.', '🛡️', 4200);
         }
     }
 }
