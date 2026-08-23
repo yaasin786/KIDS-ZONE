@@ -65,7 +65,8 @@
             <span class="logo-text">KidZone <span class="badge-pro">PLUS</span></span>
         </div>
         <nav class="nav-links" aria-label="Main Navigation">
-            <button class="nav-btn active" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
+            <button class="nav-btn active" onclick="switchTab('home', event)">🏠 Home</button>
+            <button class="nav-btn" onclick="switchTab('encyclopedia', event)">📚 Encyclopedia</button>
             <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
             <button class="nav-btn" onclick="switchTab('geo', event)">🏔️ Mountains & Rivers</button>
             <button class="nav-btn" onclick="switchTab('homework', event)">📝 Homework</button>
@@ -106,8 +107,75 @@
     <!-- Main Content Container -->
     <main class="container">
 
+
+        <!-- HOME DASHBOARD TAB -->
+        <section id="home" class="tab-content active" aria-label="Home Dashboard Section">
+            <div class="hero-banner home-hero">
+                <h1>🏠 KidZone Learning Dashboard</h1>
+                <p>Everything is organized into simple learning worlds. Pick a card and start exploring!</p>
+            </div>
+
+            <div class="home-quick-row">
+                <button class="home-quick-btn" onclick="openKidZoneSection('safezone')">🛡️ Safe Zone</button>
+                <button class="home-quick-btn" onclick="openKidZoneSection('homework')">📝 Homework</button>
+                <button class="home-quick-btn" onclick="openKidZoneSection('games')">🎮 Games</button>
+                <button class="home-quick-btn" onclick="openBadgesModal()">🏅 Badges</button>
+            </div>
+
+            <div class="home-category-grid">
+                <div class="home-category-card learning">
+                    <div class="home-cat-icon">📚</div>
+                    <h2>Learn & Discover</h2>
+                    <p>Facts, history, geography, animals, documentaries and big general knowledge topics.</p>
+                    <div class="home-cat-actions">
+                        <button onclick="openKidZoneSection('encyclopedia')">📚 Encyclopedia</button>
+                        <button onclick="openKidZoneSection('history')">🌍 World History</button>
+                        <button onclick="openKidZoneSection('geo')">🏔️ Mountains & Rivers</button>
+                        <button onclick="openKidZoneSection('animals')">🦁 Animals</button>
+                        <button onclick="openKidZoneSection('docs')">🎬 Videos</button>
+                    </div>
+                </div>
+
+                <div class="home-category-card stem">
+                    <div class="home-cat-icon">🪐</div>
+                    <h2>Science & Space</h2>
+                    <p>Explore planets, the Moon, experiments, and science activities.</p>
+                    <div class="home-cat-actions">
+                        <button onclick="openKidZoneSection('solar')">🪐 Solar System</button>
+                        <button onclick="openKidZoneSection('lab')">🧪 Science Lab</button>
+                    </div>
+                </div>
+
+                <div class="home-category-card play">
+                    <div class="home-cat-icon">🎮</div>
+                    <h2>Play & Practice</h2>
+                    <p>Learn through quizzes, language games, memory games, and challenges.</p>
+                    <div class="home-cat-actions">
+                        <button onclick="openKidZoneSection('games')">🎮 Learning Games</button>
+                        <button onclick="openKidZoneSection('books')">📖 Storybooks</button>
+                    </div>
+                </div>
+
+                <div class="home-category-card social">
+                    <div class="home-cat-icon">🛡️</div>
+                    <h2>Safe Social & School</h2>
+                    <p>Post, chat safely, receive homework, and check notifications.</p>
+                    <div class="home-cat-actions">
+                        <button onclick="openKidZoneSection('safezone')">🛡️ Safe Zone</button>
+                        <button onclick="openKidZoneSection('homework')">📝 Homework</button>
+                        <button onclick="openNotificationsModal()">🔔 Notifications</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="home-tip-box">
+                <span>💡</span>
+                <p><strong>Tip:</strong> The top menu is now just a shortcut bar. Use this dashboard when the website feels busy.</p>
+            </div>
+        </section>
+
         <!-- ENCYCLOPEDIA TAB -->
-        <section id="encyclopedia" class="tab-content active" aria-label="Encyclopedia Section">
+        <section id="encyclopedia" class="tab-content" aria-label="Encyclopedia Section">
             <div class="hero-banner ency-hero">
                 <h1>🔍 Kids Encyclopedia Explorer</h1>
                 <p>Discover amazing facts about space, animals, dinosaurs, and oceans!</p>
@@ -1189,14 +1257,28 @@
 
                 <div class="input-group">
                     <label>Choose Avatar</label>
-                    <div class="avatar-picker" id="avatarPicker">
-                        <button type="button" class="avatar-option active" onclick="selectAvatar('🚀', this)">🚀</button>
-                        <button type="button" class="avatar-option" onclick="selectAvatar('🦄', this)">🦄</button>
-                        <button type="button" class="avatar-option" onclick="selectAvatar('🤖', this)">🤖</button>
-                        <button type="button" class="avatar-option" onclick="selectAvatar('🦁', this)">🦁</button>
-                        <button type="button" class="avatar-option" onclick="selectAvatar('🦖', this)">🦖</button>
-                        <button type="button" class="avatar-option" onclick="selectAvatar('🧜‍♀️', this)">🧜‍♀️</button>
+                    <div class="avatar-picker avatar-picker-super" id="avatarPicker">
+                        <button type="button" class="avatar-option active" onclick="selectAvatar('🚀', this)" title="Rocket Explorer"><span>🚀</span><small>Rocket</small></button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦄', this)" title="Magic Unicorn"><span>🦄</span><small>Unicorn</small></button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🤖', this)" title="Robot Buddy"><span>🤖</span><small>Robot</small></button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦁', this)" title="Lion Leader"><span>🦁</span><small>Lion</small></button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🦖', this)" title="Dino Kid"><span>🦖</span><small>Dino</small></button>
+                        <button type="button" class="avatar-option" onclick="selectAvatar('🧜‍♀️', this)" title="Ocean Mermaid"><span>🧜‍♀️</span><small>Mermaid</small></button>
+
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🕵️‍♀️', this)" title="Mystery Academy"><span>🕵️‍♀️</span><small>Mystery</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🧙‍♂️', this)" title="Wizard School"><span>🧙‍♂️</span><small>Wizard</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🧛', this)" title="Friendly Vampire"><span>🧛</span><small>Vampire</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('👑', this)" title="Royal Star"><span>👑</span><small>Royal</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🐺', this)" title="Wolf Hero"><span>🐺</span><small>Wolf</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🦸', this)" title="Super Kid"><span>🦸</span><small>Hero</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🧚', this)" title="Fairy Friend"><span>🧚</span><small>Fairy</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🥷', this)" title="Ninja Quest"><span>🥷</span><small>Ninja</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('👽', this)" title="Alien Explorer"><span>👽</span><small>Alien</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🐉', this)" title="Dragon Rider"><span>🐉</span><small>Dragon</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🦉', this)" title="Wise Owl"><span>🦉</span><small>Owl</small></button>
+                        <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🐼', this)" title="Panda Pal"><span>🐼</span><small>Panda</small></button>
                     </div>
+                    <p class="avatar-note">🎬 TV-style avatars inspired by kids adventure shows — no official character images, so it stays safe and lightweight.</p>
                 </div>
 
                 <div class="input-group">
@@ -1461,5 +1543,5 @@
         <span class="mascot-emoji" aria-hidden="true">🤖</span>
     </div>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f26dab9d1c3111',t:'MTc4NzQwNzQ4NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2f2834ef9583111',t:'MTc4NzQwODM3MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
