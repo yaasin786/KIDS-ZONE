@@ -593,11 +593,6 @@ const ADMIN_UID = "l9skt6UUdcdMrmR1jKLRXQyhv4c2";
 let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
 let adminLoginInProgress = false; // true only after the admin submits the password form
-let adminSource = null; // 'firebase' (main admin) or 'kid' (granted helper admin)
-
-function isKidHelperAdmin(kid) {
-    return !!(kid && (kid.isAdmin === true || kid.role === 'admin'));
-}
 
 function getActiveKidProfile() {
     return cachedKidProfiles.find(k => k && k.id === currentActiveId) || null;
@@ -642,10 +637,10 @@ function checkLoginSession() {
     const activeId = sessionStorage.getItem('kidzone_active_id');
     const loginOverlay = document.getElementById('loginScreen');
 
-    // Main Firebase admin sessions are NOT restored from sessionStorage.
-    // Helper-admin kids (granted by Admin) restore from their PIN session.
-    const storedAdminSource = sessionStorage.getItem('kidzone_admin_source');
-    if (role === 'admin' && storedAdminSource !== 'kid') {
+    // Admin sessions are NOT restored from sessionStorage - that flag can be
+    // forged in DevTools. Firebase's onAuthStateChanged is the only thing
+    // allowed to grant admin, and it re-checks the real token.
+    if (role === 'admin') {
         if (loginOverlay) loginOverlay.classList.remove('hidden');
         populateKidSelect();
         return;
@@ -654,7 +649,6 @@ function checkLoginSession() {
     if (isLoggedIn === 'true' && activeId) {
         currentRole = role;
         currentActiveId = activeId;
-        adminSource = storedAdminSource || (role === 'admin' ? 'kid' : null);
         if (loginOverlay) loginOverlay.classList.add('hidden');
         setupUIForSession();
         loadProgress();
@@ -713,20 +707,6 @@ function listenToKidProfiles() {
             }
         });
         populateKidSelect();
-        if (adminSource === 'kid' && currentActiveId) {
-            const me = cachedKidProfiles.find(p => p.id === currentActiveId);
-            if (!isKidHelperAdmin(me) && currentRole === 'admin') {
-                currentRole = 'kid';
-                sessionStorage.setItem('kidzone_user_role', 'kid');
-                sessionStorage.setItem('kidzone_admin_source', '');
-                adminSource = null;
-            } else if (isKidHelperAdmin(me) && currentRole !== 'admin') {
-                currentRole = 'admin';
-                adminSource = 'kid';
-                sessionStorage.setItem('kidzone_user_role', 'admin');
-                sessionStorage.setItem('kidzone_admin_source', 'kid');
-            }
-        }
         setupUIForSession();
         // Keep Safe Zone friend lists live when Admin creates a new kid profile.
         if (typeof populateSafeAudience === 'function') populateSafeAudience();
@@ -784,15 +764,12 @@ async function handleKidLogin(event) {
 
     if (kid && pinOk) {
         clearFailedLogins('kid_' + kidId);
-        const helperAdmin = isKidHelperAdmin(kid);
         sessionStorage.setItem('kidzone_logged_in', 'true');
-        sessionStorage.setItem('kidzone_user_role', helperAdmin ? 'admin' : 'kid');
+        sessionStorage.setItem('kidzone_user_role', 'kid');
         sessionStorage.setItem('kidzone_active_id', kid.id);
-        sessionStorage.setItem('kidzone_admin_source', helperAdmin ? 'kid' : '');
 
-        currentRole = helperAdmin ? 'admin' : 'kid';
+        currentRole = 'kid';
         currentActiveId = kid.id;
-        adminSource = helperAdmin ? 'kid' : null;
 
         const loginTimeISO = new Date().toISOString();
         try {
@@ -812,9 +789,7 @@ async function handleKidLogin(event) {
         loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(helperAdmin
-            ? `Welcome back, ${escapeHtml(kid.name)} — helper admin unlocked!`
-            : `Welcome back, ${escapeHtml(kid.name)}! 🚀`, helperAdmin ? '🛠️' : '✨', 3500);
+        showToast(`Welcome back, ${escapeHtml(kid.name)}! 🚀`, '✨', 3500);
     } else {
         playSound(150, 'sawtooth', 0.3);
         if (errorMsg) {
@@ -909,10 +884,8 @@ function watchAdminAuth() {
                 sessionStorage.removeItem('kidzone_logged_in');
                 sessionStorage.removeItem('kidzone_user_role');
                 sessionStorage.removeItem('kidzone_active_id');
-                sessionStorage.removeItem('kidzone_admin_source');
                 currentRole = null;
                 currentActiveId = null;
-                adminSource = null;
                 const overlay = document.getElementById('loginScreen');
                 if (overlay) overlay.classList.remove('hidden');
                 setupUIForSession();
@@ -920,11 +893,9 @@ function watchAdminAuth() {
             }
 
             currentRole = 'admin';
-            adminSource = 'firebase';
             currentActiveId = 'admin_' + user.uid.slice(0, 8);
             sessionStorage.setItem('kidzone_logged_in', 'true');
             sessionStorage.setItem('kidzone_user_role', 'admin');
-            sessionStorage.setItem('kidzone_admin_source', 'firebase');
             sessionStorage.setItem('kidzone_active_id', currentActiveId);
 
             const overlay = document.getElementById('loginScreen');
@@ -933,8 +904,8 @@ function watchAdminAuth() {
             loadProgress();
             playChime([523, 659, 784, 1046]);
             showToast('Welcome Admin! \ud83d\udee0\ufe0f', '\ud83d\udc51', 3500);
-        } else if (currentRole === 'admin' && adminSource === 'firebase') {
-            // Main Firebase admin signed out or the token expired.
+        } else if (currentRole === 'admin') {
+            // Admin signed out or the token expired.
             adminLoginInProgress = false;
             currentRole = null;
             currentActiveId = null;
@@ -980,11 +951,8 @@ function setupUIForSession() {
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
         if (errorLogsBtn) errorLogsBtn.style.display = 'inline-block';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
-        const helperKid = adminSource === 'kid' ? cachedKidProfiles.find(p => p.id === currentActiveId) : null;
-        if (avatarElem) avatarElem.innerText = helperKid ? (helperKid.avatar || '🛠️') : '🛠️';
-        if (nameElem) nameElem.innerText = helperKid
-            ? `${helperKid.name} (Helper Admin)`
-            : 'Admin (Yaasin)';
+        if (avatarElem) avatarElem.innerText = '🛠️';
+        if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
         if (logoutBtn) {
             logoutBtn.innerText = '🔒 Admin Logout';
             logoutBtn.title = 'Log out of Admin';
@@ -1025,11 +993,9 @@ function handleLogout() {
     sessionStorage.removeItem('kidzone_logged_in');
     sessionStorage.removeItem('kidzone_user_role');
     sessionStorage.removeItem('kidzone_active_id');
-    sessionStorage.removeItem('kidzone_admin_source');
     
     currentRole = null;
     currentActiveId = null;
-    adminSource = null;
     if (safeProgressChatUnsub) { try { safeProgressChatUnsub(); } catch (e) {} safeProgressChatUnsub = null; }
     safeZoneProgressChats = [];
 
@@ -1108,13 +1074,11 @@ async function handleCreateKidAccount(event) {
     }
 
     const newId = `kid_${Date.now()}`;
-    const grantAdmin = !!(document.getElementById('newKidIsAdmin') && document.getElementById('newKidIsAdmin').checked);
     const newProfile = {
         id: newId,
         name: kidName,
         avatar: selectedAvatar,
-        pinHash: await hashPin(kidPin),   // never store the raw PIN
-        isAdmin: grantAdmin
+        pinHash: await hashPin(kidPin)   // never store the raw PIN
     };
 
     try {
@@ -1183,55 +1147,22 @@ function renderAdminPortalProfiles() {
             });
         }
 
-        const helper = isKidHelperAdmin(p);
-        const safeName = String(p.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         div.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
                 <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-color);">
                     <span style="font-size: 1.2rem; margin-right: 6px;">${escapeHtml(p.avatar)}</span> ${escapeHtml(p.name)} 
-                    ${helper ? '<span class="helper-admin-pill">🛠️ Helper Admin</span>' : ''}
-                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${p.pinHash ? '🔒 PIN secured' : '⚠️ PIN not yet secured'}</span>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${p.pinHash ? '\ud83d\udd12 PIN secured' : '\u26a0\ufe0f PIN not yet secured'}</span>
                 </div>
                 <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
                     <span>🕒 Last Login:</span>
                     <strong style="color: var(--primary-blue-dark); font-weight: 700;">${formattedDate}</strong>
                 </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-                <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem; background:${helper ? '#64748b' : '#16a34a'};"
-                    onclick="toggleKidAdminPrivilege('${p.id}', ${helper ? 'false' : 'true'})">${helper ? '⬇️ Remove Admin' : '🛠️ Make Admin'}</button>
-                <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${safeName}')">🗑️ Remove</button>
-            </div>
+            <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
         `;
         container.appendChild(div);
     });
 }
-
-async function toggleKidAdminPrivilege(kidId, makeAdmin) {
-    if (currentRole !== 'admin') return;
-    const kid = cachedKidProfiles.find(p => p.id === kidId);
-    if (!kid) return;
-    const next = !!makeAdmin;
-    if (next && !confirm(`Give ${kid.name} helper-admin access? They will see Manage Profiles, Reports, Homework tools, and Safe Zone controls after they log in with their PIN.`)) return;
-    if (!next && !confirm(`Remove helper-admin access from ${kid.name}? They will become a regular kid again.`)) return;
-    try {
-        await setDoc(doc(db, "kidProfiles", kidId), { isAdmin: next }, { merge: true });
-        playSound(next ? 700 : 300);
-        showToast(next
-            ? `${kid.name} is now a helper admin.`
-            : `${kid.name} is a regular explorer again.`, next ? '🛠️' : '👤', 3500);
-        if (currentActiveId === kidId && adminSource === 'kid') {
-            currentRole = next ? 'admin' : 'kid';
-            sessionStorage.setItem('kidzone_user_role', currentRole);
-            if (!next) sessionStorage.setItem('kidzone_admin_source', '');
-            setupUIForSession();
-        }
-    } catch (e) {
-        console.error('Failed to update admin privilege:', e);
-        showToast('Could not update admin privilege. Check your connection.', '❌', 3500);
-    }
-}
-window.toggleKidAdminPrivilege = toggleKidAdminPrivilege;
 
 async function deleteKidProfile(kidId, kidName) {
     if (currentRole !== 'admin') return;
@@ -1904,7 +1835,11 @@ function renderDuoQuestion() {
             </div>
         `;
         playChime([300, 200, 150], 'sawtooth');
-          unlockBadge('duoLingo');
+        return;
+    }
+
+    if (duoIndex >= duoCurrentQuestions.length) {
+        unlockBadge('duoLingo');
         recordRoundScore('duo', duoScore, Math.max(duoCurrentQuestions.length * 10, 1));
         const earnedStars = duoScore * 5;
         addStars(earnedStars);
@@ -7791,8 +7726,5 @@ window.addEventListener('DOMContentLoaded', () => {
     checkLoginSession();
     renderStoryPage();
     // Pac-Man now starts itself (see showGame) once its tab is opened,
-    // instead of running in the background from page load.
-});
-pened,
     // instead of running in the background from page load.
 });
