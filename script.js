@@ -1391,6 +1391,14 @@ window.mascotSpeak = mascotSpeak;
 // ============================================================
 // NAVIGATION & TAB CONTROLLERS
 // ============================================================
+function openKidZoneSection(tabId) {
+    const btn = [...document.querySelectorAll('.nav-btn')]
+        .find(b => (b.getAttribute('onclick') || '').includes(`'${tabId}'`));
+    switchTab(tabId, btn ? { currentTarget: btn } : null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.openKidZoneSection = openKidZoneSection;
+
 function switchTab(tabId, evt) {
     if (tabId === 'solar') { setTimeout(buildSolarSystem, 30); setTimeout(buildMoonDance, 30); }
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
@@ -1410,7 +1418,13 @@ function switchTab(tabId, evt) {
 
     const targetTab = document.getElementById(tabId);
     if (targetTab) targetTab.classList.add('active');
-    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+    } else {
+        const navBtn = [...document.querySelectorAll('.nav-btn')]
+            .find(b => (b.getAttribute('onclick') || '').includes(`'${tabId}'`));
+        if (navBtn) navBtn.classList.add('active');
+    }
 
     if (tabId === 'games') {
         initDuoGame();
