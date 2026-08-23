@@ -4728,3 +4728,34 @@ body::after {
     .home-quick-btn { padding: 10px 8px; font-size: .78rem; }
     .controls-bar { padding: 10px; border-radius: 16px; }
 }
+
+.helper-admin-pill {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.72rem;
+    font-weight: 800;
+    vertical-align: middle;
+}
+
+.admin-grant-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background: #ecfdf5;
+    border: 2px dashed #86efac;
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin: 0 0 16px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.admin-grant-check input {
+    width: 18px;
+    height: 18px;
+}

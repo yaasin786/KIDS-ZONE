@@ -1286,6 +1286,11 @@
                     <input type="password" id="newKidPin" maxlength="4" placeholder="1234" required pattern="[0-9]{4}">
                 </div>
 
+                <label class="admin-grant-check">
+                    <input type="checkbox" id="newKidIsAdmin">
+                    <span>🛠️ Also give this kid helper-admin privileges</span>
+                </label>
+
                 <button type="submit" class="login-submit-btn">Create Kid Profile 🎉</button>
             </form>
         </div>
@@ -1297,7 +1302,7 @@
             <button class="close-btn" onclick="closeAdminPortalModal()" aria-label="Close portal">&times;</button>
             <div class="modal-icon">⚙️</div>
             <h2 id="adminPortalTitle">Admin Explorer Console</h2>
-            <p class="badges-subtitle">Manage profiles and view real-time kid login history below.</p>
+            <p class="badges-subtitle">Manage profiles, grant helper-admin access, and view login history.</p>
             
             <div id="adminProfilesList" style="margin-top: 20px; display: flex; flex-direction: column; gap: 14px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
                 <!-- Dynamically Populated List with Delete Buttons & Login Timestamps -->
