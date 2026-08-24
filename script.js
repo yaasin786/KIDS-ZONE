@@ -126,6 +126,16 @@ import {
     setPersistence,
     inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import {
+    getMessaging,
+    getToken,
+    onMessage,
+    isSupported
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js";
+import {
+    getFunctions,
+    httpsCallable
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 
 // ============================================================
 // FIREBASE CONFIGURATION & INITIALIZATION
@@ -790,6 +800,23 @@ async function handleKidLogin(event) {
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
         showToast(`Welcome back, ${escapeHtml(kid.name)}! 🚀`, '✨', 3500);
+
+        // ---- phone alerts: connect this kid's device ----
+        phoneAlertBaseline = null;   // don't alert about old notifications
+        if ('Notification' in window && Notification.permission === 'granted') {
+            const token = await activatePushToken(false) ||
+                localStorage.getItem('kidzone_fcm_token');
+            if (token) await savePushToken(token);
+        } else {
+            // gentle one-time hint (iOS needs Home Screen install first)
+            setTimeout(() => {
+                if (isIosWithoutInstall()) {
+                    showToast('📱 Add KidZone to your Home Screen (Share ⬆️ → Add to Home Screen) to get alerts!', '🔔', 7000);
+                } else {
+                    showToast('Want alerts on this phone? Open the 🔔 bell → "Phone Alerts"!', '🔔', 6000);
+                }
+            }, 3000);
+        }
     } else {
         playSound(150, 'sawtooth', 0.3);
         if (errorMsg) {
@@ -944,12 +971,14 @@ function setupUIForSession() {
     const logoutBtn = document.querySelector('.logout-btn[onclick="handleLogout()"]');
     const homeworkAdminPanel = document.getElementById('homeworkAdminPanel');
     const errorLogsBtn = document.getElementById('errorLogsBtn');
+    const announceBtn = document.getElementById('announceBtn');
 
     if (currentRole === 'admin') {
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
         if (errorLogsBtn) errorLogsBtn.style.display = 'inline-block';
+        if (announceBtn) announceBtn.style.display = 'inline-block';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
         if (avatarElem) avatarElem.innerText = '🛠️';
         if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
@@ -962,6 +991,7 @@ function setupUIForSession() {
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'none';
         if (reportsBtn) reportsBtn.style.display = 'none';
         if (errorLogsBtn) errorLogsBtn.style.display = 'none';
+        if (announceBtn) announceBtn.style.display = 'none';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'none';
         if (logoutBtn) {
             logoutBtn.innerText = '🚪 Logout';
@@ -996,6 +1026,7 @@ function handleLogout() {
     
     currentRole = null;
     currentActiveId = null;
+    phoneAlertBaseline = null;
     if (safeProgressChatUnsub) { try { safeProgressChatUnsub(); } catch (e) {} safeProgressChatUnsub = null; }
     safeZoneProgressChats = [];
 
@@ -4115,6 +4146,17 @@ function buildNotifications() {
     const notes = [];
     if (!currentActiveId) return notes;
 
+    // Announcements sent by Admin with "📣 Send Alert".
+    cachedAnnouncements.forEach(a => {
+        if (!a.createdAt) return;
+        notes.push({
+            id: 'ann_' + a.id,
+            type: 'announcement', icon: '📣', at: a.createdAt,
+            title: a.title || 'Announcement from Admin',
+            text: a.body || ''
+        });
+    });
+
     // New direct chat messages to this kid.
     getAllSafeZoneChats().forEach(m => {
         if (!m || m.status === 'deleted') return;
@@ -4181,6 +4223,27 @@ function updateNotifications() {
     const unread = currentNotifications.filter(n => !read.has(n.id)).length;
     countEl.innerText = unread;
     btn.classList.toggle('has-unread', unread > 0);
+
+    // ---- PHONE ALERTS: fire a real notification for anything brand new ----
+    // The first snapshot after login only records a baseline, so kids are
+    // never spammed with old messages. Anything that arrives AFTER that
+    // (and is recent + unread) pops up as a phone notification.
+    // (Admins still see the bell count, but are not pinged for kid chats.)
+    if (currentRole === 'kid') {
+        const ids = new Set(currentNotifications.map(n => n.id));
+        if (!phoneAlertBaseline) {
+            phoneAlertBaseline = ids;
+        } else {
+            currentNotifications.forEach(n => {
+                const fresh = (n.at || 0) > Date.now() - 20 * 60 * 1000;
+                if (!phoneAlertBaseline.has(n.id) && !read.has(n.id) && fresh) {
+                    showSystemNotification(n.title, n.text || 'Open KidZone to see more!', n.type);
+                }
+            });
+            phoneAlertBaseline = ids;
+        }
+    }
+
     if (document.getElementById('notificationsModal')?.style.display === 'flex') renderNotificationsList();
 }
 window.updateNotifications = updateNotifications;
@@ -4232,6 +4295,11 @@ function openNotificationTarget(id) {
     saveReadNotificationIds(read);
     closeNotificationsModal();
     updateNotifications();
+    // Announcements do not live in the Safe Zone — stay where the kid is.
+    if (note && note.type === 'announcement') {
+        showToast(note.title, '📣', 4500);
+        return;
+    }
     const safeBtn = [...document.querySelectorAll('.nav-btn')].find(b => (b.getAttribute('onclick') || '').includes("'safezone'"));
     switchTab('safezone', { currentTarget: safeBtn });
     setTimeout(() => {
@@ -4248,13 +4316,267 @@ function openNotificationTarget(id) {
 }
 window.openNotificationTarget = openNotificationTarget;
 
-function requestBrowserNotifications() {
-    if (!('Notification' in window)) { showToast('Phone/browser notifications are not supported here.', '🔕', 3000); return; }
-    Notification.requestPermission().then(permission => {
-        showToast(permission === 'granted' ? 'Phone alerts enabled for this browser.' : 'Phone alerts not enabled.', permission === 'granted' ? '🔔' : '🔕', 3000);
-    });
+// ============================================================
+// PHONE ALERTS — real notifications on kids' mobiles
+//
+// Two layers:
+//   1. Browser notifications (works right away, no setup):
+//      whenever a NEW chat, post, comment or announcement arrives
+//      while KidZone is open, the phone shows a system notification.
+//   2. Firebase Cloud Messaging push (optional, see
+//      NOTIFICATIONS-SETUP.md): kids get alerts even when KidZone
+//      is CLOSED. Needs a VAPID key below + the small Cloud
+//      Function in /functions (or send from the Firebase Console).
+//
+// iPhone note: Safari only allows web notifications for sites
+// added to the Home Screen (iOS 16.4+). Kids must use
+// Share -> "Add to Home Screen" and open KidZone from the icon.
+// ============================================================
+const KIDZONE_PUSH_VAPID_KEY = "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE";
+const KIDZONE_SITE_PATH = "/KIDS-ZONE/";   // change if hosted at a different path
+
+let pushSwRegistration = null;   // service worker registration
+let fcmMessaging = null;         // Firebase Messaging instance
+let phoneAlertBaseline = null;   // notification ids already known this session
+
+function vapidKeyReady() {
+    return typeof KIDZONE_PUSH_VAPID_KEY === 'string' &&
+        KIDZONE_PUSH_VAPID_KEY.length > 30 &&
+        !/PASTE/i.test(KIDZONE_PUSH_VAPID_KEY);
+}
+
+function siteUrl() { return location.origin + KIDZONE_SITE_PATH; }
+
+// Is this an iPhone/iPad where KidZone is NOT installed on the Home Screen?
+function isIosWithoutInstall() {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const standalone = navigator.standalone === true ||
+        (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    return ios && !standalone;
+}
+
+// Register the service worker (also enables PWA install on iPhones).
+async function initPhoneAlerts() {
+    try {
+        if (!('serviceWorker' in navigator)) return;
+        pushSwRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+
+        if (!('Notification' in window)) return;
+
+        // Push messages that arrive while the app is OPEN should still
+        // pop up as a phone notification.
+        if (vapidKeyReady()) {
+            try {
+                if (await isSupported()) {
+                    if (!fcmMessaging) fcmMessaging = getMessaging(app);
+                    onMessage(fcmMessaging, (payload) => {
+                        const t = (payload.notification && payload.notification.title) || '📣 KidZone';
+                        const b = (payload.notification && payload.notification.body) || '';
+                        showSystemNotification(t, b, 'kidzone_push');
+                    });
+                }
+            } catch (e) { console.warn('[KidZone] foreground push setup skipped:', e); }
+        }
+
+        // Permission already granted on this device? Re-register the push
+        // token quietly so closed-app alerts keep working after refresh.
+        if (Notification.permission === 'granted') await activatePushToken(false);
+    } catch (e) {
+        console.warn('[KidZone] service worker registration failed:', e);
+    }
+}
+window.initPhoneAlerts = initPhoneAlerts;
+
+// Show a real system notification (via the service worker so taps are
+// handled consistently, with a plain-Notification fallback).
+function showSystemNotification(title, body, tag) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const options = {
+        body: String(body || '').slice(0, 140),
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: tag || ('kidzone_' + Date.now()),
+        data: { url: siteUrl() }
+    };
+    try {
+        if (pushSwRegistration) pushSwRegistration.showNotification('KidZone · ' + title, options);
+        else new Notification('KidZone · ' + title, options);
+    } catch (e) { /* never break the app for a notification */ }
+}
+window.showSystemNotification = showSystemNotification;
+
+async function savePushToken(token) {
+    if (!currentActiveId || currentRole !== 'kid' || !token) return;
+    try {
+        await setDoc(doc(db, 'kidProfiles', currentActiveId), {
+            fcmToken: token,
+            fcmTokenAt: Date.now(),
+            fcmUserAgent: String(navigator.userAgent || '').slice(0, 120)
+        }, { merge: true });
+    } catch (e) {
+        console.warn('[KidZone] could not save push token:', e && (e.code || e.message));
+    }
+}
+window.savePushToken = savePushToken;
+
+// Get (or refresh) the FCM push token for this device.
+async function activatePushToken(announceResult) {
+    if (!vapidKeyReady() || !pushSwRegistration) return null;
+    try {
+        if (!(await isSupported())) return null;
+        if (!fcmMessaging) fcmMessaging = getMessaging(app);
+        const token = await getToken(fcmMessaging, {
+            vapidKey: KIDZONE_PUSH_VAPID_KEY,
+            serviceWorkerRegistration: pushSwRegistration
+        });
+        if (token) {
+            const prev = localStorage.getItem('kidzone_fcm_token');
+            localStorage.setItem('kidzone_fcm_token', token);
+            if (token !== prev) await savePushToken(token);
+            if (announceResult) {
+                showToast('Push alerts active — you\'ll be buzzed even when KidZone is closed! 🔔', '🎉', 4200);
+            }
+        }
+        return token;
+    } catch (e) {
+        console.warn('[KidZone] push token error:', e && (e.code || e.message));
+        if (announceResult) {
+            showToast('Alerts will work while KidZone is open. For alerts when the app is closed, finish the steps in NOTIFICATIONS-SETUP.md.', '🔔', 5500);
+        }
+        return null;
+    }
+}
+window.activatePushToken = activatePushToken;
+
+// The 🔔 Phone Alerts button in the notifications modal.
+async function requestBrowserNotifications() {
+    if (!('Notification' in window)) {
+        showToast('This browser cannot show phone alerts.', '🔕', 3000);
+        return;
+    }
+    if (isIosWithoutInstall()) {
+        showToast('On iPhone/iPad: tap the Share button ⬆️, choose "Add to Home Screen", open KidZone from its icon, then tap this button again.', '📱', 8000);
+        return;
+    }
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            showToast('Alerts are blocked. Allow notifications for KidZone in your browser settings, then try again.', '🔕', 4500);
+            return;
+        }
+        showToast('Alerts on! KidZone will ping this phone while it is open.', '🔔', 3500);
+        const btn = document.getElementById('phoneAlertsBtn');
+        if (btn) btn.innerHTML = '✅ Alerts On';
+        const token = await activatePushToken(true);
+        if (!token) {
+            // push not configured yet — still make sure a saved token is re-registered
+            const saved = localStorage.getItem('kidzone_fcm_token');
+            if (saved) await savePushToken(saved);
+        }
+        playChime([523, 659, 784]);
+    } catch (e) {
+        showToast('Could not enable alerts on this device.', '🔕', 3000);
+        console.warn('[KidZone] permission error:', e);
+    }
 }
 window.requestBrowserNotifications = requestBrowserNotifications;
+
+// ------------------------------------------------------------
+// ANNOUNCEMENTS (Admin "📣 Send Alert" -> every kid's bell + push)
+// ------------------------------------------------------------
+let cachedAnnouncements = [];
+
+function listenToAnnouncements() {
+    onSnapshot(collection(db, 'announcements'), (snapshot) => {
+        cachedAnnouncements = [];
+        snapshot.forEach(d => {
+            const raw = d.data() || {};
+            if (raw.deleted) return;
+            cachedAnnouncements.push({ ...raw, id: d.id });
+        });
+        cachedAnnouncements.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        cachedAnnouncements = cachedAnnouncements.slice(0, 30);
+        if (typeof updateNotifications === 'function') updateNotifications();
+    }, (err) => {
+        console.warn('[KidZone] announcements listener error:', err);
+    });
+}
+window.listenToAnnouncements = listenToAnnouncements;
+
+function openAnnounceModal() {
+    if (currentRole !== 'admin') {
+        showToast('Only Admin can send alerts!', '⚠️', 3000);
+        return;
+    }
+    playSound(600);
+    const m = document.getElementById('announceModal');
+    if (m) m.style.display = 'flex';
+}
+window.openAnnounceModal = openAnnounceModal;
+
+function closeAnnounceModal() {
+    playSound(300);
+    const m = document.getElementById('announceModal');
+    if (m) m.style.display = 'none';
+}
+window.closeAnnounceModal = closeAnnounceModal;
+
+function closeAnnounceModalOnBg(e) {
+    if (e.target.id === 'announceModal') closeAnnounceModal();
+}
+window.closeAnnounceModalOnBg = closeAnnounceModalOnBg;
+
+// Calls the sendKidZonePush Cloud Function IF it has been deployed
+// (see NOTIFICATIONS-SETUP.md). Silently no-ops otherwise.
+async function tryCloudPush(title, body) {
+    try {
+        const fn = httpsCallable(getFunctions(app), 'sendKidZonePush');
+        const res = await Promise.race([
+            fn({ title, body, url: siteUrl() }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000))
+        ]);
+        return res && res.data ? res.data : null;
+    } catch (e) {
+        console.warn('[KidZone] cloud push unavailable:', e && (e.code || e.message));
+        return null;
+    }
+}
+window.tryCloudPush = tryCloudPush;
+
+async function handleAnnounceSubmit(event) {
+    event.preventDefault();
+    if (currentRole !== 'admin') return;
+    const tEl = document.getElementById('announceTitleInput');
+    const bEl = document.getElementById('announceBodyInput');
+    const title = (tEl && tEl.value || '').trim();
+    const body = (bEl && bEl.value || '').trim();
+    if (!title || !body) return;
+
+    const btn = document.getElementById('announceSubmitBtn');
+    if (btn) { btn.disabled = true; btn.innerText = 'Sending… 📡'; }
+    try {
+        await setDoc(doc(db, 'announcements', 'ann_' + Date.now()), {
+            title, body,
+            createdAt: Date.now(),
+            by: 'Admin'
+        });
+        const push = await tryCloudPush('📣 ' + title, body);
+        if (push && typeof push.sent === 'number' && push.total > 0) {
+            showToast(`Announcement sent! Push delivered to ${push.sent}/${push.total} device${push.total === 1 ? '' : 's'}.`, '🚀', 4500);
+        } else {
+            showToast('Announcement posted! Kids see it in their 🔔 bell now. To also buzz phones when KidZone is closed, finish NOTIFICATIONS-SETUP.md.', '📣', 6500);
+        }
+        if (tEl) tEl.value = '';
+        if (bEl) bEl.value = '';
+        closeAnnounceModal();
+    } catch (err) {
+        console.error('[KidZone] announcement failed:', err);
+        showToast('Could not send announcement.', '❌', 3500);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Send to All Kids 🚀'; }
+    }
+}
+window.handleAnnounceSubmit = handleAnnounceSubmit;
 
 
 // ============================================================
@@ -4503,6 +4825,20 @@ async function handleHomeworkUpload(event) {
             createdAt: Date.now(), createdBy: currentActiveId || 'admin', active: true
         };
         await setDoc(doc(db, 'homework', id), data);
+        // Announce the new homework: kids' 🔔 bell + phone notification,
+        // and a push attempt for devices with KidZone closed.
+        try {
+            await setDoc(doc(db, 'announcements', 'ann_hw_' + Date.now()), {
+                title: `New ${type}: ${title}`,
+                body: dueDate ? `Due ${dueDate} — open KidZone to see it! 📝` : 'Open KidZone to see it! 📝',
+                createdAt: Date.now(),
+                by: 'Admin',
+                homeworkId: id
+            });
+            tryCloudPush(`📝 New ${type}!`, title).catch(() => {});
+        } catch (annErr) {
+            console.warn('[KidZone] homework announcement skipped:', annErr);
+        }
         event.target.reset();
         const preview = document.getElementById('hwFilePreview'); if (preview) preview.innerText = '';
         toggleHomeworkForm(false);
@@ -7722,6 +8058,8 @@ window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     listenToHomework();
     listenToSafeZone();
+    listenToAnnouncements();   // Admin "📣 Send Alert" -> kids' bell + phone alerts
+    initPhoneAlerts();         // service worker + push permission/token
     watchAdminAuth();      // signs out any old remembered admin token; admin must type password each visit
     checkLoginSession();
     renderStoryPage();
