@@ -4332,7 +4332,7 @@ window.openNotificationTarget = openNotificationTarget;
 // added to the Home Screen (iOS 16.4+). Kids must use
 // Share -> "Add to Home Screen" and open KidZone from the icon.
 // ============================================================
-const KIDZONE_PUSH_VAPID_KEY = "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE";
+const KIDZONE_PUSH_VAPID_KEY = "BLS2sBToTPCnEslReNVIHGjgQJmeOZshvzTOvCF1_IfzKyHiI2ql_eCVYMYLz2MK5nnKFyWwv_386DEDizeIJ3A";
 const KIDZONE_SITE_PATH = "/KIDS-ZONE/";   // change if hosted at a different path
 
 let pushSwRegistration = null;   // service worker registration
