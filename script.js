@@ -8101,6 +8101,8 @@ let callSignalsUnsub = null;
 let callTimerInterval = null;
 let callMissedTimer = null;
 let ringInterval = null;
+let callRingbackTimer = null;
+let notifiedGroupRoomIds = null;
 let myCallPeerId = null;
 let callMuted = false;
 let callCameraOn = false;
@@ -8124,6 +8126,30 @@ function listenToCallRooms() {
         });
         cachedCallRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         updateGroupCallButton();
+
+        // First snapshot: just remember which group rooms already exist,
+        // so nobody gets notified about old calls when the page loads.
+        if (!notifiedGroupRoomIds) {
+            notifiedGroupRoomIds = new Set(cachedCallRooms.map(r => r.id));
+        } else {
+            // 🎉 A friend just started a Group Call -> tell everyone!
+            const freshGroup = cachedCallRooms.find(r =>
+                r.isGroup &&
+                (r.status === 'active' || r.status === 'ringing') &&
+                (r.createdAt || 0) > Date.now() - 60000 &&
+                r.fromId !== currentActiveId &&
+                currentActiveId &&
+                !notifiedGroupRoomIds.has(r.id) &&
+                !(r.participants || []).some(p => p.kidId === currentActiveId)
+            );
+            if (freshGroup) {
+                notifiedGroupRoomIds.add(freshGroup.id);
+                playChime([523, 784, 1046]);
+                showToast(`${freshGroup.fromAvatar || '🚀'} ${freshGroup.fromName || 'A friend'} started a Group Call! Tap "Join Group Call" in the Group Chat! 🎉`, '📞', 6000);
+                showSystemNotification('🎉 Group Call started!',
+                    `${freshGroup.fromName || 'A friend'} is waiting in the KidZone group call. Tap to join!`, 'kidzone_groupcall');
+            }
+        }
 
         // Incoming 1:1 call for me? (only fresh rings — not stale leftovers)
         const incoming = cachedCallRooms.find(r =>
@@ -8406,10 +8432,12 @@ async function joinCall(roomId, mode) {
     const myPart = { ...activeCall.myMeta, joinedAt: Date.now() };
     activeCall.myPart = myPart;   // exact object needed later for arrayRemove
     try {
-        await setDoc(doc(db, 'callRooms', roomId), {
-            participants: arrayUnion(myPart),
-            status: 'active'
-        }, { merge: true });
+        // IMPORTANT: only the ANSWERING kid (or a group join) may flip the
+        // room to 'active'. If the caller did it too, the friend's phone
+        // would never see the 'ringing' state and the call would never ring.
+        const joinUpdate = { participants: arrayUnion(myPart) };
+        if (room.isGroup || room.toId === currentActiveId) joinUpdate.status = 'active';
+        await setDoc(doc(db, 'callRooms', roomId), joinUpdate, { merge: true });
     } catch (e) { console.warn('[KidZone Calls] join write failed:', e); }
 
     openCallUI(room);
@@ -8575,9 +8603,13 @@ function openCallUI(room) {
             : `📞 Call with ${room.toId === me.kidId ? (room.fromName || 'Friend') : (room.toName || 'Friend')}`;
     }
     const st = document.getElementById('callStatus');
-    if (st) st.innerText = 'Waiting for friends…';
+    if (st) st.innerText = room.isGroup ? 'Waiting for friends…' : 'Ringing… 🔔';
     const timerEl = document.getElementById('callTimer');
     if (timerEl) timerEl.innerText = '00:00';
+    // Caller hears a soft ring-back tone while waiting for the friend to answer.
+    if (!room.isGroup) {
+        callRingbackTimer = setInterval(() => playChime([523, 659]), 2000);
+    }
     const camBtn = document.getElementById('callCamBtn');
     if (camBtn) camBtn.style.display = callHasVideoTrack ? 'inline-flex' : 'none';
     updateCallControlButtons();
@@ -8684,6 +8716,7 @@ window.toggleCallCamera = toggleCallCamera;
 
 function startCallTimerIfPeer(hasPeer) {
     if (!hasPeer || callTimerInterval || !activeCall) return;
+    if (callRingbackTimer) { clearInterval(callRingbackTimer); callRingbackTimer = null; }
     const t0 = Date.now();
     const st = document.getElementById('callStatus');
     if (st) st.innerText = 'Connected 🟢';
@@ -8753,6 +8786,7 @@ function leaveCallCleanup() {
     if (callSignalsUnsub) { try { callSignalsUnsub(); } catch (e) {} callSignalsUnsub = null; }
     if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
     if (callMissedTimer) { clearTimeout(callMissedTimer); callMissedTimer = null; }
+    if (callRingbackTimer) { clearInterval(callRingbackTimer); callRingbackTimer = null; }
     if (callLocalStream) {
         callLocalStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
         callLocalStream = null;
