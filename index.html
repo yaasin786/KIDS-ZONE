@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6c5ce7">
+    <link rel="manifest" href="manifest.json">
     <title>KidZone Explorer - Next Level Fun & Learning!</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
@@ -89,6 +91,7 @@
             <button id="addKidBtn" class="add-account-btn" style="display: none;" onclick="openCreateAccountModal()" title="Add Kid Profile">➕ Add Kid</button>
             <button id="manageProfilesBtn" class="add-account-btn" style="display: none; background: #ff9600;" onclick="openAdminPortalModal()" title="Manage & Remove Profiles">⚙️ Manage Profiles</button>
             <button id="reportsBtn" class="add-account-btn" style="display: none; background: #ce82ff;" onclick="openReportsModal()" title="See each kid's scores and answers">📊 Reports</button>
+            <button id="announceBtn" class="add-account-btn" style="display: none; background: #22c55e;" onclick="openAnnounceModal()" title="Send a notification to every kid's phone">📣 Send Alert</button>
             <button id="errorLogsBtn" class="add-account-btn" style="display: none; background: #ef4444;" onclick="openErrorLogsModal()" title="See website errors reported from kids devices">🧯 Error Logs</button>
 
             <button class="stats-btn notify-btn" onclick="openNotificationsModal()" title="Notifications" aria-label="View Notifications">🔔 <span id="notificationCount">0</span></button>
@@ -1507,6 +1510,27 @@
     </div>
 
 
+    <!-- Modal Popup: Admin Announcement / Phone Alert (ADMIN ONLY) -->
+    <div id="announceModal" class="modal" onclick="closeAnnounceModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="announceTitleHeading">
+        <div class="modal-content" style="max-width: 480px;">
+            <button class="close-btn" onclick="closeAnnounceModal()" aria-label="Close announcement">&times;</button>
+            <div class="modal-icon">📣</div>
+            <h2 id="announceTitleHeading">Send a Phone Alert</h2>
+            <p class="badges-subtitle">Write a message and every kid will see it in their 🔔 bell — and get a real phone notification if push alerts are switched on.</p>
+            <form onsubmit="handleAnnounceSubmit(event)">
+                <div class="input-group">
+                    <label for="announceTitleInput">📢 Title</label>
+                    <input type="text" id="announceTitleInput" maxlength="80" placeholder="e.g. New homework is waiting!" required>
+                </div>
+                <div class="input-group">
+                    <label for="announceBodyInput">✍️ Message</label>
+                    <textarea id="announceBodyInput" rows="3" maxlength="240" placeholder="Write a short, kind message..." required></textarea>
+                </div>
+                <button type="submit" class="login-submit-btn" id="announceSubmitBtn">Send to All Kids 🚀</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal Popup: Notifications -->
     <div id="notificationsModal" class="modal" onclick="closeNotificationsModalOnBg(event)" role="dialog" aria-modal="true" aria-labelledby="notificationsTitle">
         <div class="modal-content notifications-modal-content">
@@ -1516,7 +1540,7 @@
             <p class="badges-subtitle">See new messages, new Safe Zone posts, likes, and comments.</p>
             <div class="notification-actions">
                 <button class="solar-tool-btn active" onclick="markAllNotificationsRead()">✅ Mark all read</button>
-                <button class="solar-tool-btn" onclick="requestBrowserNotifications()">🔔 Phone Alerts</button>
+                <button class="solar-tool-btn" id="phoneAlertsBtn" onclick="requestBrowserNotifications()">🔔 Phone Alerts</button>
             </div>
             <div id="notificationsList" class="notifications-list"></div>
         </div>
