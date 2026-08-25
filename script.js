@@ -115,7 +115,8 @@ import {
     getDoc, 
     deleteDoc, 
     onSnapshot,
-    arrayUnion
+    arrayUnion,
+    arrayRemove
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
     getAuth,
@@ -1027,6 +1028,8 @@ function handleLogout() {
     currentRole = null;
     currentActiveId = null;
     phoneAlertBaseline = null;
+    if (activeCall) { try { endCall(); } catch (e) {} }
+    hideIncomingCall();
     if (safeProgressChatUnsub) { try { safeProgressChatUnsub(); } catch (e) {} safeProgressChatUnsub = null; }
     safeZoneProgressChats = [];
 
@@ -1156,6 +1159,7 @@ window.closeAdminPortalModalOnBg = closeAdminPortalModalOnBg;
 function renderAdminPortalProfiles() {
     const container = document.getElementById('adminProfilesList');
     if (!container) return;
+    renderAdminCallLogs();   // 📞 recent kid calls, live at the top
     
     if (cachedKidProfiles.length === 0) {
         container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No kid profiles created yet.</p>';
@@ -3309,6 +3313,8 @@ function selectSafeChatFriend(friendId) {
     selectedSafeChatFriend = friendId || '';
     safeChatStickBottom = true;
     playSound(480);
+    const callBtn = document.getElementById('callFriendBtn');
+    if (callBtn) callBtn.style.display = friendId ? 'inline-flex' : 'none';
     renderSafeChat();
 }
 window.selectSafeChatFriend = selectSafeChatFriend;
@@ -8051,6 +8057,724 @@ function toggleStep(element) {
 window.toggleStep = toggleStep;
 
 // ============================================================
+// KID CALLS — real voice & video calls between kids
+//
+// How it works (no extra servers needed!):
+//   - WebRTC connects kids' browsers DIRECTLY to each other
+//     (peer-to-peer, like WhatsApp) for audio + video.
+//   - Firestore is only used as the "phone book": the call
+//     rooms + connection handshakes (signaling) are tiny docs.
+//   - Group calls use a mesh: every kid connects to every other
+//     kid, which works great for up to about 6 explorers.
+//
+// Safety:
+//   - Admin sees every call in the call history (who, when, how
+//     long) inside ⚙️ Manage Profiles. Calls are NOT recorded.
+//   - Admin can pause all calls with the 📞 Pause Calls button.
+// ============================================================
+const CALL_RTC_CONFIG = {
+    iceServers: [
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+        // Free public TURN relay (openrelayproject) so calls also work on
+        // strict home/school networks. Replace with your own for production.
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ],
+    iceCandidatePoolSize: 4
+};
+const CALL_MISSED_MS = 60000;   // 1:1 ring auto-cancels after 1 minute
+const CALL_MAX_KIDS = 6;        // mesh limit — keeps phones happy
+
+let callsPaused = false;
+let cachedCallRooms = [];
+let cachedCallLogs = [];
+let incomingShownRoomId = null;
+
+// live call state
+let activeCall = null;           // { roomId, isGroup, peers:{}, startedAt }
+let callLocalStream = null;
+let callPCs = new Map();         // peerId -> RTCPeerConnection
+let callAppliedCands = new Map();// signalDocId -> count of ICE candidates applied
+let callRoomUnsub = null;
+let callSignalsUnsub = null;
+let callTimerInterval = null;
+let callMissedTimer = null;
+let ringInterval = null;
+let myCallPeerId = null;
+let callMuted = false;
+let callCameraOn = false;
+let callHasVideoTrack = false;
+
+function callProfile() {
+    if (currentRole === 'admin') {
+        return { kidId: currentActiveId || 'admin', name: 'Admin (Yaasin)', avatar: '🛠️' };
+    }
+    const kid = getActiveKidProfile();
+    return { kidId: currentActiveId, name: kid ? kid.name : 'Explorer', avatar: kid ? (kid.avatar || '🚀') : '🚀' };
+}
+
+// ---------- listeners (started once at app load) ----------
+function listenToCallRooms() {
+    onSnapshot(collection(db, 'callRooms'), (snap) => {
+        cachedCallRooms = [];
+        snap.forEach(d => {
+            const r = { ...(d.data() || {}), id: d.id };
+            cachedCallRooms.push(r);
+        });
+        cachedCallRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        updateGroupCallButton();
+
+        // Incoming 1:1 call for me? (only fresh rings — not stale leftovers)
+        const incoming = cachedCallRooms.find(r =>
+            r.status === 'ringing' &&
+            r.toId === currentActiveId &&
+            r.toId && !activeCall &&
+            currentActiveId &&
+            (r.createdAt || 0) > Date.now() - CALL_MISSED_MS &&
+            r.id !== incomingShownRoomId
+        );
+        if (incoming) showIncomingCall(incoming);
+
+        // My call room was ended / declined elsewhere
+        if (activeCall) {
+            const mine = cachedCallRooms.find(r => r.id === activeCall.roomId);
+            if (!mine || mine.status === 'ended' || mine.status === 'declined') {
+                if (mine && mine.status === 'declined') showToast('Call was declined. 😢', '📵', 3000);
+                leaveCallCleanup();
+            }
+        }
+    }, (err) => console.warn('[KidZone Calls] rooms listener error:', err));
+}
+window.listenToCallRooms = listenToCallRooms;
+
+function listenToCallSettings() {
+    onSnapshot(doc(db, 'callSettings', 'main'), (snap) => {
+        callsPaused = !!(snap.exists() && snap.data() && snap.data().paused);
+        const btn = document.getElementById('callsPauseBtn');
+        if (btn) {
+            btn.innerText = callsPaused ? '▶️ Resume Calls' : '📞 Pause Calls';
+            btn.classList.toggle('active', !callsPaused);
+        }
+    });
+}
+window.listenToCallSettings = listenToCallSettings;
+
+async function toggleCallsPause() {
+    if (currentRole !== 'admin') return;
+    try {
+        await setDoc(doc(db, 'callSettings', 'main'), { paused: !callsPaused, updatedAt: Date.now() }, { merge: true });
+        showToast(callsPaused ? 'Calls are now allowed. 📞' : 'All kid calls are paused. ⏸️', '📞', 3000);
+    } catch (e) { showToast('Could not update call settings.', '❌', 3000); }
+}
+window.toggleCallsPause = toggleCallsPause;
+
+function listenToCallLogs() {
+    onSnapshot(collection(db, 'callLogs'), (snap) => {
+        cachedCallLogs = [];
+        snap.forEach(d => cachedCallLogs.push(d.data() || {}));
+        cachedCallLogs.sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+        cachedCallLogs = cachedCallLogs.slice(0, 25);
+        renderAdminCallLogs();
+    }, (err) => console.warn('[KidZone Calls] logs listener error:', err));
+}
+window.listenToCallLogs = listenToCallLogs;
+
+function renderAdminCallLogs() {
+    const box = document.getElementById('adminCallLogsBox');
+    if (!box) return;
+    if (!cachedCallLogs.length) {
+        box.innerHTML = '';
+        return;
+    }
+    const fmt = (ms) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const dur = (s) => s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+    const rows = cachedCallLogs.slice(0, 8).map(l => {
+        const outcome = l.outcome || 'answered';
+        const cls = outcome === 'answered' ? 'answered' : (outcome === 'declined' ? 'declined' : 'missed');
+        const label = outcome === 'answered' ? 'answered' : (outcome === 'declined' ? 'declined' : 'missed');
+        return `<div class="call-log-row">
+            <span class="call-log-ico">${l.isGroup ? '👨‍👩‍👧‍👦' : '📞'}</span>
+            <span class="call-log-main">
+                <strong>${escapeHtml((l.participants || []).join(', ') || l.startedByName || 'Explorers')}</strong>
+                <small>${fmt(l.startedAt || 0)}${l.durationSec ? ' · ' + dur(l.durationSec) : ''}</small>
+            </span>
+            <span class="call-log-outcome ${cls}">${label}</span>
+        </div>`;
+    }).join('');
+    box.innerHTML = `<div class="admin-call-logs-title">📞 Recent Calls</div>${rows}`;
+}
+window.renderAdminCallLogs = renderAdminCallLogs;
+
+// ---------- group call button state ----------
+function findJoinableGroupRoom() {
+    const now = Date.now();
+    return cachedCallRooms.find(r =>
+        r.isGroup && r.status !== 'ended' && r.status !== 'declined' &&
+        (r.createdAt || 0) > now - 2 * 60 * 60 * 1000
+    );
+}
+function updateGroupCallButton() {
+    const btn = document.getElementById('groupCallBtn');
+    if (!btn) return;
+    if (activeCall) {
+        btn.innerText = '🟢 In a call…';
+        return;
+    }
+    const room = findJoinableGroupRoom();
+    if (room) {
+        const n = (room.participants || []).length;
+        btn.innerText = `🎉 Join Group Call (${n} in call)`;
+        btn.classList.add('active');
+    } else {
+        btn.innerText = '📞 Start Group Call';
+    }
+}
+window.updateGroupCallButton = updateGroupCallButton;
+
+function groupCallButtonAction() {
+    if (activeCall) { showToast('You are already in a call! 📞', '📞', 2500); return; }
+    const room = findJoinableGroupRoom();
+    if (room) joinCall(room.id, 'audio');
+    else startGroupCall();
+}
+window.groupCallButtonAction = groupCallButtonAction;
+
+// ---------- starting calls ----------
+function callsAllowedGuard() {
+    if (!currentActiveId) { showToast('Log in first to call friends!', '🔐', 3000); return false; }
+    if (callsPaused && currentRole !== 'admin') {
+        showToast('Calls are paused by Admin right now. ⏸️', '📵', 3000);
+        return false;
+    }
+    return true;
+}
+
+function startCallToSelectedFriend() {
+    if (activeCall) { showToast('Already in a call — hang up first! 📞', '📵', 2500); return; }
+    if (!callsAllowedGuard()) return;
+    const sel = document.getElementById('safeChatFriendSelect');
+    const friendId = sel ? sel.value : '';
+    if (!friendId) { showToast('Choose a friend first!', '👤', 2500); return; }
+    const friend = cachedKidProfiles.find(p => p.id === friendId);
+    if (!friend) return;
+    const me = callProfile();
+    const roomId = 'call_' + Date.now();
+    const room = {
+        id: roomId,
+        isGroup: false,
+        fromId: me.kidId, fromName: me.name, fromAvatar: me.avatar,
+        toId: friendId, toName: friend.name || 'Friend', toAvatar: friend.avatar || '🚀',
+        mode: 'audio', status: 'ringing',
+        createdAt: Date.now(), participants: []
+    };
+    playSound(660);
+    setDoc(doc(db, 'callRooms', roomId), room)
+        .then(() => joinCall(roomId, 'audio'))
+        .catch(e => showToast('Could not start the call.', '❌', 3000));
+}
+window.startCallToSelectedFriend = startCallToSelectedFriend;
+
+function startGroupCall() {
+    if (activeCall) return;
+    if (!callsAllowedGuard()) return;
+    const me = callProfile();
+    const roomId = 'call_' + Date.now();
+    setDoc(doc(db, 'callRooms', roomId), {
+        id: roomId,
+        isGroup: true,
+        fromId: me.kidId, fromName: me.name, fromAvatar: me.avatar,
+        mode: 'audio', status: 'active',
+        createdAt: Date.now(), participants: []
+    }).then(() => joinCall(roomId, 'audio'))
+      .catch(e => showToast('Could not start the group call.', '❌', 3000));
+}
+window.startGroupCall = startGroupCall;
+
+// ---------- incoming call UI ----------
+function showIncomingCall(room) {
+    incomingShownRoomId = room.id;
+    playSound(880);
+    const av = document.getElementById('incomingAvatar');
+    const nm = document.getElementById('incomingName');
+    const sub = document.getElementById('incomingSub');
+    if (av) av.innerText = room.fromAvatar || '🚀';
+    if (nm) nm.innerText = room.fromName || 'Friend';
+    if (sub) sub.innerText = (room.isGroup ? 'is inviting you to a group call…' : 'is calling you…');
+    const m = document.getElementById('incomingCallModal');
+    if (m) m.style.display = 'flex';
+
+    // ring ring 🔔 (WebAudio needs a tap first on some phones; the modal itself is the tap target)
+    stopRingtone();
+    ringInterval = setInterval(() => {
+        playChime([784, 659, 784]);
+        try { navigator.vibrate && navigator.vibrate(300); } catch (e) {}
+    }, 1800);
+
+    // phone-level alert too (if the kid allowed Phone Alerts)
+    showSystemNotification(`📞 ${room.fromName || 'Friend'} is calling!`,
+        'Tap KidZone to answer.', 'kidzone_call');
+
+    // stop ringing automatically if the room dies
+    if (callMissedTimer) clearTimeout(callMissedTimer);
+    callMissedTimer = setTimeout(() => hideIncomingCall(), CALL_MISSED_MS + 5000);
+}
+window.showIncomingCall = showIncomingCall;
+
+function hideIncomingCall() {
+    const m = document.getElementById('incomingCallModal');
+    if (m) m.style.display = 'none';
+    stopRingtone();
+    if (callMissedTimer) { clearTimeout(callMissedTimer); callMissedTimer = null; }
+}
+function stopRingtone() {
+    if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
+}
+
+function acceptIncomingCall(mode) {
+    const roomId = incomingShownRoomId;
+    hideIncomingCall();
+    if (!roomId) return;
+    if (activeCall) { showToast('Already in a call!', '📞', 2500); return; }
+    joinCall(roomId, mode);
+}
+window.acceptIncomingCall = acceptIncomingCall;
+
+async function declineIncomingCall() {
+    const roomId = incomingShownRoomId;
+    hideIncomingCall();
+    playSound(300);
+    if (!roomId) return;
+    const room = cachedCallRooms.find(r => r.id === roomId);
+    try {
+        await setDoc(doc(db, 'callRooms', roomId), { status: 'declined', endedAt: Date.now() }, { merge: true });
+        writeCallLog(room, 'declined');
+    } catch (e) { console.warn(e); }
+}
+window.declineIncomingCall = declineIncomingCall;
+
+// ---------- joining the call (WebRTC engine) ----------
+async function joinCall(roomId, mode) {
+    if (activeCall) return;
+    if (!callsAllowedGuard()) return;
+
+    // 1:1 rooms are private: only the two invited kids (or admin) may join.
+    const room = cachedCallRooms.find(r => r.id === roomId) ||
+        (await getDoc(doc(db, 'callRooms', roomId))).data();
+    if (!room) { showToast('This call has ended.', '📵', 3000); return; }
+    if (!room.isGroup && room.toId !== currentActiveId && room.fromId !== currentActiveId && currentRole !== 'admin') {
+        showToast('This call is private.', '🔒', 3000); return;
+    }
+    const headcount = (room.participants || []).length;
+    if (headcount >= CALL_MAX_KIDS) { showToast(`Group call is full (max ${CALL_MAX_KIDS}). 🐵`, '😢', 3000); return; }
+
+    // Microphone (+ camera for video answer). Camera track is requested once
+    // so switching video on/off later needs no renegotiation.
+    playSound(700);
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: (mode === 'video') ? { width: { ideal: 640 }, facingMode: 'user' } : true
+        });
+    } catch (e) {
+        console.warn('[KidZone Calls] camera/mic error:', e && e.name);
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e2) {
+            showToast('Allow microphone access to call! Check your browser permissions. 🎙️', '⚠️', 4500);
+            return;
+        }
+    }
+    callLocalStream = stream;
+    callHasVideoTrack = stream.getVideoTracks().length > 0;
+    callCameraOn = mode === 'video';
+    if (callHasVideoTrack) stream.getVideoTracks().forEach(t => { t.enabled = callCameraOn; });
+    callMuted = false;
+
+    const me = callProfile();
+    myCallPeerId = (me.kidId || 'guest') + '_' + Math.random().toString(36).slice(2, 7);
+    activeCall = {
+        roomId,
+        isGroup: !!room.isGroup,
+        peers: {},
+        startedAt: Date.now(),
+        myMeta: { peerId: myCallPeerId, kidId: me.kidId, name: me.name, avatar: me.avatar }
+    };
+
+    // register me in the room
+    const myPart = { ...activeCall.myMeta, joinedAt: Date.now() };
+    activeCall.myPart = myPart;   // exact object needed later for arrayRemove
+    try {
+        await setDoc(doc(db, 'callRooms', roomId), {
+            participants: arrayUnion(myPart),
+            status: 'active'
+        }, { merge: true });
+    } catch (e) { console.warn('[KidZone Calls] join write failed:', e); }
+
+    openCallUI(room);
+
+    // watch the room: new peers, leavers, end
+    callRoomUnsub = onSnapshot(doc(db, 'callRooms', roomId), async (snap) => {
+        if (!activeCall || activeCall.roomId !== roomId) return;
+        const r = snap.exists() ? snap.data() : null;
+        if (!r) { leaveCallCleanup(); return; }
+        if (r.status === 'ended' || r.status === 'declined') {
+            if (r.status === 'declined') showToast('Call declined. 😢', '📵', 2500);
+            await finalizeRoomEnd(roomId, r, 'answered');
+            leaveCallCleanup();
+            return;
+        }
+        const parts = r.participants || [];
+        const others = parts.filter(p => p.peerId !== myCallPeerId);
+        startCallTimerIfPeer(others.length > 0);
+
+        // connect to anyone I'm not connected to yet
+        for (const p of others) {
+            if (!callPCs.has(p.peerId)) {
+                await connectToPeer(p);
+            }
+        }
+        // drop tiles for kids who left
+        for (const peerId of [...callPCs.keys()]) {
+            if (!others.some(p => p.peerId === peerId)) {
+                removeCallPeer(peerId);
+            }
+        }
+    });
+
+    // watch signaling docs addressed to me
+    callSignalsUnsub = onSnapshot(collection(db, 'callRooms', roomId, 'signals'), (snap) => {
+        snap.forEach(d => handleSignalDoc(d.id, d.data()));
+    }, (err) => console.warn('[KidZone Calls] signals error:', err));
+
+    // auto-cancel if nobody answers a 1:1 ring
+    if (!room.isGroup && (room.participants || []).length === 0) {
+        if (callMissedTimer) clearTimeout(callMissedTimer);
+        callMissedTimer = setTimeout(async () => {
+            if (!activeCall || activeCall.roomId !== roomId) return;
+            const fresh = await getDoc(doc(db, 'callRooms', roomId));
+            const rd = fresh.exists() ? fresh.data() : {};
+            if ((rd.participants || []).length < 2) {
+                await finalizeRoomEnd(roomId, rd, 'missed');
+                leaveCallCleanup();
+                showToast('No answer. Try again later! 🔔', '📵', 3500);
+            }
+        }, CALL_MISSED_MS);
+    }
+}
+window.joinCall = joinCall;
+
+// ---------- peer connection helpers ----------
+async function connectToPeer(peerMeta) {
+    try {
+        const pc = makeCallPC(peerMeta.peerId);
+        // Deterministic offerer: the smaller peerId initiates, so two kids
+        // connecting at the same moment never collide.
+        if (myCallPeerId < peerMeta.peerId) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await writeCallSignal(activeCall.roomId, myCallPeerId, peerMeta.peerId, {
+                kind: 'offer', sdp: JSON.stringify(offer)
+            });
+            pc._iOffered = true;
+        }
+    } catch (e) {
+        console.warn('[KidZone Calls] connectToPeer failed:', e);
+    }
+}
+
+function makeCallPC(peerId) {
+    const pc = new RTCPeerConnection(CALL_RTC_CONFIG);
+    callPCs.set(peerId, pc);
+    if (callLocalStream) {
+        callLocalStream.getTracks().forEach(t => {
+            try { pc.addTrack(t, callLocalStream); } catch (e) {}
+        });
+    }
+    pc.onicecandidate = (ev) => {
+        if (ev.candidate && activeCall) {
+            pushCallCandidates(activeCall.roomId, myCallPeerId, peerId, JSON.stringify(ev.candidate));
+        }
+    };
+    pc.ontrack = (ev) => {
+        const [remote] = ev.streams;
+        renderCallTile(peerId, remote || new MediaStream([ev.track]));
+    };
+    pc.onconnectionstatechange = () => {
+        const st = document.getElementById('callStatus');
+        if (st && activeCall) {
+            if (pc.connectionState === 'connected') st.innerText = 'Connected 🟢';
+        }
+        if (pc.connectionState === 'failed') showToast('Connection problem — try again! ⚠️', '📵', 3000);
+    };
+    return pc;
+}
+
+async function handleSignalDoc(docId, sig) {
+    if (!sig || !activeCall) return;
+    if (sig.toPeer !== myCallPeerId) return;
+    let pc = callPCs.get(sig.fromPeer);
+    try {
+        if (sig.kind === 'offer' && sig.sdp) {
+            if (!pc) pc = makeCallPC(sig.fromPeer);
+            if (!pc._offerApplied) {
+                pc._offerApplied = true;
+                await pc.setRemoteDescription(JSON.parse(sig.sdp));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                await writeCallSignal(activeCall.roomId, myCallPeerId, sig.fromPeer, {
+                    kind: 'answer', sdp: JSON.stringify(answer)
+                });
+            }
+        } else if (sig.kind === 'answer' && sig.sdp && pc) {
+            if (!pc._answerApplied && pc._iOffered) {
+                pc._answerApplied = true;
+                await pc.setRemoteDescription(JSON.parse(sig.sdp));
+            }
+        }
+    } catch (e) {
+        console.warn('[KidZone Calls] signal apply failed:', e);
+    }
+    // apply any not-yet-applied ICE candidates from this doc
+    if (pc) {
+        const seen = callAppliedCands.get(docId) || 0;
+        const cands = sig.candidates || [];
+        for (let i = seen; i < cands.length; i++) {
+            try { await pc.addIceCandidate(JSON.parse(cands[i])); } catch (e) {}
+        }
+        callAppliedCands.set(docId, cands.length);
+    }
+}
+
+async function writeCallSignal(roomId, fromPeer, toPeer, data) {
+    const id = `sig_${fromPeer}__${toPeer}`;
+    try {
+        await setDoc(doc(db, 'callRooms', roomId, 'signals', id), {
+            fromPeer, toPeer, createdAt: Date.now(), candidates: [], ...data
+        }, { merge: true });
+    } catch (e) { console.warn('[KidZone Calls] signal write failed:', e); }
+}
+
+async function pushCallCandidates(roomId, fromPeer, toPeer, cand) {
+    const id = `sig_${fromPeer}__${toPeer}`;
+    try {
+        await setDoc(doc(db, 'callRooms', roomId, 'signals', id), {
+            candidates: arrayUnion(cand)
+        }, { merge: true });
+    } catch (e) {}
+}
+
+// ---------- call UI ----------
+function openCallUI(room) {
+    const me = activeCall.myMeta;
+    const titleEl = document.getElementById('callTitle');
+    if (titleEl) {
+        titleEl.innerText = room.isGroup
+            ? '🎉 Group Call'
+            : `📞 Call with ${room.toId === me.kidId ? (room.fromName || 'Friend') : (room.toName || 'Friend')}`;
+    }
+    const st = document.getElementById('callStatus');
+    if (st) st.innerText = 'Waiting for friends…';
+    const timerEl = document.getElementById('callTimer');
+    if (timerEl) timerEl.innerText = '00:00';
+    const camBtn = document.getElementById('callCamBtn');
+    if (camBtn) camBtn.style.display = callHasVideoTrack ? 'inline-flex' : 'none';
+    updateCallControlButtons();
+    renderCallTile(myCallPeerId, null);   // my own tile
+    const m = document.getElementById('callModal');
+    if (m) m.style.display = 'flex';
+    updateGroupCallButton();
+}
+
+function renderCallTile(peerId, remoteStream) {
+    if (!activeCall) return;
+    const tiles = document.getElementById('callTiles');
+    if (!tiles) return;
+    const isMe = peerId === myCallPeerId;
+    const allParts = [{ ...(activeCall.myMeta) }];
+    // names from live rooms cache
+    const room = cachedCallRooms.find(r => r.id === activeCall.roomId);
+    (room && room.participants || []).forEach(p => allParts.push(p));
+    const meta = allParts.find(p => p.peerId === peerId) || {};
+    const name = isMe ? (meta.name || 'Me') + ' (you)' : (meta.name || 'Friend');
+
+    let tile = document.getElementById('callTile_' + peerId);
+    if (!tile) {
+        tile = document.createElement('div');
+        tile.className = 'call-tile';
+        tile.id = 'callTile_' + peerId;
+        tile.innerHTML = `<span class="call-tile-avatar">${meta.avatar || (isMe ? '🚀' : '👤')}</span>
+                          <video autoplay playsinline ${isMe ? 'muted' : ''}></video>
+                          <span class="call-tile-name"></span>`;
+        tile.querySelector('.call-tile-name').innerText = name;
+        tiles.appendChild(tile);
+    }
+    const video = tile.querySelector('video');
+    const avatar = tile.querySelector('.call-tile-avatar');
+
+    if (isMe) {
+        if (video && callLocalStream) {
+            video.srcObject = callLocalStream;
+            video.style.display = callCameraOn ? 'block' : 'none';
+            avatar.style.display = callCameraOn ? 'none' : 'flex';
+        }
+        tile.classList.toggle('muted-video', !callCameraOn);
+        tile.classList.toggle('muted-audio', callMuted);
+    } else if (remoteStream) {
+        if (video) {
+            video.srcObject = remoteStream;
+            video.play().catch(() => {});
+            const hasVideo = remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === 'live');
+            video.style.display = hasVideo ? 'block' : 'none';
+            avatar.style.display = hasVideo ? 'none' : 'flex';
+            tile.classList.toggle('muted-video', !hasVideo);
+        }
+    }
+}
+
+function removeCallPeer(peerId) {
+    const pc = callPCs.get(peerId);
+    if (pc) {
+        try { pc.close(); } catch (e) {}
+        callPCs.delete(peerId);
+    }
+    const tile = document.getElementById('callTile_' + peerId);
+    if (tile) tile.remove();
+}
+
+function updateCallControlButtons() {
+    const muteBtn = document.getElementById('callMuteBtn');
+    if (muteBtn) {
+        muteBtn.innerText = callMuted ? '🔇' : '🎙️';
+        muteBtn.classList.toggle('active-warn', callMuted);
+        muteBtn.title = callMuted ? 'Unmute my microphone' : 'Mute my microphone';
+    }
+    const camBtn = document.getElementById('callCamBtn');
+    if (camBtn && callHasVideoTrack) {
+        camBtn.innerText = callCameraOn ? '🎥' : '📷';
+        camBtn.classList.toggle('active-warn', !callCameraOn);
+        camBtn.title = callCameraOn ? 'Turn my camera off' : 'Turn my camera on';
+    }
+}
+
+function toggleCallMute() {
+    callMuted = !callMuted;
+    if (callLocalStream) {
+        callLocalStream.getAudioTracks().forEach(t => { t.enabled = !callMuted; });
+    }
+    updateCallControlButtons();
+    renderCallTile(myCallPeerId, null);
+    playSound(callMuted ? 300 : 600);
+    showToast(callMuted ? 'Microphone muted 🔇' : 'Microphone on 🎙️', '🎙️', 1800);
+}
+window.toggleCallMute = toggleCallMute;
+
+function toggleCallCamera() {
+    if (!callHasVideoTrack) { showToast('This device has no camera available.', '📷', 2500); return; }
+    callCameraOn = !callCameraOn;
+    if (callLocalStream) {
+        callLocalStream.getVideoTracks().forEach(t => { t.enabled = callCameraOn; });
+    }
+    updateCallControlButtons();
+    renderCallTile(myCallPeerId, null);
+    playSound(callCameraOn ? 700 : 400);
+}
+window.toggleCallCamera = toggleCallCamera;
+
+function startCallTimerIfPeer(hasPeer) {
+    if (!hasPeer || callTimerInterval || !activeCall) return;
+    const t0 = Date.now();
+    const st = document.getElementById('callStatus');
+    if (st) st.innerText = 'Connected 🟢';
+    callTimerInterval = setInterval(() => {
+        const s = Math.floor((Date.now() - t0) / 1000);
+        const mm = String(Math.floor(s / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        const el = document.getElementById('callTimer');
+        if (el) el.innerText = `${mm}:${ss}`;
+    }, 1000);
+}
+
+// ---------- ending ----------
+async function writeCallLog(room, outcome) {
+    if (!room || !room.id) return;
+    try {
+        const names = (room.participants || []).map(p => p.name).filter(Boolean);
+        if (!names.length && room.fromName) names.push(room.fromName);
+        if (!names.length && room.toName) names.push(room.toName);
+        await setDoc(doc(db, 'callLogs', 'log_' + room.id), {
+            roomId: room.id,
+            isGroup: !!room.isGroup,
+            startedByName: room.fromName || 'Explorer',
+            participants: names.slice(0, 8),
+            startedAt: room.createdAt || Date.now(),
+            endedAt: Date.now(),
+            durationSec: Math.max(0, Math.round((Date.now() - (room.createdAt || Date.now())) / 1000)),
+            outcome
+        }, { merge: true });
+    } catch (e) { console.warn('[KidZone Calls] log write failed:', e); }
+}
+
+async function finalizeRoomEnd(roomId, roomData, outcomeIfNone) {
+    try {
+        await setDoc(doc(db, 'callRooms', roomId), { status: 'ended', endedAt: Date.now() }, { merge: true });
+    } catch (e) {}
+    const existing = await getDoc(doc(db, 'callLogs', 'log_' + roomId));
+    if (!existing.exists()) {
+        writeCallLog({ ...(roomData || {}), id: roomId }, outcomeIfNone);
+    }
+}
+
+async function endCall() {
+    if (!activeCall) return;
+    playSound(300);
+    const roomId = activeCall.roomId;
+    const myPart = activeCall.myPart || { ...activeCall.myMeta };
+    try {
+        // remove me; if I was the last one, close + log the room
+        await setDoc(doc(db, 'callRooms', roomId), {
+            participants: arrayRemove(myPart)
+        }, { merge: true });
+        const fresh = await getDoc(doc(db, 'callRooms', roomId));
+        const rd = fresh.exists() ? fresh.data() : {};
+        const remaining = (rd.participants || []).filter(p => p.peerId !== myCallPeerId);
+        if (remaining.length === 0) {
+            await finalizeRoomEnd(roomId, rd, 'answered');
+        }
+    } catch (e) { console.warn(e); }
+    leaveCallCleanup();
+    showToast('Call ended. 👋', '📞', 2500);
+}
+window.endCall = endCall;
+
+function leaveCallCleanup() {
+    if (callRoomUnsub) { try { callRoomUnsub(); } catch (e) {} callRoomUnsub = null; }
+    if (callSignalsUnsub) { try { callSignalsUnsub(); } catch (e) {} callSignalsUnsub = null; }
+    if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+    if (callMissedTimer) { clearTimeout(callMissedTimer); callMissedTimer = null; }
+    if (callLocalStream) {
+        callLocalStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+        callLocalStream = null;
+    }
+    callPCs.forEach(pc => { try { pc.close(); } catch (e) {} });
+    callPCs.clear();
+    callAppliedCands.clear();
+    activeCall = null;
+    myCallPeerId = null;
+    callHasVideoTrack = false;
+    callCameraOn = false;
+    callMuted = false;
+    hideIncomingCall();
+    const m = document.getElementById('callModal');
+    if (m) m.style.display = 'none';
+    const tiles = document.getElementById('callTiles');
+    if (tiles) tiles.innerHTML = '';
+    updateGroupCallButton();
+}
+window.leaveCallCleanup = leaveCallCleanup;
+
+// ============================================================
 // APP INITIALIZATION ENTRY POINT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
@@ -8060,6 +8784,9 @@ window.addEventListener('DOMContentLoaded', () => {
     listenToSafeZone();
     listenToAnnouncements();   // Admin "📣 Send Alert" -> kids' bell + phone alerts
     initPhoneAlerts();         // service worker + push permission/token
+    listenToCallRooms();       // 📞 kid calls: rings, group rooms, live state
+    listenToCallSettings();    // admin pause switch
+    listenToCallLogs();        // admin call history
     watchAdminAuth();      // signs out any old remembered admin token; admin must type password each visit
     checkLoginSession();
     renderStoryPage();

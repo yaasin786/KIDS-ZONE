@@ -523,6 +523,7 @@
                     <div class="safe-admin-actions">
                         <button class="solar-tool-btn active" onclick="safeApproveAllPending()">✅ Approve All Pending</button>
                         <button class="solar-tool-btn" onclick="toggleSafeZonePause()" id="safePauseBtn">⏸️ Pause Posting</button>
+                        <button class="solar-tool-btn" onclick="toggleCallsPause()" id="callsPauseBtn">📞 Pause Calls</button>
                     </div>
                 </div>
                 <div id="safezoneAdminStats" class="safezone-admin-stats"></div>
@@ -540,6 +541,9 @@
                         <p>All kids can chat together here. Admin can see everything and delete anything unkind.</p>
                     </div>
                     <span class="safe-group-live-pill">🟢 Safe Room</span>
+                </div>
+                <div class="safe-group-call-row">
+                    <button id="groupCallBtn" class="solar-tool-btn active" onclick="groupCallButtonAction()">📞 Start Group Call</button>
                 </div>
                 <div id="safeGroupChatWindow" class="safe-chat-window safe-group-chat-window">
                     <div class="safe-empty">👋 No group messages yet. Say hello to everyone!</div>
@@ -576,9 +580,12 @@
                         <h2>Chat with a friend safely</h2>
                         <p>Kids can chat freely with friends. Admin can still monitor and delete anything unkind.</p>
                     </div>
-                    <select id="safeChatFriendSelect" onchange="selectSafeChatFriend(this.value)" aria-label="Choose a friend to chat with">
-                        <option value="">Choose a friend...</option>
-                    </select>
+                    <div class="safe-chat-head-row">
+                        <select id="safeChatFriendSelect" onchange="selectSafeChatFriend(this.value)" aria-label="Choose a friend to chat with">
+                            <option value="">Choose a friend...</option>
+                        </select>
+                        <button id="callFriendBtn" class="safe-call-friend-btn" style="display:none;" onclick="startCallToSelectedFriend()" title="Call your friend" aria-label="Call your friend">📞</button>
+                    </div>
                 </div>
                 <div id="safeChatWindow" class="safe-chat-window">
                     <div class="safe-empty">👋 Choose a friend to start a safe chat.</div>
@@ -1302,6 +1309,8 @@
             <h2 id="adminPortalTitle">Admin Explorer Console</h2>
             <p class="badges-subtitle">Manage profiles and view real-time kid login history below.</p>
             
+            <div id="adminCallLogsBox" class="admin-call-logs"></div>
+            
             <div id="adminProfilesList" style="margin-top: 20px; display: flex; flex-direction: column; gap: 14px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
                 <!-- Dynamically Populated List with Delete Buttons & Login Timestamps -->
             </div>
@@ -1554,6 +1563,42 @@
             <h2 id="badgeModalTitle">My Badge Collection</h2>
             <p class="badges-subtitle">Play, read, and explore to unlock them all!</p>
             <div class="badges-grid" id="badgesGrid"></div>
+        </div>
+    </div>
+
+    <!-- Incoming Call Ring Screen -->
+    <div id="incomingCallModal" class="modal call-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="incomingName">
+        <div class="call-card incoming-card">
+            <div class="call-avatar-pulse" id="incomingAvatar">🚀</div>
+            <h2 id="incomingName">Friend</h2>
+            <p class="call-sub" id="incomingSub">is calling you…</p>
+            <div class="call-action-row">
+                <button class="call-decline-btn" onclick="declineIncomingCall()">📵 Decline</button>
+                <button class="call-audio-btn" onclick="acceptIncomingCall('audio')">🔊 Answer</button>
+                <button class="call-video-btn" onclick="acceptIncomingCall('video')">🎥 Video</button>
+            </div>
+            <p class="call-safety-note">🛡️ Admin can see this call in the call history.</p>
+        </div>
+    </div>
+
+    <!-- In-Call Room -->
+    <div id="callModal" class="modal call-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="callTitle">
+        <div class="call-card call-room-card">
+            <div class="call-room-head">
+                <span class="call-mode-icon" id="callModeIcon">📞</span>
+                <div class="call-room-title">
+                    <h2 id="callTitle">KidZone Call</h2>
+                    <small id="callStatus">Connecting…</small>
+                </div>
+                <span class="call-timer" id="callTimer">00:00</span>
+            </div>
+            <div class="call-tiles" id="callTiles"></div>
+            <div class="call-controls">
+                <button id="callMuteBtn" class="call-ctrl-btn" onclick="toggleCallMute()" title="Mute / unmute my microphone">🎙️</button>
+                <button id="callCamBtn" class="call-ctrl-btn" onclick="toggleCallCamera()" title="Turn my camera on / off">🎥</button>
+                <button class="call-ctrl-btn call-end-btn" onclick="endCall()" title="Leave the call">📵</button>
+            </div>
+            <p class="call-safety-note">🛡️ Be kind! Admin can see who called and when in the call history.</p>
         </div>
     </div>
 
