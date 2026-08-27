@@ -40,16 +40,20 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
   const link = String((request.data && request.data.url) || "https://yaasin786.github.io/KIDS-ZONE/");
 
   // ---- Collect every kid's registered device token ----
+  // Track the profile docs that own each token too, so dead registrations can be
+  // cleaned up instead of making future pushes fail/noisy.
   const snap = await admin.firestore().collection("kidProfiles").get();
-  const tokens = new Set();
+  const tokenOwners = new Map();
   snap.forEach((d) => {
     const data = d.data() || {};
     if (typeof data.fcmToken === "string" && data.fcmToken.length > 10) {
-      tokens.add(data.fcmToken);
+      const owners = tokenOwners.get(data.fcmToken) || [];
+      owners.push(d.id);
+      tokenOwners.set(data.fcmToken, owners);
     }
   });
 
-  const uniqueTokens = [...tokens];
+  const uniqueTokens = [...tokenOwners.keys()];
   if (uniqueTokens.length === 0) {
     return {
       sent: 0,
@@ -59,6 +63,9 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
   }
 
   // ---- Send the push to every device ----
+  // sendEach() takes a list of individual token messages.
+  // (sendEachForMulticast() expects {tokens: [...]}, so using it here silently
+  // broke closed-app phone alerts.)
   const messages = uniqueTokens.map((token) => ({
     token,
     notification: { title, body },
@@ -70,12 +77,39 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
   }));
 
   try {
-    const response = await admin.messaging().sendEachForMulticast({ messages });
+    const response = await admin.messaging().sendEach(messages);
+
+    // Remove tokens/devices that FCM says are permanently invalid.
+    const invalidCodes = new Set([
+      "messaging/registration-token-not-registered",
+      "messaging/invalid-registration-token",
+    ]);
+    const invalidProfileIds = new Set();
+    response.responses.forEach((r, index) => {
+      const code = r.error && r.error.code;
+      if (!r.success && invalidCodes.has(code)) {
+        (tokenOwners.get(uniqueTokens[index]) || []).forEach((id) => invalidProfileIds.add(id));
+      }
+    });
+
+    if (invalidProfileIds.size) {
+      const batch = admin.firestore().batch();
+      [...invalidProfileIds].slice(0, 450).forEach((profileId) => {
+        batch.update(admin.firestore().collection("kidProfiles").doc(profileId), {
+          fcmToken: admin.firestore.FieldValue.delete(),
+          fcmTokenInvalidAt: Date.now(),
+        });
+      });
+      await batch.commit();
+      logger.info("KidZone stale push tokens cleaned", { count: invalidProfileIds.size });
+    }
+
     logger.info("KidZone push sent", { success: response.successCount, failed: response.failureCount });
     return {
       sent: response.successCount,
       failed: response.failureCount,
       total: uniqueTokens.length,
+      cleaned: invalidProfileIds.size,
     };
   } catch (err) {
     logger.error("KidZone push failed", err);

@@ -173,6 +173,7 @@ function shuffleArray(array) {
 
 // Keep dynamic profiles cache in memory
 let cachedKidProfiles = [];
+let kidProfilesLoaded = false;
 let collectedErrorLogs = [];
 let cloudErrorLogs = [];
 let errorLoggingInstalled = false;
@@ -442,10 +443,22 @@ window.addEventListener('keydown', (e) => {
 function showToast(message, icon = '🎉', duration = 3000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
-    
+
+    // Build toasts with textContent instead of innerHTML. Announcements,
+    // profile names and chat-related messages can be user-generated, so this
+    // keeps the global toast helper safe from accidental HTML/script injection.
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg">${message}</span>`;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = icon || '🎉';
+
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'toast-msg';
+    messageSpan.textContent = String(message ?? '');
+
+    toast.append(iconSpan, messageSpan);
     container.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => {
@@ -605,6 +618,85 @@ let currentRole = null; // 'admin' or 'kid'
 let currentActiveId = null;
 let adminLoginInProgress = false; // true only after the admin submits the password form
 
+// ---------- Kid profile device lock ----------
+// A successful kid login "locks" the browser/PWA to that explorer. Closing
+// KidZone does not forget which child owns the device: the next visit opens a
+// PIN lock screen for the same profile, while the saved FCM token map lets
+// closed-app phone alerts continue through the service worker.
+const DEVICE_PROFILE_LOCK_KEY = 'kidzone_device_profile_lock_v1';
+
+function getDeviceProfileLock() {
+    try {
+        const lock = JSON.parse(localStorage.getItem(DEVICE_PROFILE_LOCK_KEY) || 'null');
+        if (!lock || !lock.kidId) return null;
+        return {
+            kidId: String(lock.kidId),
+            name: String(lock.name || 'Explorer').slice(0, 40),
+            avatar: String(lock.avatar || '🚀').slice(0, 12),
+            lockedAt: Number(lock.lockedAt) || Date.now()
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+function rememberDeviceProfileLock(kid) {
+    if (!kid || !kid.id) return null;
+    const lock = {
+        kidId: String(kid.id),
+        name: String(kid.name || 'Explorer').slice(0, 40),
+        avatar: String(kid.avatar || '🚀').slice(0, 12),
+        lockedAt: Date.now()
+    };
+    try { localStorage.setItem(DEVICE_PROFILE_LOCK_KEY, JSON.stringify(lock)); } catch (e) {}
+    return lock;
+}
+
+function clearDeviceProfileLock() {
+    try { localStorage.removeItem(DEVICE_PROFILE_LOCK_KEY); } catch (e) {}
+}
+
+function applyDeviceProfileLockUI() {
+    const lock = getDeviceProfileLock();
+    const selectElem = document.getElementById('loginKidSelect');
+    const selectGroup = document.getElementById('kidProfileSelectGroup');
+    const notice = document.getElementById('lockedProfileNotice');
+    const lockAvatar = document.getElementById('lockedProfileAvatar');
+    const lockName = document.getElementById('lockedProfileName');
+
+    // If Admin deleted the locked profile, release the old device lock.
+    if (lock && kidProfilesLoaded && !cachedKidProfiles.some(p => p.id === lock.kidId)) {
+        clearDeviceProfileLock();
+        applyDeviceProfileLockUI();
+        return;
+    }
+
+    const profile = lock ? cachedKidProfiles.find(p => p.id === lock.kidId) : null;
+    if (profile) rememberDeviceProfileLock(profile); // refresh renamed avatar/name
+
+    if (selectElem) {
+        if (lock) selectElem.value = lock.kidId;
+        selectElem.disabled = !!lock;
+    }
+    if (selectGroup) selectGroup.style.display = lock ? 'none' : 'block';
+    if (notice) notice.style.display = lock ? 'flex' : 'none';
+    if (lockAvatar) lockAvatar.textContent = (profile && profile.avatar) || (lock && lock.avatar) || '🚀';
+    if (lockName) lockName.textContent = (profile && profile.name) || (lock && lock.name) || 'Explorer';
+}
+
+function unlockDeviceProfile() {
+    playSound(300);
+    const ok = confirm('Switch explorer on this device?\n\nThe locked profile will be removed from the login screen. Phone alerts stay enabled, but the next explorer should open 🔔 Phone Alerts once.');
+    if (!ok) return;
+    clearDeviceProfileLock();
+    const pinElem = document.getElementById('loginKidPin');
+    if (pinElem) pinElem.value = '';
+    applyDeviceProfileLockUI();
+    populateKidSelect();
+    showToast('Explorer lock removed. Choose a profile to continue.', '🔓', 3000);
+}
+window.unlockDeviceProfile = unlockDeviceProfile;
+
 function getActiveKidProfile() {
     return cachedKidProfiles.find(k => k && k.id === currentActiveId) || null;
 }
@@ -717,8 +809,10 @@ function listenToKidProfiles() {
                 data.errorOutbox.forEach(log => { if (log && log.id) collectedErrorLogs.push(log); });
             }
         });
+        kidProfilesLoaded = true;
         populateKidSelect();
         setupUIForSession();
+        syncLockedDevicePushToken().catch(e => console.warn('[KidZone] locked profile push sync skipped:', e && (e.code || e.message || e)));
         // Keep Safe Zone friend lists live when Admin creates a new kid profile.
         if (typeof populateSafeAudience === 'function') populateSafeAudience();
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
@@ -744,9 +838,13 @@ function populateKidSelect() {
     cachedKidProfiles.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
-        opt.innerText = `${escapeHtml(p.avatar)} ${escapeHtml(p.name)}`;
+        // textContent is already safe; using escapeHtml here would show literal
+        // &amp; / &lt; strings to children when a name contains punctuation.
+        opt.textContent = `${p.avatar || '🚀'} ${p.name || 'Explorer'}`;
         selectElem.appendChild(opt);
     });
+
+    applyDeviceProfileLockUI();
 }
 
 async function handleKidLogin(event) {
@@ -760,6 +858,15 @@ async function handleKidLogin(event) {
     const errorMsg = document.getElementById('kidLoginErrorMsg');
 
     const kid = cachedKidProfiles.find(p => p.id === kidId);
+
+    if (!kidId || !/^[0-9]{4}$/.test(pinInput)) {
+        if (errorMsg) {
+            errorMsg.innerText = 'Choose a profile and enter your 4-digit PIN.';
+            errorMsg.style.display = 'block';
+        }
+        playSound(150, 'sawtooth', 0.25);
+        return;
+    }
 
     const waitMs = lockRemainingMs('kid_' + kidId);
     if (waitMs > 0) {
@@ -775,6 +882,9 @@ async function handleKidLogin(event) {
 
     if (kid && pinOk) {
         clearFailedLogins('kid_' + kidId);
+        rememberDeviceProfileLock(kid);
+        applyDeviceProfileLockUI();
+
         sessionStorage.setItem('kidzone_logged_in', 'true');
         sessionStorage.setItem('kidzone_user_role', 'kid');
         sessionStorage.setItem('kidzone_active_id', kid.id);
@@ -800,7 +910,7 @@ async function handleKidLogin(event) {
         loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Welcome back, ${escapeHtml(kid.name)}! 🚀`, '✨', 3500);
+        showToast(`Welcome back, ${kid.name || 'Explorer'}! Profile locked and alerts stay active. 🚀`, '✨', 4200);
 
         // ---- phone alerts: connect this kid's device ----
         phoneAlertBaseline = null;   // don't alert about old notifications
@@ -909,6 +1019,21 @@ function watchAdminAuth() {
             // do NOT auto-open the website as Admin. Require the password form again.
             if (!adminLoginInProgress) {
                 try { await signOut(auth); } catch (e) { console.warn('[KidZone] auto admin sign-out failed:', e); }
+
+                // Do not kick out a child just because Firebase found an old
+                // admin token from another visit. Keep the kid session/lock and
+                // quietly revoke admin in the background.
+                const kidSessionActive = sessionStorage.getItem('kidzone_user_role') === 'kid' &&
+                    !!sessionStorage.getItem('kidzone_active_id');
+                if (kidSessionActive) {
+                    currentRole = 'kid';
+                    currentActiveId = sessionStorage.getItem('kidzone_active_id');
+                    const overlay = document.getElementById('loginScreen');
+                    if (overlay) overlay.classList.add('hidden');
+                    setupUIForSession();
+                    return;
+                }
+
                 sessionStorage.removeItem('kidzone_logged_in');
                 sessionStorage.removeItem('kidzone_user_role');
                 sessionStorage.removeItem('kidzone_active_id');
@@ -1002,6 +1127,8 @@ function setupUIForSession() {
         if (kid) {
             if (avatarElem) avatarElem.innerText = kid.avatar;
             if (nameElem) nameElem.innerText = kid.name;
+            // Older sessions created before this update are locked on first UI sync.
+            if (currentRole === 'kid') rememberDeviceProfileLock(kid);
         }
     }
     setupSafeProgressChatListener();
@@ -1015,16 +1142,20 @@ function handleLogout() {
     // If the admin is signed in with Firebase, end that session too -
     // otherwise the token would still authorise database writes.
     const wasAdmin = currentRole === 'admin';
+    const wasKid = currentRole === 'kid';
+    const wasKidId = currentActiveId;
     currentRole = null;                       // stop watchAdminAuth double-firing
     adminLoginInProgress = false;
     if (wasAdmin) {
         signOut(auth).catch(e => console.warn('[KidZone] signOut failed:', e));
     }
 
+    // End only the *open session*. The kid profile lock and FCM token stay in
+    // localStorage so this device can buzz after the child exits KidZone.
     sessionStorage.removeItem('kidzone_logged_in');
     sessionStorage.removeItem('kidzone_user_role');
     sessionStorage.removeItem('kidzone_active_id');
-    
+
     currentRole = null;
     currentActiveId = null;
     phoneAlertBaseline = null;
@@ -1037,12 +1168,18 @@ function handleLogout() {
     const passElem = document.getElementById('adminPassword');
     if (pinElem) pinElem.value = '';
     if (passElem) passElem.value = '';
-    
+
     const loginOverlay = document.getElementById('loginScreen');
     if (loginOverlay) loginOverlay.classList.remove('hidden');
-    
+
+    if (wasKid) toggleLoginType('kid');
     populateKidSelect();
-    showToast('Logged out! Access locked. 👋', '🔒', 3000);
+    syncLockedDevicePushToken().catch(e => console.warn('[KidZone] locked profile push sync skipped:', e && (e.code || e.message || e)));
+    if (wasKid && wasKidId && getDeviceProfileLock()) {
+        showToast(`${getDeviceProfileLock().name} is locked in. Alerts keep working after exit. 👋`, '🔒', 4200);
+    } else {
+        showToast('Logged out! Access locked. 👋', '🔒', 3000);
+    }
 }
 window.handleLogout = handleLogout;
 
@@ -1124,7 +1261,7 @@ async function handleCreateKidAccount(event) {
 
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Profile created for ${escapeHtml(kidName)}! Synced to Mobile! 🎉`, '✨', 3500);
+        showToast(`Profile created for ${kidName}! Synced to Mobile! 🎉`, '✨', 3500);
     } catch (e) {
         console.error("Firestore Save Error:", e);
         showToast('Error saving profile to Firestore!', '❌', 3000);
@@ -1261,7 +1398,9 @@ const BADGES = {
     geoMatcher:    { icon: '🧭', name: 'Map Matcher',        desc: 'Matched every place to its correct continent!' },
     safePoster:   { icon: '💬', name: 'Kind Communicator', desc: 'Shared your first safe post!' },
     safeFriend:   { icon: '🤝', name: 'Friendly Helper',   desc: 'Sent your first kind buddy note!' },
-    safePopular:  { icon: '❤️', name: 'Heart Collector',   desc: 'Received 5 likes in the Safe Zone!' }
+    safePopular:  { icon: '❤️', name: 'Heart Collector',   desc: 'Received 5 likes in the Safe Zone!' },
+    spellingBee:  { icon: '🐝', name: 'Spelling Bee',      desc: 'Won a Spelling Bee Adventure round!' },
+    sentenceStar: { icon: '📝', name: 'Sentence Star',     desc: 'Built a whole Sentence Builder round!' }
 };
 
 async function saveProgress() {
@@ -1482,6 +1621,8 @@ function showGame(gameId, evt) {
     const duo = document.getElementById('duo-game');
     const math = document.getElementById('math-game');
     const quiz = document.getElementById('quiz-game');
+    const spelling = document.getElementById('spelling-game');
+    const sentence = document.getElementById('sentence-game');
     const pacman = document.getElementById('pacman-game');
     const memory = document.getElementById('memory-match');
     const mauritius = document.getElementById('mauritius-game');
@@ -1490,6 +1631,8 @@ function showGame(gameId, evt) {
     if (duo) duo.style.display = (gameId === 'duo-game') ? 'block' : 'none';
     if (math) math.style.display = (gameId === 'math-game') ? 'block' : 'none';
     if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
+    if (spelling) spelling.style.display = (gameId === 'spelling-game') ? 'block' : 'none';
+    if (sentence) sentence.style.display = (gameId === 'sentence-game') ? 'block' : 'none';
     if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
     if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
     if (mauritius) mauritius.style.display = (gameId === 'mauritius-game') ? 'block' : 'none';
@@ -1499,6 +1642,8 @@ function showGame(gameId, evt) {
     if (gameId === 'duo-game') initDuoGame();
     if (gameId === 'math-game') initMathGame();
     if (gameId === 'quiz-game') initQuiz();
+    if (gameId === 'spelling-game') initSpellingGame();
+    if (gameId === 'sentence-game') initSentenceGame();
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
     if (gameId === 'body-game') {
@@ -2056,7 +2201,7 @@ function answerMath(choice) {
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
 
-    recordAnswer('math', choice === q.answer, q.question || '');
+    recordAnswer('math', choice === q.answer, q.q || '');
 
     setTimeout(() => {
         mathIndex++;
@@ -2171,7 +2316,7 @@ function answerQuiz(choice) {
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
     }
 
-    recordAnswer('trivia', choice === q.answer, q.question || '');
+    recordAnswer('trivia', choice === q.answer, q.q || '');
 
     setTimeout(() => {
         quizIndex++;
@@ -2602,12 +2747,313 @@ function flipMemoryCard(card) {
 
 
 // ============================================================
+// GAME 6: SPELLING BEE ADVENTURE
+// Listen to the word, use the picture clue, and pick the correct spelling.
+// ============================================================
+const spellingWords = [
+    { word: 'elephant', emoji: '🐘', hint: 'A huge animal with a long trunk.', decoys: ['elefant', 'elephent', 'eliphant'] },
+    { word: 'butterfly', emoji: '🦋', hint: 'An insect with colourful wings.', decoys: ['buterfly', 'butterflie', 'butterflay'] },
+    { word: 'rainbow', emoji: '🌈', hint: 'Colourful light you can see after rain.', decoys: ['rainbo', 'ranebow', 'rainboe'] },
+    { word: 'dinosaur', emoji: '🦖', hint: 'A giant reptile that lived long ago.', decoys: ['dinasaur', 'dinosar', 'dinausor'] },
+    { word: 'computer', emoji: '💻', hint: 'A machine you can use to learn and create.', decoys: ['computar', 'compewter', 'computor'] },
+    { word: 'friendship', emoji: '🤝', hint: 'A kind relationship between friends.', decoys: ['frendship', 'friendshipe', 'freindship'] },
+    { word: 'library', emoji: '📚', hint: 'A quiet place full of books.', decoys: ['libary', 'librery', 'libray'] },
+    { word: 'volcano', emoji: '🌋', hint: 'A mountain that can erupt with lava.', decoys: ['volcanno', 'volcaino', 'volcanoe'] },
+    { word: 'astronaut', emoji: '🚀', hint: 'A person who explores outside Earth.', decoys: ['astronot', 'astronaught', 'astranaut'] },
+    { word: 'penguin', emoji: '🐧', hint: 'A black-and-white bird that cannot fly.', decoys: ['pengwin', 'pengin', 'pengguin'] },
+    { word: 'scientist', emoji: '🔬', hint: 'A person who experiments and discovers things.', decoys: ['sientist', 'sciantist', 'sciencist'] },
+    { word: 'mountain', emoji: '🏔️', hint: 'A very tall piece of land.', decoys: ['moutain', 'mountian', 'mountane'] }
+];
+
+let spellingRoundQuestions = [];
+let spellingIndex = 0;
+let spellingScore = 0;
+
+function initSpellingGame() {
+    spellingRoundQuestions = shuffleArray(spellingWords).slice(0, 5).map(item => {
+        const options = shuffleArray([item.word, ...item.decoys]);
+        return { ...item, options, answer: options.indexOf(item.word) };
+    });
+    spellingIndex = 0;
+    spellingScore = 0;
+    updateSpellingStats();
+    renderSpellingQuestion();
+}
+window.initSpellingGame = initSpellingGame;
+
+function updateSpellingStats() {
+    const progress = document.getElementById('spellingProgress');
+    const score = document.getElementById('spellingScoreDisplay');
+    if (progress) progress.innerText = `${Math.min(spellingIndex + 1, spellingRoundQuestions.length)} / ${spellingRoundQuestions.length || 5}`;
+    if (score) score.innerText = spellingScore;
+}
+
+function speakCurrentSpellingWord() {
+    const q = spellingRoundQuestions[spellingIndex];
+    if (!q) return;
+    playSound(520);
+    speakText(`${q.word}. ${q.hint}`, 'en-US');
+}
+window.speakCurrentSpellingWord = speakCurrentSpellingWord;
+
+function renderSpellingQuestion() {
+    const container = document.getElementById('spellingContainer');
+    if (!container) return;
+    const total = spellingRoundQuestions.length;
+
+    if (!total) return;
+    if (spellingIndex >= total) {
+        recordRoundScore('spelling', spellingScore, total);
+        const perfect = spellingScore === total;
+        if (perfect) unlockBadge('spellingBee');
+        const earnedStars = spellingScore * 5;
+        addStars(earnedStars);
+        if (spellingScore >= Math.ceil(total * 0.8)) launchConfetti(35);
+
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">${perfect ? '🐝🏆' : '🐝'}</div>
+                <h3>Spelling Bee Complete!</h3>
+                <p>You spelled <strong>${spellingScore} / ${total}</strong> words correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
+                <button class="restart-btn" onclick="initSpellingGame()">🔄 New Spelling Round</button>
+            </div>`;
+        playChime(perfect ? [523, 659, 784, 1046] : [523, 659]);
+        return;
+    }
+
+    const q = spellingRoundQuestions[spellingIndex];
+    updateSpellingStats();
+    container.innerHTML = `
+        <div class="quiz-question spelling-question">
+            <div class="quiz-question-icon spelling-icon" aria-hidden="true">${q.emoji}</div>
+            <h3>${escapeHtml(q.hint)}</h3>
+            <p class="learning-hint">Tap the speaker, listen carefully, then choose the correct spelling.</p>
+            <button class="book-btn audio-btn spelling-listen-btn" onclick="speakCurrentSpellingWord()">🔊 Hear the Word</button>
+            <div class="quiz-options spelling-options">
+                ${q.options.map((opt, i) => `<button class="quiz-option" onclick="answerSpelling(${i})">${escapeHtml(opt)}</button>`).join('')}
+            </div>
+        </div>`;
+}
+
+function answerSpelling(choice) {
+    const q = spellingRoundQuestions[spellingIndex];
+    if (!q) return;
+    const buttons = document.querySelectorAll('#spellingContainer .quiz-option');
+    buttons.forEach(btn => btn.onclick = null);
+
+    if (buttons[q.answer]) buttons[q.answer].classList.add('correct');
+    const correct = choice === q.answer;
+    if (correct) {
+        spellingScore++;
+        playSound(880, 'sine', 0.2);
+    } else {
+        if (buttons[choice]) buttons[choice].classList.add('incorrect');
+        playSound(180, 'sawtooth', 0.3);
+    }
+
+    recordAnswer('spelling', correct, `Spell the word for: ${q.hint}`);
+    updateSpellingStats();
+    setTimeout(() => {
+        spellingIndex++;
+        renderSpellingQuestion();
+    }, 950);
+}
+window.answerSpelling = answerSpelling;
+
+// ============================================================
+// GAME 7: SENTENCE BUILDER ROCKET
+// Touch word cards in the right order to practise reading and grammar.
+// ============================================================
+const sentenceLessons = [
+    { icon: '🌙', words: ['The', 'Moon', 'shines', 'at', 'night.'], clue: 'A sentence about the Moon.', fact: 'The Moon reflects light from the Sun.' },
+    { icon: '🐬', words: ['Dolphins', 'can', 'talk', 'with', 'clicks.'], clue: 'A sentence about clever ocean animals.', fact: 'Dolphins use clicks and whistles to communicate.' },
+    { icon: '🌱', words: ['Plants', 'need', 'sunlight', 'and', 'water.'], clue: 'A sentence about how plants grow.', fact: 'Leaves use sunlight to make food.' },
+    { icon: '🦁', words: ['A', 'lion', 'is', 'a', 'strong', 'hunter.'], clue: 'A sentence about a big cat.', fact: 'Lions live in groups called prides.' },
+    { icon: '📖', words: ['Reading', 'helps', 'our', 'brains', 'grow.'], clue: 'A sentence about learning.', fact: 'Reading builds words, ideas and imagination.' },
+    { icon: '🌍', words: ['The', 'Earth', 'travels', 'around', 'the', 'Sun.'], clue: 'A sentence about our planet.', fact: 'One trip around the Sun takes one year.' },
+    { icon: '🧲', words: ['Magnets', 'can', 'pull', 'some', 'metals.'], clue: 'A sentence about a science tool.', fact: 'Iron and nickel are attracted to magnets.' },
+    { icon: '🐝', words: ['Bees', 'make', 'sweet', 'golden', 'honey.'], clue: 'A sentence about busy insects.', fact: 'Bees also help flowers make seeds.' },
+    { icon: '🚀', words: ['Astronauts', 'float', 'inside', 'the', 'spacecraft.'], clue: 'A sentence about space explorers.', fact: 'They float because they are in free fall around Earth.' },
+    { icon: '🏔️', words: ['Mount', 'Everest', 'is', 'very', 'tall.'], clue: 'A sentence about the highest mountain.', fact: 'Mount Everest grows a little taller as the plates push together.' }
+];
+
+let sentenceRoundLessons = [];
+let sentenceIndex = 0;
+let sentenceScore = 0;
+let sentencePool = [];
+let sentenceAnswerIds = [];
+let sentenceLocked = false;
+let sentenceFeedback = '';
+
+function initSentenceGame() {
+    sentenceRoundLessons = shuffleArray(sentenceLessons).slice(0, 5);
+    sentenceIndex = 0;
+    sentenceScore = 0;
+    startSentenceRound();
+}
+window.initSentenceGame = initSentenceGame;
+
+function startSentenceRound() {
+    const q = sentenceRoundLessons[sentenceIndex];
+    sentenceLocked = false;
+    sentenceFeedback = '';
+    sentenceAnswerIds = [];
+    sentencePool = q ? shuffleArray(q.words.map((_, idx) => idx)) : [];
+    updateSentenceStats();
+    renderSentenceGame();
+}
+
+function updateSentenceStats() {
+    const progress = document.getElementById('sentenceProgress');
+    const score = document.getElementById('sentenceScoreDisplay');
+    if (progress) progress.innerText = `${Math.min(sentenceIndex + 1, sentenceRoundLessons.length)} / ${sentenceRoundLessons.length || 5}`;
+    if (score) score.innerText = sentenceScore;
+}
+
+function moveSentenceToken(tokenId, toAnswer) {
+    if (sentenceLocked) return;
+    playSound(toAnswer ? 520 : 360);
+    if (toAnswer) {
+        sentencePool = sentencePool.filter(id => id !== tokenId);
+        sentenceAnswerIds.push(tokenId);
+    } else {
+        sentenceAnswerIds = sentenceAnswerIds.filter(id => id !== tokenId);
+        sentencePool.push(tokenId);
+    }
+    sentenceFeedback = '';
+    renderSentenceGame();
+}
+window.moveSentenceToken = moveSentenceToken;
+
+function clearSentenceAnswer() {
+    if (sentenceLocked) return;
+    playSound(300);
+    sentencePool.push(...sentenceAnswerIds);
+    sentenceAnswerIds = [];
+    sentenceFeedback = '';
+    renderSentenceGame();
+}
+window.clearSentenceAnswer = clearSentenceAnswer;
+
+function speakSentenceLesson() {
+    const q = sentenceRoundLessons[sentenceIndex];
+    if (!q) return;
+    playSound(520);
+    speakText(`${q.clue} Build the sentence by tapping the word cards.`, 'en-US');
+}
+window.speakSentenceLesson = speakSentenceLesson;
+
+function renderSentenceGame() {
+    const container = document.getElementById('sentenceContainer');
+    if (!container) return;
+    const total = sentenceRoundLessons.length;
+    if (!total) return;
+
+    if (sentenceIndex >= total) {
+        recordRoundScore('sentence', sentenceScore, total);
+        const perfect = sentenceScore === total;
+        if (perfect) unlockBadge('sentenceStar');
+        const earnedStars = sentenceScore * 5;
+        addStars(earnedStars);
+        if (sentenceScore >= Math.ceil(total * 0.8)) launchConfetti(35);
+
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">${perfect ? '📝🏆' : '🚀'}</div>
+                <h3>Sentence Builder Complete!</h3>
+                <p>You built <strong>${sentenceScore} / ${total}</strong> sentences correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
+                <button class="restart-btn" onclick="initSentenceGame()">🔄 Build More Sentences</button>
+            </div>`;
+        playChime(perfect ? [523, 659, 784, 1046] : [523, 659]);
+        return;
+    }
+
+    const q = sentenceRoundLessons[sentenceIndex];
+    updateSentenceStats();
+    const answerMarkup = sentenceAnswerIds.length
+        ? sentenceAnswerIds.map(id => `<button class="sentence-word selected-word" type="button" onclick="moveSentenceToken(${id}, false)">${escapeHtml(q.words[id])}</button>`).join('')
+        : '<span class="sentence-placeholder">Tap words below to build the sentence…</span>';
+    const bankMarkup = sentencePool.length
+        ? sentencePool.map(id => `<button class="sentence-word" type="button" ${sentenceLocked ? 'disabled' : ''} onclick="moveSentenceToken(${id}, true)">${escapeHtml(q.words[id])}</button>`).join('')
+        : '<span class="sentence-placeholder">All words are in your sentence.</span>';
+
+    container.innerHTML = `
+        <div class="sentence-card">
+            <div class="quiz-question-icon sentence-icon" aria-hidden="true">${q.icon}</div>
+            <h3>${escapeHtml(q.clue)}</h3>
+            <button class="book-btn audio-btn" onclick="speakSentenceLesson()">🔊 Hear the Mission</button>
+
+            <div class="sentence-answer-box" aria-label="Your sentence">${answerMarkup}</div>
+            <div class="sentence-word-bank" aria-label="Word choices">${bankMarkup}</div>
+
+            <div class="sentence-actions">
+                <button class="restart-btn" type="button" onclick="clearSentenceAnswer()" ${sentenceLocked || !sentenceAnswerIds.length ? 'disabled' : ''}>↩️ Clear</button>
+                <button class="login-submit-btn sentence-check-btn" type="button" onclick="checkSentenceAnswer()" ${sentenceLocked || sentencePool.length || !sentenceAnswerIds.length ? 'disabled' : ''}>✅ Check Sentence</button>
+            </div>
+
+            ${sentenceFeedback ? `<div class="sentence-feedback ${sentenceLocked ? (sentenceIsCorrect() ? 'good' : 'try') : ''}">${escapeHtml(sentenceFeedback)}</div>` : ''}
+            ${sentenceLocked ? `
+                <div class="sentence-teach-box">
+                    <strong>Correct sentence:</strong> ${escapeHtml(q.words.join(' '))}<br>
+                    <span>⭐ ${escapeHtml(q.fact)}</span>
+                </div>
+                <button class="restart-btn" type="button" onclick="nextSentenceRound()">${sentenceIndex + 1 >= total ? 'Finish Round 🏁' : 'Next Sentence ➔'}</button>
+            ` : ''}
+        </div>`;
+}
+
+function sentenceIsCorrect() {
+    const q = sentenceRoundLessons[sentenceIndex];
+    return !!q && sentenceAnswerIds.map(id => q.words[id]).join(' ') === q.words.join(' ');
+}
+
+function checkSentenceAnswer() {
+    if (sentenceLocked) return;
+    const q = sentenceRoundLessons[sentenceIndex];
+    if (!q || !sentenceAnswerIds.length || sentencePool.length) {
+        sentenceFeedback = 'Use every word card before checking!';
+        renderSentenceGame();
+        playSound(180, 'sawtooth', 0.2);
+        return;
+    }
+
+    const correct = sentenceIsCorrect();
+    sentenceLocked = true;
+    if (correct) {
+        sentenceScore++;
+        sentenceFeedback = 'Wonderful! You built the sentence correctly. 🎉';
+        playChime([523, 659, 784]);
+    } else {
+        sentenceFeedback = 'Almost! Read the correct sentence slowly and try another one. 💪';
+        playSound(180, 'sawtooth', 0.3);
+    }
+    recordAnswer('sentence', correct, `Build: ${q.clue}`);
+    updateSentenceStats();
+    renderSentenceGame();
+
+    if (!correct) {
+        // Hearing the target is a quick, gentle correction for early readers.
+        setTimeout(() => speakText(q.words.join(' '), 'en-US'), 450);
+    }
+}
+window.checkSentenceAnswer = checkSentenceAnswer;
+
+function nextSentenceRound() {
+    playSound(450);
+    sentenceIndex++;
+    startSentenceRound();
+}
+window.nextSentenceRound = nextSentenceRound;
+
+// ============================================================
 // QUIZ RESULT TRACKING (per kid, per activity)
 // ============================================================
 const ACTIVITY_LABELS = {
     duo:      { icon: '🦉', name: 'Duolingo Dash' },
     math:     { icon: '🔢', name: 'Math Wizard' },
     trivia:   { icon: '🧠', name: 'Trivia Quiz' },
+    spelling: { icon: '🐝', name: 'Spelling Bee Adventure' },
+    sentence: { icon: '📝', name: 'Sentence Builder Rocket' },
     mauritius:{ icon: '🇲🇺', name: 'Mauritius History' },
     body:     { icon: '🧍', name: 'Body Parts Explorer' },
     planet:   { icon: '🪐', name: 'Planet Quiz' },
@@ -4275,10 +4721,27 @@ window.renderNotificationsList = renderNotificationsList;
 function openNotificationsModal() {
     currentNotifications = buildNotifications();
     renderNotificationsList();
+    updatePhoneAlertsButton();
     const m = document.getElementById('notificationsModal');
     if (m) m.style.display = 'flex';
 }
 window.openNotificationsModal = openNotificationsModal;
+
+function updatePhoneAlertsButton() {
+    const btn = document.getElementById('phoneAlertsBtn');
+    if (!btn || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+        btn.innerHTML = '✅ Alerts On';
+        btn.title = 'Phone alerts are enabled. Locked profiles can keep receiving pushes after KidZone closes.';
+    } else if (Notification.permission === 'denied') {
+        btn.innerHTML = '🔕 Alerts Blocked';
+        btn.title = 'Browser notifications are blocked for KidZone. Enable them in browser settings.';
+    } else {
+        btn.innerHTML = '🔔 Phone Alerts';
+        btn.title = 'Turn on notifications for this device.';
+    }
+}
+window.updatePhoneAlertsButton = updatePhoneAlertsButton;
 function closeNotificationsModal() { const m = document.getElementById('notificationsModal'); if (m) m.style.display = 'none'; }
 window.closeNotificationsModal = closeNotificationsModal;
 function closeNotificationsModalOnBg(e) { if (e.target.id === 'notificationsModal') closeNotificationsModal(); }
@@ -4411,19 +4874,71 @@ function showSystemNotification(title, body, tag) {
 }
 window.showSystemNotification = showSystemNotification;
 
-async function savePushToken(token) {
-    if (!currentActiveId || currentRole !== 'kid' || !token) return;
+const PUSH_TOKEN_MAP_KEY = 'kidzone_fcm_tokens_v1';
+
+function getStoredPushTokens() {
+    try { return JSON.parse(localStorage.getItem(PUSH_TOKEN_MAP_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+}
+
+function getStoredPushTokenForKid(profileId) {
+    if (!profileId) return '';
+    const map = getStoredPushTokens();
+    return map[profileId] || '';
+}
+
+function rememberStoredPushToken(profileId, token) {
+    if (!token) return;
     try {
-        await setDoc(doc(db, 'kidProfiles', currentActiveId), {
+        localStorage.setItem('kidzone_fcm_token', token); // legacy fast path
+        if (profileId) {
+            const map = getStoredPushTokens();
+            map[profileId] = token;
+            localStorage.setItem(PUSH_TOKEN_MAP_KEY, JSON.stringify(map));
+        }
+    } catch (e) {}
+}
+
+function getPushTokenTargetId() {
+    if (currentRole === 'kid' && currentActiveId) return currentActiveId;
+    const lock = getDeviceProfileLock();
+    return lock ? lock.kidId : null;
+}
+
+async function savePushToken(token, profileId = null) {
+    const targetId = profileId || getPushTokenTargetId();
+    if (!targetId || !token) return false;
+
+    // Keep a per-profile local copy so a locked profile can reconnect to
+    // closed-app alerts even before the kid types the PIN again.
+    rememberStoredPushToken(targetId, token);
+
+    const known = cachedKidProfiles.find(p => p.id === targetId);
+    if (known && known.fcmToken === token) return true;
+
+    try {
+        await setDoc(doc(db, 'kidProfiles', targetId), {
             fcmToken: token,
             fcmTokenAt: Date.now(),
             fcmUserAgent: String(navigator.userAgent || '').slice(0, 120)
         }, { merge: true });
+        return true;
     } catch (e) {
         console.warn('[KidZone] could not save push token:', e && (e.code || e.message));
+        return false;
     }
 }
 window.savePushToken = savePushToken;
+
+async function syncLockedDevicePushToken() {
+    const lock = getDeviceProfileLock();
+    if (!lock) return false;
+    if ('Notification' in window && Notification.permission !== 'granted') return false;
+    const token = getStoredPushTokenForKid(lock.kidId) || localStorage.getItem('kidzone_fcm_token');
+    if (!token) return false;
+    return savePushToken(token, lock.kidId);
+}
+window.syncLockedDevicePushToken = syncLockedDevicePushToken;
 
 // Get (or refresh) the FCM push token for this device.
 async function activatePushToken(announceResult) {
@@ -4436,9 +4951,10 @@ async function activatePushToken(announceResult) {
             serviceWorkerRegistration: pushSwRegistration
         });
         if (token) {
-            const prev = localStorage.getItem('kidzone_fcm_token');
-            localStorage.setItem('kidzone_fcm_token', token);
-            if (token !== prev) await savePushToken(token);
+            const targetId = getPushTokenTargetId();
+            const prev = targetId ? getStoredPushTokenForKid(targetId) : localStorage.getItem('kidzone_fcm_token');
+            rememberStoredPushToken(targetId, token);
+            if (targetId && token !== prev) await savePushToken(token, targetId);
             if (announceResult) {
                 showToast('Push alerts active — you\'ll be buzzed even when KidZone is closed! 🔔', '🎉', 4200);
             }
@@ -4466,14 +4982,14 @@ async function requestBrowserNotifications() {
     }
     try {
         const permission = await Notification.requestPermission();
+        updatePhoneAlertsButton();
         if (permission !== 'granted') {
             showToast('Alerts are blocked. Allow notifications for KidZone in your browser settings, then try again.', '🔕', 4500);
             return;
         }
         showToast('Alerts on! KidZone will ping this phone while it is open.', '🔔', 3500);
-        const btn = document.getElementById('phoneAlertsBtn');
-        if (btn) btn.innerHTML = '✅ Alerts On';
         const token = await activatePushToken(true);
+        await syncLockedDevicePushToken();
         if (!token) {
             // push not configured yet — still make sure a saved token is re-registered
             const saved = localStorage.getItem('kidzone_fcm_token');

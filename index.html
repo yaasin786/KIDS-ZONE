@@ -29,7 +29,17 @@
             
             <!-- Kid Login Form -->
             <form id="kidLoginForm" onsubmit="handleKidLogin(event)">
-                <div class="input-group">
+                <!-- Shows when this device has been locked to one kid profile. -->
+                <div id="lockedProfileNotice" class="locked-profile-card" style="display:none;">
+                    <div class="locked-profile-avatar" id="lockedProfileAvatar" aria-hidden="true">🚀</div>
+                    <div class="locked-profile-copy">
+                        <strong id="lockedProfileName">Explorer</strong>
+                        <span>Profile locked on this device. Enter the PIN to continue learning and keep phone alerts active.</span>
+                    </div>
+                    <button type="button" class="link-btn locked-profile-switch" onclick="unlockDeviceProfile()">Switch Explorer</button>
+                </div>
+
+                <div class="input-group" id="kidProfileSelectGroup">
                     <label for="loginKidSelect">👤 Select Explorer</label>
                     <select id="loginKidSelect" required>
                         <option value="" disabled selected>Choose your profile...</option>
@@ -152,7 +162,7 @@
                 <div class="home-category-card play">
                     <div class="home-cat-icon">🎮</div>
                     <h2>Play & Practice</h2>
-                    <p>Learn through quizzes, language games, memory games, and challenges.</p>
+                    <p>Learn through quizzes, languages, spelling, sentence building, memory games, and challenges.</p>
                     <div class="home-cat-actions">
                         <button onclick="openKidZoneSection('games')">🎮 Learning Games</button>
                         <button onclick="openKidZoneSection('books')">📖 Storybooks</button>
@@ -663,7 +673,7 @@
         <section id="games" class="tab-content" aria-label="Games Section">
             <div class="hero-banner games-hero">
                 <h1>🎮 Arcade & Learning Games</h1>
-                <p>Play interactive action games, language quests, and test your skills!</p>
+                <p>Play interactive action games, language quests, spelling missions, sentence building, and skill challenges!</p>
             </div>
 
             <div class="game-selector" role="tablist">
@@ -671,6 +681,8 @@
                 <button class="game-tab-btn" onclick="showGame('body-game', event)">🧍 Body Parts Explorer</button>
                 <button class="game-tab-btn" onclick="showGame('math-game', event)">🔢 Math Wizard</button>
                 <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
+                <button class="game-tab-btn" onclick="showGame('spelling-game', event)">🐝 Spelling Bee</button>
+                <button class="game-tab-btn" onclick="showGame('sentence-game', event)">📝 Sentence Builder</button>
                 <button class="game-tab-btn" onclick="showGame('mauritius-game', event)">🇲🇺 Mauritius History</button>
                 <button class="game-tab-btn" onclick="showGame('pacman-game', event)">🟡 Pac-Man Classic</button>
                 <button class="game-tab-btn" onclick="showGame('memory-match', event)">🧩 Emoji Memory Match</button>
@@ -707,7 +719,27 @@
                 <div class="quiz-container" id="quizContainer"></div>
             </div>
 
-            <!-- Game 3: Mauritius History Hub -->
+            <!-- Game 3: Spelling Bee Adventure -->
+            <div id="spelling-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Word: <strong id="spellingProgress">1 / 5</strong></span>
+                    <span>Score: <strong id="spellingScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initSpellingGame()">🔄 New Round</button>
+                </div>
+                <div class="spelling-container" id="spellingContainer" aria-live="polite"></div>
+            </div>
+
+            <!-- Game 4: Sentence Builder Rocket -->
+            <div id="sentence-game" class="game-wrapper" style="display:none;">
+                <div class="game-stats">
+                    <span>Sentence: <strong id="sentenceProgress">1 / 5</strong></span>
+                    <span>Score: <strong id="sentenceScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initSentenceGame()">🔄 New Round</button>
+                </div>
+                <div class="sentence-builder" id="sentenceContainer" aria-live="polite"></div>
+            </div>
+
+            <!-- Game 5: Mauritius History Hub -->
             <div id="mauritius-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Question: <strong id="mruProgress">1 / 5</strong></span>
@@ -717,7 +749,7 @@
                 <div class="quiz-container" id="mruContainer"></div>
             </div>
 
-            <!-- Game 4: Pac-Man Game -->
+            <!-- Game 6: Pac-Man Game -->
             <div id="pacman-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Score: <strong id="score">0</strong></span>
@@ -743,7 +775,7 @@
                 </div>
             </div>
 
-            <!-- Game 5: Memory Match -->
+            <!-- Game 7: Memory Match -->
             <div id="memory-match" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Moves: <strong id="memoryMoves">0</strong></span>
@@ -753,7 +785,7 @@
                 <div class="memory-grid" id="memoryGrid"></div>
             </div>
 
-            <!-- Game 6: Body Parts Explorer -->
+            <!-- Game 8: Body Parts Explorer -->
             <div id="body-game" class="game-wrapper" style="display:none;">
                 <div class="game-stats">
                     <span>Mode: <strong id="bodyModeLabel">Explore</strong></span>

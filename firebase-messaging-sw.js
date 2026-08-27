@@ -15,6 +15,15 @@
 // If you move the site (custom domain / different folder), change this:
 var KIDZONE_SITE_PATH = '/KIDS-ZONE/';
 
+// New installs take control immediately so notification fixes do not wait for
+// an old service worker to time out on a child's phone.
+self.addEventListener('install', function () {
+    self.skipWaiting();
+});
+self.addEventListener('activate', function (event) {
+    event.waitUntil(self.clients.claim());
+});
+
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 

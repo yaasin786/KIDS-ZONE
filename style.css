@@ -219,6 +219,54 @@ input {
     display: none;
 }
 
+.locked-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    background: linear-gradient(135deg, #eef8ff, #f5f0ff);
+    border: 2px solid #bfdbfe;
+    border-bottom: 5px solid #93c5fd;
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+.locked-profile-avatar {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: var(--shadow-sm);
+    font-size: 2rem;
+}
+
+.locked-profile-copy {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.locked-profile-copy strong {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+}
+
+.locked-profile-copy span {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.locked-profile-switch {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+}
+
 .login-submit-btn {
     width: 100%;
     padding: 14px;
@@ -619,6 +667,138 @@ input {
 .quiz-result-icon {
     font-size: 5rem;
     margin-bottom: 10px;
+}
+
+/* SPELLING BEE + SENTENCE BUILDER */
+.spelling-container,
+.sentence-builder {
+    max-width: 680px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.learning-hint {
+    color: var(--text-muted);
+    font-weight: 700;
+    margin: -8px 0 14px;
+}
+
+.spelling-listen-btn,
+.sentence-card > .audio-btn {
+    margin: 0 auto 16px;
+}
+
+.spelling-icon,
+.sentence-icon {
+    filter: drop-shadow(0 8px 12px rgba(28, 176, 246, 0.18));
+}
+
+.sentence-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    border: 2px solid #dbeafe;
+    border-bottom: 5px solid #bfdbfe;
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.sentence-card h3 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    margin-bottom: 12px;
+}
+
+.sentence-answer-box,
+.sentence-word-bank {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    min-height: 58px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+}
+
+.sentence-answer-box {
+    margin: 14px 0;
+    background: #fff8e7;
+    border: 2px dashed var(--accent-yellow);
+}
+
+.sentence-word-bank {
+    background: var(--bg-main);
+    border: 2px dashed var(--border-color);
+}
+
+.sentence-word {
+    padding: 10px 14px;
+    border-radius: var(--radius-full);
+    background: #ffffff;
+    border: 2px solid var(--primary-blue);
+    color: var(--text-color);
+    box-shadow: 0 3px 0 rgba(28, 176, 246, 0.35);
+    font-size: 1rem;
+}
+
+.sentence-word:hover:not(:disabled),
+.sentence-word:focus-visible:not(:disabled) {
+    background: #eef8ff;
+    transform: translateY(-2px);
+}
+
+.sentence-word.selected-word {
+    background: var(--primary-blue);
+    color: #ffffff;
+}
+
+.sentence-placeholder {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.sentence-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.sentence-check-btn {
+    min-width: 180px;
+    margin-top: 0 !important;
+}
+
+.sentence-feedback {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: #eef8ff;
+    color: var(--primary-blue-dark);
+    font-weight: 700;
+}
+
+.sentence-feedback.good {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.sentence-feedback.try {
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.sentence-teach-box {
+    margin: 14px auto;
+    padding: 14px;
+    max-width: 560px;
+    border-radius: var(--radius-md);
+    background: #f5f0ff;
+    border: 2px solid #ddd6fe;
+    color: var(--text-color);
+    line-height: 1.55;
 }
 
 /* PACMAN CANVAS & D-PAD */
