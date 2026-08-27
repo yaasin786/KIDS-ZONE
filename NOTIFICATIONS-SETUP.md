@@ -65,14 +65,13 @@ phones whose KidZone app is fully closed.
    firebase login
    ```
    (log in with the SAME Google account as your Firebase project)
-2. In the `functions` folder of this project, run:
+2. From the **repo root** of this project, run:
    ```
-   cd functions
-   npm install
-   cd ..
    firebase deploy --only functions
    ```
-   Pick **kidzoneapp-3a074** when asked.
+   The repo ships with `firebase.json` + `.firebaserc`, so the command already
+   knows to deploy the `functions` folder to project **kidzoneapp-3a074** —
+   you don't need to pick anything.
    > ℹ️ Cloud Functions need Firebase's **Blaze plan** — it has a generous free
    > allowance and KidZone's tiny traffic will stay well inside it, so it costs
    > nothing in practice. A card is needed to activate it.

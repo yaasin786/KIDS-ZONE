@@ -13,7 +13,8 @@
  *   1. npm install -g firebase-tools
  *   2. firebase login
  *   3. From this repo folder:  firebase deploy --only functions
- *      (choose your Firebase project kidzoneapp-3a074 when asked)
+ *      (the repo's firebase.json + .firebaserc already point at
+ *      the kidzoneapp-3a074 project, so nothing to pick)
  *
  * Full beginner steps: see NOTIFICATIONS-SETUP.md
  * ============================================================
@@ -77,7 +78,26 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
   }));
 
   try {
-    const response = await admin.messaging().sendEach(messages);
+    // FCM allows at most 500 messages per sendEach() call, so large groups
+    // are sent in chunks. Without this, >500 registered devices would make
+    // the whole push throw and NO kid would get the alert.
+    const CHUNK_SIZE = 400;
+    let sent = 0;
+    let failed = 0;
+    const tokenResults = []; // { ok, code, token }
+    for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
+      const chunk = messages.slice(i, i + CHUNK_SIZE);
+      const response = await admin.messaging().sendEach(chunk);
+      sent += response.successCount;
+      failed += response.failureCount;
+      response.responses.forEach((r, j) => {
+        tokenResults.push({
+          ok: r.success,
+          code: r.error && r.error.code,
+          token: chunk[j].token,
+        });
+      });
+    }
 
     // Remove tokens/devices that FCM says are permanently invalid.
     const invalidCodes = new Set([
@@ -85,10 +105,9 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
       "messaging/invalid-registration-token",
     ]);
     const invalidProfileIds = new Set();
-    response.responses.forEach((r, index) => {
-      const code = r.error && r.error.code;
-      if (!r.success && invalidCodes.has(code)) {
-        (tokenOwners.get(uniqueTokens[index]) || []).forEach((id) => invalidProfileIds.add(id));
+    tokenResults.forEach((r) => {
+      if (!r.ok && invalidCodes.has(r.code)) {
+        (tokenOwners.get(r.token) || []).forEach((id) => invalidProfileIds.add(id));
       }
     });
 
@@ -104,10 +123,10 @@ exports.sendKidZonePush = onCall({ region: "us-central1" }, async (request) => {
       logger.info("KidZone stale push tokens cleaned", { count: invalidProfileIds.size });
     }
 
-    logger.info("KidZone push sent", { success: response.successCount, failed: response.failureCount });
+    logger.info("KidZone push sent", { success: sent, failed });
     return {
-      sent: response.successCount,
-      failed: response.failureCount,
+      sent,
+      failed,
       total: uniqueTokens.length,
       cleaned: invalidProfileIds.size,
     };
