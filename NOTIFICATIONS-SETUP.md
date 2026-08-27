@@ -18,6 +18,16 @@ After you deploy this update:
 You (Admin) also get a new button in the top bar: **📣 Send Alert** — write a short
 message and every kid sees it in their bell + gets the phone notification.
 
+### 🔒 Automatic profile lock
+After a kid logs in once, KidZone **locks that device to the kid's profile**:
+
+- Closing or exiting KidZone does **not** forget which explorer owns the phone.
+- The next visit shows a friendly PIN lock screen for the same kid.
+- The FCM notification token stays registered for that profile, so alerts can keep
+  arriving after the app/browser is closed.
+- On a shared device, tap **Switch Explorer** on the lock screen, then the next
+  kid logs in and taps **🔔 Phone Alerts** once to register themselves again.
+
 ### 📱 Important iPhone note
 Safari on iPhone/iPad only allows web notifications for websites **added to the Home
 Screen** (needs iOS 16.4 or newer):
@@ -125,5 +135,11 @@ If your rules are still in test mode (open), everything already works.
   key and (Option A) deploy the function, or use Option B from the Console.
 - **Button says "0 devices"** → each kid must open KidZone once and tap
   "Phone Alerts" so their device registers.
+- **Kid logged out and wants alerts?** That is OK. The profile lock keeps the
+  device-token link; the kid only needs to tap **Phone Alerts** again if the
+  browser permission or device changed.
+- **Using a shared family phone?** Use **Switch Explorer** on the lock screen
+  before the second kid logs in, so that profile can register the device for
+  itself.
 - **Hosting at a different address?** Update `KIDZONE_SITE_PATH` in both
   `script.js` and `firebase-messaging-sw.js`.
