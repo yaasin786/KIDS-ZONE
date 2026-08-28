@@ -570,8 +570,10 @@
                     <div class="hw-upload-box">
                         <label for="tpFile">📎 Attach the paper file (optional)</label>
                         <input type="file" id="tpFile" accept=".pdf,.png,.jpg,.jpeg,.webp">
-                        <small>Kids can open this file while answering online. PDF or image, max 750 KB.</small>
+                        <small>Choose a picture of the paper and KidZone will use AI-assisted OCR to draft the questions below. Please check the draft before publishing. PDF or image, max 750 KB.</small>
                         <div id="tpFilePreview" class="hw-file-preview"></div>
+                        <button type="button" id="tpAiReadBtn" class="solar-tool-btn ai-read-btn" onclick="readTestPaperWithAI()" disabled>✨ Read picture with AI</button>
+                        <div id="tpAiStatus" class="tp-ai-status" aria-live="polite"></div>
                     </div>
 
                     <div class="tp-builder">
@@ -1537,6 +1539,7 @@
             </div>
             <div class="homework-instructions" id="homeworkModalInstructions"></div>
             <div id="homeworkModalFile" class="homework-modal-file"></div>
+            <div id="homeworkKidResult" class="homework-kid-result" style="display:none;"></div>
             <div id="homeworkKidSubmitBox" class="homework-submit-box">
                 <label for="homeworkAnswerText">✍️ Your answer / notes</label>
                 <textarea id="homeworkAnswerText" rows="5" placeholder="Type your answer here..."></textarea>

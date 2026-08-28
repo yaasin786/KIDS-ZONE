@@ -616,6 +616,8 @@ const ADMIN_UID = "l9skt6UUdcdMrmR1jKLRXQyhv4c2";
 
 let currentRole = null; // 'admin' (the owner), 'teacher' (promoted profile), or 'kid'
 let currentActiveId = null;
+let ownProgressUnsub = null;
+let ownProgressListenerId = null;
 let adminLoginInProgress = false; // true only after the admin submits the password form
 
 // A promoted profile uses the same admin tools as the owner. Keep this helper
@@ -1202,6 +1204,7 @@ function setupUIForSession() {
             if (currentRole === 'kid') rememberDeviceProfileLock(kid);
         }
     }
+    listenToOwnProgress();
     setupSafeProgressChatListener();
     if (currentRole === 'kid') safeZoneFilter = 'all';
     updateSafeZoneIdentity();
@@ -1229,6 +1232,8 @@ function handleLogout() {
 
     currentRole = null;
     currentActiveId = null;
+    if (ownProgressUnsub) { try { ownProgressUnsub(); } catch (e) {} ownProgressUnsub = null; }
+    ownProgressListenerId = null;
     phoneAlertBaseline = null;
     if (activeCall) { try { endCall(); } catch (e) {} }
     hideIncomingCall();
@@ -1616,6 +1621,30 @@ async function loadProgress() {
     }
 }
 
+function listenToOwnProgress() {
+    const listenerId = currentRole === 'kid' ? currentActiveId : null;
+    if (ownProgressListenerId === listenerId && ownProgressUnsub) return;
+    if (ownProgressUnsub) {
+        try { ownProgressUnsub(); } catch (e) {}
+        ownProgressUnsub = null;
+    }
+    ownProgressListenerId = listenerId;
+    if (!listenerId) return;
+
+    ownProgressUnsub = onSnapshot(doc(db, 'kidProgress', listenerId), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() || {};
+        const clean = sanitiseProgress(data);
+        userStars = clean.stars;
+        level = clean.level;
+        unlockedBadges = new Set(clean.badges);
+        factsViewed = new Set(clean.factsViewed);
+        finishedStories = new Set(clean.finishedStories);
+        completedExperiments = new Set(clean.completedExperiments);
+        updateStatsDisplay();
+    }, (error) => console.warn('[KidZone] live progress sync skipped:', error && (error.code || error.message || error)));
+}
+
 function updateStatsDisplay() {
     const starElem = document.getElementById('starCount') || document.getElementById('star-count');
     const levelElem = document.getElementById('levelCount');
@@ -1640,6 +1669,46 @@ function addStars(amount) {
     saveProgress();
 }
 window.addStars = addStars;
+
+// Teacher-awarded work points are written to the child's progress document,
+// not only to the teacher's screen. This makes the new score appear live on
+// the child's star counter and keeps repeat edits idempotent via pointsDelta.
+async function awardPointsToKid(kidId, pointsDelta, reason = 'Teacher feedback') {
+    const delta = Math.round(Number(pointsDelta) || 0);
+    if (!kidId || !delta) return 0;
+    const progressRef = doc(db, 'kidProgress', kidId);
+    const snap = await getDoc(progressRef);
+    const current = snap.exists() ? snap.data() || {} : {};
+    const stars = Math.max(0, Math.min(1000000, (parseInt(current.stars, 10) || 0) + delta));
+    const nextLevel = Math.floor(stars / 50) + 1;
+    const now = Date.now();
+    await setDoc(progressRef, {
+        stars,
+        level: nextLevel,
+        lastTeacherAward: String(reason).slice(0, 180),
+        lastTeacherAwardAt: now
+    }, { merge: true });
+    return delta;
+}
+window.awardPointsToKid = awardPointsToKid;
+
+async function notifyKidOfTeacherFeedback(kidId, title, body) {
+    if (!kidId) return;
+    try {
+        const id = `ann_feedback_${kidId}_${Date.now()}`;
+        await setDoc(doc(db, 'announcements', id), {
+            title: String(title || 'Your work was marked').slice(0, 120),
+            body: String(body || 'Open KidZone to see your teacher feedback.').slice(0, 500),
+            kidId,
+            createdAt: Date.now(),
+            by: 'Teacher'
+        });
+    } catch (e) {
+        // Feedback is still saved if the optional in-app notification fails.
+        console.warn('[KidZone] feedback notification skipped:', e && (e.code || e.message || e));
+    }
+}
+window.notifyKidOfTeacherFeedback = notifyKidOfTeacherFeedback;
 
 function checkLevelUp() {
     const newLevel = Math.floor(userStars / 50) + 1;
@@ -3795,6 +3864,30 @@ function accuracyClass(pct) {
     return 'acc-none';
 }
 
+function reportLearnerProfiles() {
+    return cachedKidProfiles.filter(p => profileRole(p) !== 'teacher');
+}
+
+function reportDate(ms) {
+    return ms ? new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown time';
+}
+
+async function refreshReportsIfOpen() {
+    const modal = document.getElementById('reportsModal');
+    if (!modal || modal.style.display !== 'flex' || !isAdminRole()) return;
+    await fetchAllKidData();
+    renderReports();
+}
+
+async function openReportTestReview(id) {
+    if (!isAdminRole()) return;
+    closeReportsModal();
+    const navBtn = [...document.querySelectorAll('.nav-btn')].find(b => (b.getAttribute('onclick') || '').includes("'testpapers'"));
+    switchTab('testpapers', { currentTarget: navBtn });
+    setTimeout(() => openTestReview(id), 120);
+}
+window.openReportTestReview = openReportTestReview;
+
 async function openReportsModal() {
     if (!isAdminRole()) return;
     playSound(600);
@@ -3824,7 +3917,8 @@ function renderReports() {
     const body = document.getElementById('reportsBody');
     if (!body) return;
 
-    if (!cachedKidProfiles.length) {
+    const learners = reportLearnerProfiles();
+    if (!learners.length) {
         body.innerHTML = '<p class="rep-loading">No kid profiles yet. Add one with ➕ Add Kid.</p>';
         return;
     }
@@ -3832,37 +3926,55 @@ function renderReports() {
     if (adminReportKid) { renderKidReport(adminReportKid); return; }
 
     // ---------- Overview: every kid, ranked ----------
-    const rows = cachedKidProfiles.map(p => {
+    const rows = learners.map(p => {
         const t = totalsFor(allKidStats[p.id]);
         const prog = allKidProgress[p.id] || {};
-        return { p, t, stars: prog.stars || 0, level: prog.level || 1, badges: (prog.badges || []).length };
+        const hwCount = homeworkSubmissions.filter(s => s.kidId === p.id).length;
+        const tpCount = testSubmissions.filter(s => s.kidId === p.id).length;
+        const pendingCount = homeworkSubmissions.filter(s => s.kidId === p.id && s.score == null).length +
+            testSubmissions.filter(s => s.kidId === p.id && s.status !== 'graded').length;
+        return { p, t, stars: prog.stars || 0, level: prog.level || 1, badges: (prog.badges || []).length, hwCount, tpCount, pendingCount };
     }).sort((a, b) => b.t.correct - a.t.correct);
 
     const classCorrect = rows.reduce((s, r) => s + r.t.correct, 0);
     const classAttempts = rows.reduce((s, r) => s + r.t.attempts, 0);
     const classPct = classAttempts ? Math.round((classCorrect / classAttempts) * 100) : 0;
+    const submittedWork = homeworkSubmissions.filter(s => learners.some(p => p.id === s.kidId)).length +
+        testSubmissions.filter(s => learners.some(p => p.id === s.kidId)).length;
+    const waitingForMark = homeworkSubmissions.filter(s => s.score == null && learners.some(p => p.id === s.kidId)).length +
+        testSubmissions.filter(s => s.status !== 'graded' && learners.some(p => p.id === s.kidId)).length;
+    const awardedPoints = homeworkSubmissions.reduce((sum, s) => sum + (Number(s.pointsAwarded) || 0), 0) +
+        testSubmissions.reduce((sum, s) => sum + (Number(s.pointsAwarded) || 0), 0);
 
     body.innerHTML = `
         <div class="rep-summary">
             <div class="rep-sum-card">
-                <span class="rs-num">${cachedKidProfiles.length}</span>
+                <span class="rs-num">${learners.length}</span>
                 <span class="rs-lab">Explorers</span>
             </div>
             <div class="rep-sum-card">
                 <span class="rs-num">${classAttempts}</span>
                 <span class="rs-lab">Questions Answered</span>
             </div>
-            <div class="rep-sum-card">
-                <span class="rs-num">${classCorrect}</span>
-                <span class="rs-lab">Correct</span>
-            </div>
             <div class="rep-sum-card ${accuracyClass(classPct)}">
                 <span class="rs-num">${classPct}%</span>
                 <span class="rs-lab">Class Accuracy</span>
             </div>
+            <div class="rep-sum-card rep-work-sum">
+                <span class="rs-num">${submittedWork}</span>
+                <span class="rs-lab">Work Submitted</span>
+            </div>
+            <div class="rep-sum-card rep-work-sum">
+                <span class="rs-num">${waitingForMark}</span>
+                <span class="rs-lab">Waiting to Mark</span>
+            </div>
+            <div class="rep-sum-card rep-work-sum">
+                <span class="rs-num">⭐ ${awardedPoints}</span>
+                <span class="rs-lab">Points Awarded</span>
+            </div>
         </div>
 
-        <p class="rep-hint">👇 Click a kid to see a full subject-by-subject breakdown.</p>
+        <p class="rep-hint">👇 Click a kid to see quizzes, every submitted answer/file, and teacher marking controls.</p>
 
         <div class="rep-list">
             ${rows.map((r, i) => `
@@ -3871,7 +3983,7 @@ function renderReports() {
                     <span class="rep-avatar">${escapeHtml(r.p.avatar || '🚀')}</span>
                     <span class="rep-name">
                         ${escapeHtml(r.p.name)}
-                        <small>Lvl ${r.level} · ⭐ ${r.stars} · 🏅 ${r.badges}</small>
+                        <small>Lvl ${r.level} · ⭐ ${r.stars} · 🏅 ${r.badges} · 📚 ${r.hwCount} homework · 🧪 ${r.tpCount} tests${r.pendingCount ? ` · ⏳ ${r.pendingCount} to mark` : ''}</small>
                     </span>
                     <span class="rep-score">
                         <strong>${r.t.correct}</strong><small>/${r.t.attempts} right</small>
@@ -3897,6 +4009,59 @@ function backToReportOverview() {
     renderReports();
 }
 window.backToReportOverview = backToReportOverview;
+
+function renderKidWork(kidId) {
+    const kidHomework = homeworkSubmissions
+        .filter(s => s.kidId === kidId)
+        .sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
+    const kidTests = testSubmissions
+        .filter(s => s.kidId === kidId)
+        .sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
+
+    const homeworkHtml = kidHomework.length ? kidHomework.map(s => {
+        const assignment = homeworkAssignments.find(a => a.id === s.assignmentId) || { title: s.assignmentTitle || 'Homework', points: 0 };
+        const scoreLabel = s.score == null ? 'Waiting for mark' : `${s.score}/100`;
+        return `
+            <article class="report-work-card">
+                <header>
+                    <div><strong>📝 ${escapeHtml(assignment.title || s.assignmentTitle || 'Homework')}</strong><small>Submitted ${escapeHtml(reportDate(s.submittedAt))}</small></div>
+                    <span class="report-work-status ${s.score == null ? 'pending' : 'graded'}">${s.score == null ? '⏳ To mark' : '✅ ' + scoreLabel}</span>
+                </header>
+                <div class="report-work-answer"><strong>Child's typed answer:</strong><br>${escapeHtml(s.answer || '(No typed answer — see attachment below)')}</div>
+                ${s.file ? `<div class="report-work-attachment"><strong>📎 Attached work:</strong>${renderHomeworkFile(s.file)}</div>` : '<p class="report-work-muted">No file/photo attached.</p>'}
+                <div class="report-work-meta">Reward: ${Number(assignment.points) || 0} possible stars · Already awarded: ${Number(s.pointsAwarded) || 0} ⭐${s.reviewedAt ? ` · Marked ${escapeHtml(reportDate(s.reviewedAt))}` : ''}</div>
+                <div class="report-work-actions">
+                    <label>Mark / 100 <input type="number" id="sc_${s.id}" min="0" max="100" placeholder="0–100" value="${escapeHtml(s.score == null ? '' : s.score)}"></label>
+                    <input type="text" id="fb_${s.id}" maxlength="240" placeholder="Feedback for the child" value="${escapeHtml(s.feedback || '')}">
+                    <button class="solar-tool-btn" type="button" onclick="saveHomeworkFeedback('${escapeHtml(s.id)}')">Save mark &amp; notify ✅</button>
+                </div>
+                ${s.feedback ? `<p class="report-work-feedback">💬 Previous feedback: ${escapeHtml(s.feedback)}</p>` : ''}
+            </article>`;
+    }).join('') : '<p class="rep-loading">This child has not submitted homework yet.</p>';
+
+    const testsHtml = kidTests.length ? kidTests.map(s => {
+        const answers = Array.isArray(s.answers) ? s.answers : [];
+        return `
+            <article class="report-work-card">
+                <header>
+                    <div><strong>🧪 ${escapeHtml(s.title || 'Test Paper')}</strong><small>${escapeHtml(s.subject || 'Test')} · Submitted ${escapeHtml(reportDate(s.submittedAt))}</small></div>
+                    <span class="report-work-status ${s.status === 'graded' ? 'graded' : 'pending'}">${s.status === 'graded' ? `✅ ${s.overallAwarded ?? 0}/${s.totalMarks}` : '⏳ To mark'}</span>
+                </header>
+                <div class="report-test-answers">
+                    ${answers.length ? answers.map((a, i) => `<div class="report-test-answer"><span class="report-test-q">Q${i + 1}. ${escapeHtml(a.q || '')}</span><span class="report-test-response">${escapeHtml(a.answer || '(empty)')}</span>${a.awarded != null ? `<span class="report-test-mark">${a.awarded}/${a.marks}</span>` : ''}</div>`).join('') : '<p class="report-work-muted">No answers stored.</p>'}
+                </div>
+                <div class="report-work-meta">${s.status === 'graded' ? `Teacher awarded ${s.pointsAwarded || 0} ⭐ · Marked ${escapeHtml(reportDate(s.gradedAt))}` : 'The teacher has not marked this paper yet.'}</div>
+                <button class="solar-tool-btn" type="button" onclick="openReportTestReview('${escapeHtml(s.id)}')">${s.status === 'graded' ? 'View / edit full marking' : 'Mark this paper'} 📊</button>
+            </article>`;
+    }).join('') : '<p class="rep-loading">This child has not submitted a test paper yet.</p>';
+
+    return `
+        <div class="report-work-summary"><strong>📚 Homework submissions: ${kidHomework.length}</strong><strong>🧪 Test papers: ${kidTests.length}</strong><strong>⭐ Points awarded: ${kidHomework.reduce((n, s) => n + (Number(s.pointsAwarded) || 0), 0) + kidTests.reduce((n, s) => n + (Number(s.pointsAwarded) || 0), 0)}</strong></div>
+        <h4 class="rep-sub">📝 Homework, attachments &amp; teacher marking</h4>
+        <div class="report-work-list">${homeworkHtml}</div>
+        <h4 class="rep-sub">🧪 Test papers, answers &amp; teacher marking</h4>
+        <div class="report-work-list">${testsHtml}</div>`;
+}
 
 function renderKidReport(kidId) {
     const body = document.getElementById('reportsBody');
@@ -4007,6 +4172,9 @@ function renderKidReport(kidId) {
         ${weakest && weakest.pct < 70 ? `
             <div class="rep-tip">💡 <strong>Needs practice:</strong>
                 ${ACTIVITY_LABELS[weakest.k].icon} ${ACTIVITY_LABELS[weakest.k].name} (${weakest.pct}% correct)</div>` : ''}
+
+        <h4 class="rep-sub">📚 Submitted Work</h4>
+        <div class="report-work-panel">${renderKidWork(kidId)}</div>
 
         <h4 class="rep-sub">📊 Subject Breakdown</h4>
         <div class="rep-acts">${activityRows}</div>
@@ -5535,9 +5703,12 @@ function buildNotifications() {
     const notes = [];
     if (!currentActiveId) return notes;
 
-    // Announcements sent by Admin with "📣 Send Alert".
+    // Announcements sent by Admin with "📣 Send Alert". Feedback notices
+    // can target one child; never show another child's score or comments.
     cachedAnnouncements.forEach(a => {
-        if (!a.createdAt) return;
+        const kidGrade = getKidGrade();
+        if (!a.createdAt || (a.kidId && a.kidId !== currentActiveId) ||
+            (a.grade && currentRole === 'kid' && Number(a.grade) !== kidGrade)) return;
         notes.push({
             id: 'ann_' + a.id,
             type: 'announcement', icon: '📣', at: a.createdAt,
@@ -6203,9 +6374,67 @@ function getHomeworkSubmission(assignmentId, kidId = currentActiveId) {
     return homeworkSubmissions.find(s => s.assignmentId === assignmentId && s.kidId === kidId);
 }
 
+function compressImageForFirestore(file, maxBytes = 780 * 1024) {
+    return new Promise((resolve, reject) => {
+        if (!file || !(file.type || '').startsWith('image/')) {
+            reject(new Error('Only images can be compressed automatically.'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read the image.'));
+        reader.onload = () => {
+            const image = new Image();
+            image.onload = () => {
+                let width = image.naturalWidth || image.width;
+                let height = image.naturalHeight || image.height;
+                const maxDimension = 1800;
+                if (Math.max(width, height) > maxDimension) {
+                    const ratio = maxDimension / Math.max(width, height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d', { alpha: false });
+                if (!ctx) { reject(new Error('This browser cannot prepare the image.')); return; }
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(image, 0, 0, width, height);
+                let quality = 0.86;
+                const attempt = () => {
+                    canvas.toBlob(blob => {
+                        if (!blob) { reject(new Error('Could not compress the image.')); return; }
+                        if (blob.size <= maxBytes || quality <= 0.42) {
+                            const outReader = new FileReader();
+                            outReader.onload = () => resolve({
+                                name: (file.name || 'paper').replace(/\.[^.]+$/, '') + '.jpg',
+                                type: 'image/jpeg', size: blob.size, dataUrl: outReader.result
+                            });
+                            outReader.onerror = () => reject(new Error('Could not prepare the compressed image.'));
+                            outReader.readAsDataURL(blob);
+                            return;
+                        }
+                        quality -= 0.1;
+                        attempt();
+                    }, 'image/jpeg', quality);
+                };
+                attempt();
+            };
+            image.onerror = () => reject(new Error('The selected image could not be opened.'));
+            image.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function fileToDataUrl(file, maxBytes = 780 * 1024) {
     return new Promise((resolve, reject) => {
         if (!file) { resolve(null); return; }
+        if (file.size > maxBytes && (file.type || '').startsWith('image/')) {
+            compressImageForFirestore(file, maxBytes).then(resolve).catch(reject);
+            return;
+        }
         if (file.size > maxBytes) {
             reject(new Error('File is too large. Please use a file under 750 KB, or compress it first.'));
             return;
@@ -6230,6 +6459,7 @@ function listenToHomework() {
         snapshot.forEach(docSnap => homeworkSubmissions.push(docSnap.data()));
         renderHomeworkHub();
         if (document.getElementById('homeworkReviewPanel')?.style.display === 'block') renderHomeworkReview(currentHomeworkId);
+        refreshReportsIfOpen();
     }, (error) => console.error('Homework submissions sync error:', error));
 }
 
@@ -6395,8 +6625,10 @@ function openHomework(id) {
     const fileBox = document.getElementById('homeworkModalFile'); if (fileBox) fileBox.innerHTML = renderHomeworkFile(a.file);
     const submitBox = document.getElementById('homeworkKidSubmitBox');
     const adminActions = document.getElementById('homeworkAdminModalActions');
+    const resultBox = document.getElementById('homeworkKidResult');
     const answer = document.getElementById('homeworkAnswerText');
     if (isAdminRole()) {
+        if (resultBox) resultBox.style.display = 'none';
         if (submitBox) submitBox.style.display = 'none';
         if (adminActions) adminActions.style.display = 'flex';
     } else {
@@ -6404,6 +6636,15 @@ function openHomework(id) {
         if (submitBox) submitBox.style.display = 'flex';
         if (adminActions) adminActions.style.display = 'none';
         if (answer) answer.value = sub ? (sub.answer || '') : '';
+        if (resultBox) {
+            if (sub && sub.score != null) {
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `<strong>✅ Teacher mark: ${escapeHtml(String(sub.score))}/100</strong><br><span>⭐ Points received: ${Number(sub.pointsAwarded) || 0}</span>${sub.feedback ? `<br><span>💬 ${escapeHtml(sub.feedback)}</span>` : ''}`;
+            } else {
+                resultBox.style.display = 'none';
+                resultBox.innerHTML = '';
+            }
+        }
     }
     const modal = document.getElementById('homeworkModal'); if (modal) modal.style.display = 'flex';
 }
@@ -6436,11 +6677,12 @@ async function submitHomeworkAnswer() {
             id, assignmentId: currentHomeworkId, assignmentTitle: a.title,
             kidId: currentActiveId, kidName: kid.name || 'Explorer', kidAvatar: kid.avatar || '🚀',
             answer, file: fileObj || (existing ? existing.file : null), submittedAt: Date.now(), status: 'submitted',
-            score: existing ? (existing.score || null) : null, feedback: existing ? (existing.feedback || '') : ''
+            score: existing ? (existing.score ?? null) : null,
+            pointsAwarded: existing ? (Number(existing.pointsAwarded) || 0) : 0,
+            feedback: existing ? (existing.feedback || '') : ''
         }, { merge: true });
-        if (!existing) addStars(a.points || 0);
         launchConfetti(30);
-        showToast(existing ? 'Work updated!' : `Submitted! You earned ${a.points || 0} stars.`, '✅', 3500);
+        showToast(existing ? 'Work updated — your teacher will check the new answer.' : 'Submitted! Your teacher will mark it and award your points. ✅', '✅', 4000);
         closeHomeworkModal();
         renderHomeworkHub();
     } catch (err) {
@@ -6491,13 +6733,32 @@ async function saveHomeworkFeedback(submissionId) {
     if (!isAdminRole()) return;
     const sub = homeworkSubmissions.find(s => s.id === submissionId);
     if (!sub) return;
-    const feedback = document.getElementById('fb_' + submissionId)?.value || '';
+    const assignment = homeworkAssignments.find(a => a.id === sub.assignmentId) || { title: sub.assignmentTitle || 'Homework', points: 0 };
+    const feedback = (document.getElementById('fb_' + submissionId)?.value || '').trim().slice(0, 240);
     const scoreVal = document.getElementById('sc_' + submissionId)?.value;
     const score = scoreVal === '' ? null : Math.max(0, Math.min(100, parseInt(scoreVal, 10) || 0));
+    const possiblePoints = Math.max(0, Number(assignment.points) || 0);
+    const pointsAwarded = score == null ? 0 : Math.round(possiblePoints * score / 100);
+    const previousPoints = Math.max(0, Number(sub.pointsAwarded) || 0);
+    const pointsDelta = pointsAwarded - previousPoints;
+    const now = Date.now();
     try {
-        await setDoc(doc(db, 'homeworkSubmissions', submissionId), { feedback, score, reviewedAt: Date.now() }, { merge: true });
-        showToast('Feedback saved!', '💾', 2500);
-    } catch (e) { console.error(e); showToast('Could not save feedback.', '❌', 3000); }
+        await setDoc(doc(db, 'homeworkSubmissions', submissionId), {
+            feedback, score, pointsAwarded, reviewedAt: now,
+            reviewedBy: currentActiveId || 'admin'
+        }, { merge: true });
+        if (pointsDelta) await awardPointsToKid(sub.kidId, pointsDelta, `${assignment.title} teacher mark`);
+        await notifyKidOfTeacherFeedback(
+            sub.kidId,
+            `✅ ${assignment.title} was marked`,
+            score == null
+                ? 'Your teacher left feedback. Open KidZone to read it.'
+                : `You scored ${score}/100 and received ${pointsAwarded}⭐. ${feedback || 'Open KidZone to see your feedback.'}`
+        );
+        Object.assign(sub, { feedback, score, pointsAwarded, reviewedAt: now, reviewedBy: currentActiveId || 'admin' });
+        showToast(`Mark saved. ${pointsDelta > 0 ? `The child received ${pointsDelta}⭐.` : 'The child was notified.'}`, '✅', 3500);
+        await refreshReportsIfOpen();
+    } catch (e) { console.error(e); showToast('Could not save feedback or points.', '❌', 3500); }
 }
 window.saveHomeworkFeedback = saveHomeworkFeedback;
 
@@ -7039,6 +7300,8 @@ let tpSelectedGrade = 1;
 let testSubmissions = [];
 let testSubsListener = null;
 let customTestPapers = [];     // teacher-uploaded papers (Firestore: customTestPapers)
+let customTestPapersSyncError = '';
+let customTestPapersListener = null;
 let currentTestPaper = null;   // paper object being filled in
 let tpCurrentReviewId = null;  // submission id being reviewed by admin
 
@@ -7101,7 +7364,9 @@ function renderTestPapersPicker() {
     const gradeData = TEST_PAPERS.filter(g => g.grade === tpSelectedGrade);
     const customForGrade = customTestPapers.filter(p => Number(p.grade) === tpSelectedGrade);
     if (!gradeData.length && !customForGrade.length) {
-        box.innerHTML = '<p class="tp-empty">No papers available for this grade yet.</p>';
+        box.innerHTML = customTestPapersSyncError
+            ? `<div class="tp-sync-error"><strong>⚠️ The teacher paper could not be loaded.</strong><span>${escapeHtml(customTestPapersSyncError)}</span><button type="button" class="solar-tool-btn" onclick="retryCustomTestPapers()">Try again 🔄</button></div>`
+            : '<p class="tp-empty">No papers available for this grade yet. If your teacher just published one, wait a moment and refresh this page.</p>';
         return;
     }
     const order = ['English', 'Mathematics', 'Science', 'French'];
@@ -7127,7 +7392,11 @@ function renderTestPapersPicker() {
             ${p.isCustom && isAdminRole() ? `<button class="tp-paper-del" onclick="deleteCustomTestPaper('${p.id}')" title="Delete this test paper">🗑️</button>` : ''}
         </div>`;
 
+    const syncNotice = customTestPapersSyncError
+        ? `<div class="tp-sync-error compact"><span>⚠️ Teacher-uploaded papers are not syncing: ${escapeHtml(customTestPapersSyncError)}</span><button type="button" class="solar-tool-btn" onclick="retryCustomTestPapers()">Retry 🔄</button></div>`
+        : '';
     box.innerHTML = `
+        ${syncNotice}
         <div class="tp-head-row">
             <h2>📚 Papers for Grade ${tpSelectedGrade}</h2>
             <span class="tp-grade-badge">Grade ${tpSelectedGrade}</span>
@@ -7206,7 +7475,7 @@ function toggleTestPaperForm(force) {
 }
 window.toggleTestPaperForm = toggleTestPaperForm;
 
-function addTestPaperQuestion() {
+function addTestPaperQuestion(question = null) {
     const list = document.getElementById('tpQuestionsList');
     if (!list) return;
     const row = document.createElement('div');
@@ -7215,11 +7484,11 @@ function addTestPaperQuestion() {
     row.innerHTML = `
         <span class="tp-qrow-num">Q${n}</span>
         <select class="tp-qrow-type" title="Answer style">
-            <option value="short">✏️ Short answer</option>
-            <option value="essay">📝 Long answer</option>
+            <option value="short" ${question?.type === 'short' || !question?.type ? 'selected' : ''}>✏️ Short answer</option>
+            <option value="essay" ${question?.type === 'essay' ? 'selected' : ''}>📝 Long answer</option>
         </select>
-        <input type="text" class="tp-qrow-text" placeholder="Write the question here…" maxlength="300">
-        <input type="number" class="tp-qrow-marks" min="1" max="20" value="2" title="Marks" oninput="updateTestPaperTotal()">
+        <input type="text" class="tp-qrow-text" placeholder="Write the question here…" maxlength="300" value="${escapeHtml(question?.q || '')}">
+        <input type="number" class="tp-qrow-marks" min="1" max="20" value="${Math.max(1, Math.min(20, Number(question?.marks) || 2))}" title="Marks" oninput="updateTestPaperTotal()">
         <button type="button" class="tp-qrow-del" onclick="removeTestPaperQuestion(this)" title="Remove question">✖</button>`;
     list.appendChild(row);
     row.querySelector('.tp-qrow-text').focus();
@@ -7249,14 +7518,155 @@ function updateTestPaperTotal() {
 }
 window.updateTestPaperTotal = updateTestPaperTotal;
 
+let tpOcrBusy = false;
+let tpOcrScriptPromise = null;
+let tpOcrText = '';
+
+function setTestPaperAIStatus(message, kind = '') {
+    const status = document.getElementById('tpAiStatus');
+    if (status) {
+        status.className = 'tp-ai-status' + (kind ? ' ' + kind : '');
+        status.innerHTML = message;
+    }
+}
+
+function loadTestPaperOcrEngine() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tpOcrScriptPromise) return tpOcrScriptPromise;
+    tpOcrScriptPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.async = true;
+        script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('The OCR engine did not load.'));
+        script.onerror = () => reject(new Error('Could not load the AI reading tool. Check the internet connection and try again.'));
+        document.head.appendChild(script);
+    });
+    return tpOcrScriptPromise;
+}
+
+function parseTestPaperOcrQuestions(rawText) {
+    const clean = String(rawText || '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+        .replace(/\r/g, '')
+        .split('\n')
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+    const questionStart = /^(?:question\s*)?(?:q\s*)?(\d{1,2})\s*(?:[\).:\-]|\s)\s*(.+)$/i;
+    const questions = [];
+    let current = null;
+    const pushCurrent = () => {
+        if (!current) return;
+        const text = current.text.replace(/\s+/g, ' ').trim();
+        if (text.length >= 3) {
+            const longAnswer = /\b(explain|describe|write|draw|discuss|paragraph|composition|sentences?|why|how|story|long answer)\b/i.test(text) || text.length > 145;
+            questions.push({ type: longAnswer ? 'essay' : 'short', q: text, marks: current.marks || (longAnswer ? 4 : 2) });
+        }
+        current = null;
+    };
+
+    clean.forEach(line => {
+        const match = line.match(questionStart);
+        if (match && Number(match[1]) <= 80) {
+            pushCurrent();
+            let text = match[2].trim();
+            let marks = null;
+            const marksMatch = text.match(/\s*[\[(]\s*(\d{1,2})\s*(?:marks?|pts?)?\s*[\])]\s*$/i) ||
+                text.match(/\s[-–—]\s*(\d{1,2})\s*(?:marks?|pts?)\s*$/i);
+            if (marksMatch) {
+                marks = Math.max(1, Math.min(20, Number(marksMatch[1])));
+                text = text.slice(0, marksMatch.index).trim();
+            }
+            current = { text, marks };
+        } else if (current) {
+            // OCR often wraps a long question over two or three lines.
+            current.text += ' ' + line;
+        }
+    });
+    pushCurrent();
+
+    // Some scans use a number followed by a full stop that OCR loses. A
+    // second pass recovers those blocks without turning page headings into
+    // questions. The teacher can always edit or remove the draft rows.
+    if (!questions.length) {
+        const blocks = String(rawText || '').split(/(?=(?:^|\n)\s*\d{1,2}\s+)/m)
+            .map(s => s.replace(/\s+/g, ' ').trim())
+            .filter(s => /^\d{1,2}\s+\S/.test(s));
+        blocks.forEach(block => {
+            const m = block.match(/^(\d{1,2})\s+(.+)/);
+            if (m && Number(m[1]) <= 80) questions.push({ type: 'short', q: m[2].trim(), marks: 2 });
+        });
+    }
+    return questions.slice(0, 50);
+}
+window.parseTestPaperOcrQuestions = parseTestPaperOcrQuestions;
+
+function replaceTestPaperQuestionRows(questions) {
+    const list = document.getElementById('tpQuestionsList');
+    if (!list) return;
+    list.innerHTML = '';
+    questions.forEach(question => addTestPaperQuestion(question));
+    updateTestPaperTotal();
+}
+
+async function readTestPaperWithAI() {
+    if (!isAdminRole()) return;
+    const input = document.getElementById('tpFile');
+    const file = input?.files?.[0];
+    if (!file) { setTestPaperAIStatus('Choose a picture first.', 'error'); return; }
+    if (!(file.type || '').startsWith('image/')) {
+        setTestPaperAIStatus('AI reading currently works with picture files. Add the questions manually for a PDF.', 'error');
+        return;
+    }
+    if (tpOcrBusy) return;
+    tpOcrBusy = true;
+    const btn = document.getElementById('tpAiReadBtn');
+    if (btn) { btn.disabled = true; btn.innerText = '✨ Reading picture…'; }
+    setTestPaperAIStatus('🧠 Reading the picture… this can take a few seconds. The draft stays in this browser until you publish.', 'working');
+    try {
+        const Tesseract = await loadTestPaperOcrEngine();
+        const result = await Tesseract.recognize(file, 'eng', {
+            logger: info => {
+                if (info && info.status === 'recognizing text' && Number.isFinite(info.progress)) {
+                    setTestPaperAIStatus(`🧠 Reading picture… ${Math.round(info.progress * 100)}%`, 'working');
+                }
+            }
+        });
+        const text = result?.data?.text || '';
+        tpOcrText = text.slice(0, 12000);
+        const questions = parseTestPaperOcrQuestions(text);
+        if (!questions.length) {
+            setTestPaperAIStatus('I could not find numbered questions. Try a clearer, well-lit picture or add the questions manually.', 'error');
+            return;
+        }
+        replaceTestPaperQuestionRows(questions);
+        const rawPreview = text.replace(/\s+/g, ' ').trim().slice(0, 500);
+        setTestPaperAIStatus(`✅ Drafted ${questions.length} question${questions.length === 1 ? '' : 's'}. Please check the wording, answer style and marks before publishing.${rawPreview ? ` <details><summary>Show OCR text preview</summary><span>${escapeHtml(rawPreview)}</span></details>` : ''}`, 'success');
+    } catch (error) {
+        console.error('[KidZone] test paper OCR failed:', error);
+        setTestPaperAIStatus(`⚠️ ${escapeHtml(error.message || 'AI reading failed. You can still add questions manually.')}`, 'error');
+    } finally {
+        tpOcrBusy = false;
+        const currentFile = document.getElementById('tpFile')?.files?.[0];
+        if (btn) { btn.disabled = !currentFile || !(currentFile.type || '').startsWith('image/'); btn.innerText = '✨ Read picture with AI'; }
+    }
+}
+window.readTestPaperWithAI = readTestPaperWithAI;
+
 const tpFileInputWatcher = () => {
     const input = document.getElementById('tpFile');
     if (input && input.dataset.wired !== 'yes') {
         input.dataset.wired = 'yes';
         input.addEventListener('change', () => {
             const box = document.getElementById('tpFilePreview');
+            const btn = document.getElementById('tpAiReadBtn');
             const f = input.files && input.files[0];
             if (box) box.innerText = f ? `Selected: ${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+            if (btn) btn.disabled = !f || !(f.type || '').startsWith('image/');
+            tpOcrText = '';
+            setTestPaperAIStatus('', '');
+            // Make the requested workflow automatic: selecting a picture
+            // starts the AI draft, while the button remains available to retry.
+            if (f && (f.type || '').startsWith('image/')) readTestPaperWithAI();
         });
     }
 };
@@ -7293,10 +7703,23 @@ async function handleTestPaperUpload(event) {
             questionCount: questions.length,
             sections: [{ heading: 'Questions', questions }],
             file: fileObj,
+            ocr: tpOcrText ? { provider: 'tesseract.js', text: tpOcrText, questionCount: questions.length, analyzedAt: Date.now() } : null,
             createdAt: Date.now(), createdBy: currentActiveId || 'admin', active: true
         };
         await setDoc(doc(db, 'customTestPapers', id), data);
+        try {
+            await setDoc(doc(db, 'announcements', 'ann_test_' + Date.now()), {
+                title: `New Grade ${grade} test paper: ${title}`,
+                body: `${subject} is ready. Open Test Papers and choose Grade ${grade}. 🧪`,
+                grade, testPaperId: id, createdAt: Date.now(), by: 'Teacher'
+            });
+            tryCloudPush(`🧪 New Grade ${grade} test paper`, title).catch(() => {});
+        } catch (announcementError) {
+            console.warn('[KidZone] test paper announcement skipped:', announcementError);
+        }
         event.target.reset();
+        tpOcrText = '';
+        setTestPaperAIStatus('', '');
         const list = document.getElementById('tpQuestionsList'); if (list) list.innerHTML = '';
         const preview = document.getElementById('tpFilePreview'); if (preview) preview.innerText = '';
         updateTestPaperTotal();
@@ -7331,19 +7754,39 @@ async function deleteCustomTestPaper(id) {
 window.deleteCustomTestPaper = deleteCustomTestPaper;
 
 function listenToCustomTestPapers() {
-    onSnapshot(collection(db, 'customTestPapers'), (snap) => {
+    if (customTestPapersListener) {
+        try { customTestPapersListener(); } catch (e) {}
+    }
+    customTestPapersListener = onSnapshot(collection(db, 'customTestPapers'), (snap) => {
+        customTestPapersSyncError = '';
         customTestPapers = [];
         snap.forEach(d => {
             const data = d.data() || {};
             if (data.active === false) return;
-            customTestPapers.push({ ...data, id: data.id || d.id });
+            // Normalise grade and id so Grade 1 papers published by older
+            // versions (which stored the select value as a string) still show.
+            customTestPapers.push({ ...data, id: data.id || d.id, grade: Number(data.grade) || 1 });
         });
         customTestPapers.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         const tab = document.getElementById('testpapers');
         if (tab && tab.classList.contains('active')) renderTestPapers();
-    }, (error) => console.error('Custom test papers sync error:', error));
+    }, (error) => {
+        customTestPapersSyncError = error && error.code === 'permission-denied'
+            ? 'Firestore rules are blocking teacher papers. Deploy firestore.rules, then try again.'
+            : 'Check the connection and try again.';
+        console.error('Custom test papers sync error:', error);
+        const tab = document.getElementById('testpapers');
+        if (tab && tab.classList.contains('active')) renderTestPapers();
+    });
 }
 window.listenToCustomTestPapers = listenToCustomTestPapers;
+
+function retryCustomTestPapers() {
+    customTestPapersSyncError = '';
+    listenToCustomTestPapers();
+    showToast('Refreshing teacher papers…', '🔄', 2200);
+}
+window.retryCustomTestPapers = retryCustomTestPapers;
 
 function openTestPaper(paperId) {
     const paper = findTestPaperById(paperId);
@@ -7453,16 +7896,16 @@ async function submitTestPaper() {
         id, paperId: paper.id, grade: meta.grade, subject: meta.subject, title: paper.title,
         totalMarks: paper.totalMarks, time: paper.time, instructions: paper.instructions,
         kidId: currentActiveId, kidName: kid.name || 'Explorer',
-        answers, status: 'pending', submittedAt: Date.now(), gradedAt: null, overallAwarded: null
+        answers, status: 'pending', submittedAt: Date.now(), gradedAt: null, overallAwarded: null,
+        pointsAwarded: 0
     };
     try {
         await setDoc(doc(db, 'testSubmissions', id), data);
-        addStars(Math.max(5, paper.totalMarks));
         playChime([523, 659, 784, 1046]);
         launchConfetti(30);
         currentTestPaper = null;
         closeTestPaperView();
-        showToast('Submitted to your teacher! Great job!', '📤', 3500);
+        showToast('Submitted to your teacher! They will mark it and award your points. 📤', '📤', 4000);
     } catch (err) {
         console.error(err);
         showToast('Could not submit. Check your connection and try again.', '❌', 4000);
@@ -7522,11 +7965,31 @@ async function saveTestReview(id) {
         return { ...a, awarded, comment: (cmtEl ? cmtEl.value : '') };
     });
     const overallAwarded = answers.reduce((s, x) => s + (x.awarded || 0), 0);
+    const totalMarks = Math.max(1, Number(sub.totalMarks) || answers.reduce((s, x) => s + (Number(x.marks) || 0), 0));
+    // A full-mark paper earns at least five stars, with partial credit earning
+    // the same percentage. Store the award on the submission so re-marking it
+    // adjusts the difference instead of paying the child twice.
+    const pointsReward = Math.max(5, Number(sub.totalMarks) || 0);
+    const pointsAwarded = Math.round(pointsReward * overallAwarded / totalMarks);
+    const previousPoints = Math.max(0, Number(sub.pointsAwarded) || 0);
+    const pointsDelta = pointsAwarded - previousPoints;
+    const gradedAt = Date.now();
+    const gradedBy = currentActiveId || 'admin';
     const btn = document.querySelector('.tp-submit-row .login-submit-btn');
     if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
     try {
-        await setDoc(doc(db, 'testSubmissions', id), { answers, overallAwarded, status: 'graded', gradedAt: Date.now(), gradedBy: 'Admin' }, { merge: true });
-        showToast('Marks saved!', '📊', 2500);
+        await setDoc(doc(db, 'testSubmissions', id), {
+            answers, overallAwarded, status: 'graded', gradedAt, gradedBy,
+            pointsAwarded
+        }, { merge: true });
+        if (pointsDelta) await awardPointsToKid(sub.kidId, pointsDelta, `${sub.title || 'Test paper'} teacher mark`);
+        await notifyKidOfTeacherFeedback(
+            sub.kidId,
+            `📊 ${sub.title || 'Your test paper'} was marked`,
+            `You scored ${overallAwarded}/${sub.totalMarks}. You received ${pointsAwarded}⭐. Open KidZone to see each question and your teacher's comments.`
+        );
+        Object.assign(sub, { answers, overallAwarded, status: 'graded', gradedAt, gradedBy, pointsAwarded });
+        showToast(`Marks saved. The child received ${pointsDelta > 0 ? pointsDelta : 0}⭐.`, '📊', 3500);
         closeTestPaperView();
     } catch (e) {
         console.error(e);
@@ -7554,8 +8017,8 @@ function openMySubmission(id) {
                     <h2>${escapeHtml(sub.title)}</h2>
                     <p class="tp-sheet-meta">Grade ${sub.grade} · ${escapeHtml(sub.subject)}</p>
                     ${graded
-                        ? `<div class="tp-score-banner">Your score: <strong>${sub.overallAwarded ?? 0} / ${sub.totalMarks}</strong></div>`
-                        : `<div class="tp-score-banner pending">⏳ Submitted — waiting for your teacher to mark it.</div>`}
+                        ? `<div class="tp-score-banner">Your score: <strong>${sub.overallAwarded ?? 0} / ${sub.totalMarks}</strong> · ⭐ ${sub.pointsAwarded || 0} points received</div>`
+                        : `<div class="tp-score-banner pending">⏳ Submitted — waiting for your teacher to mark it and award points.</div>`}
                 </div>
             </div>
             ${sub.answers.map((a, i) => `
@@ -7593,6 +8056,7 @@ function listenToTestPapers() {
         snap.forEach(d => testSubmissions.push(d.data()));
         const tab = document.getElementById('testpapers');
         if (tab && tab.classList.contains('active')) renderTestPapers();
+        refreshReportsIfOpen();
     }, (error) => console.error('Test submissions sync error:', error));
 }
 window.listenToTestPapers = listenToTestPapers;
