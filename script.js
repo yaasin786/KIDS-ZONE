@@ -428,6 +428,7 @@ window.speakText = speakText;
 // ============================================================
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+        if (typeof closeMessageSeenBy === 'function') closeMessageSeenBy();
         closeModal();
         closeBadgesModal();
         closeCreateAccountModal();
@@ -4346,19 +4347,269 @@ function getAllSafeZoneChats() {
         .filter(m => m && m.id && (m.kind !== 'safeChatReceipt' || m.text || m.attachment || m.fromName))
         .sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
-function preserveSafeZoneScroll(pageY, chatY) {
-    // Mobile browsers try to keep focused/changed elements visible after every
-    // realtime update. Force the page and chat panel back to where the child was.
+function preserveSafeZoneScroll(pageY, chatY, opts = {}) {
+    // Keep the page where the child was during realtime feed refreshes.
+    // Chat windows handle their own scroll via applySafeChatScroll().
     const restore = () => {
         try { window.scrollTo(0, pageY); } catch (e) {}
-        const win = document.getElementById('safeChatWindow');
-        if (win && typeof chatY === 'number') win.scrollTop = chatY;
+        if (opts && opts.chatWinId && typeof chatY === 'number') {
+            const win = document.getElementById(opts.chatWinId);
+            if (win) win.scrollTop = chatY;
+        }
     };
     restore();
     requestAnimationFrame(restore);
-    setTimeout(restore, 80);
-    setTimeout(restore, 220);
+    setTimeout(restore, 40);
 }
+
+// ---- Buddy / Group chat scroll helpers (no more jumpiness) ----
+const SAFE_CHAT_NEAR_BOTTOM_PX = 72;
+let _safeChatScrollWired = false;
+let _safeGroupChatScrollWired = false;
+let safeGroupChatStickBottom = true;
+
+function isSafeChatNearBottom(win, threshold = SAFE_CHAT_NEAR_BOTTOM_PX) {
+    if (!win) return true;
+    return (win.scrollHeight - win.scrollTop - win.clientHeight) <= threshold;
+}
+
+function wireSafeChatScrollTracking() {
+    const win = document.getElementById('safeChatWindow');
+    if (win && !_safeChatScrollWired) {
+        _safeChatScrollWired = true;
+        win.addEventListener('scroll', () => {
+            safeChatStickBottom = isSafeChatNearBottom(win);
+        }, { passive: true });
+    }
+    const gwin = document.getElementById('safeGroupChatWindow');
+    if (gwin && !_safeGroupChatScrollWired) {
+        _safeGroupChatScrollWired = true;
+        gwin.addEventListener('scroll', () => {
+            safeGroupChatStickBottom = isSafeChatNearBottom(gwin);
+        }, { passive: true });
+    }
+}
+
+function applySafeChatScroll(win, prevTop, stickBottom, forceBottom = false) {
+    if (!win) return;
+    const goBottom = forceBottom || stickBottom || isSafeChatNearBottom({
+        scrollHeight: win.scrollHeight,
+        scrollTop: prevTop,
+        clientHeight: win.clientHeight
+    });
+    const apply = () => {
+        if (goBottom) win.scrollTop = win.scrollHeight;
+        else win.scrollTop = prevTop;
+    };
+    apply();
+    requestAnimationFrame(apply);
+    setTimeout(apply, 60);
+    setTimeout(apply, 180);
+}
+
+// ---- Conversation background themes (per friend / group) ----
+const SAFE_CHAT_BG_THEMES = {
+    soft: {
+        label: 'Soft sky',
+        emoji: '☁️',
+        css: 'linear-gradient(160deg, #eef2ff 0%, #f8fafc 45%, #ecfeff 100%)'
+    },
+    ocean: {
+        label: 'Ocean',
+        emoji: '🌊',
+        css: 'linear-gradient(160deg, #bae6fd 0%, #7dd3fc 40%, #38bdf8 100%)'
+    },
+    sunset: {
+        label: 'Sunset',
+        emoji: '🌅',
+        css: 'linear-gradient(160deg, #ffedd5 0%, #fdba74 45%, #fb7185 100%)'
+    },
+    forest: {
+        label: 'Forest',
+        emoji: '🌿',
+        css: 'linear-gradient(160deg, #dcfce7 0%, #86efac 45%, #4ade80 100%)'
+    },
+    candy: {
+        label: 'Candy',
+        emoji: '🍬',
+        css: 'linear-gradient(160deg, #fce7f3 0%, #f9a8d4 40%, #c4b5fd 100%)'
+    },
+    space: {
+        label: 'Space',
+        emoji: '🚀',
+        css: 'linear-gradient(160deg, #1e1b4b 0%, #312e81 40%, #4c1d95 70%, #0f172a 100%)'
+    },
+    rainbow: {
+        label: 'Rainbow',
+        emoji: '🌈',
+        css: 'linear-gradient(135deg, #fecaca, #fed7aa, #fef08a, #bbf7d0, #bfdbfe, #e9d5ff)'
+    },
+    stars: {
+        label: 'Night stars',
+        emoji: '✨',
+        css: 'radial-gradient(circle at 20% 20%, #fef9c3 0 2px, transparent 3px), radial-gradient(circle at 70% 30%, #fff 0 1.5px, transparent 2px), radial-gradient(circle at 40% 70%, #e0e7ff 0 2px, transparent 3px), radial-gradient(circle at 85% 75%, #fde68a 0 1.5px, transparent 2px), linear-gradient(160deg, #0f172a, #1e3a8a 55%, #312e81)'
+    }
+};
+
+function safeChatBgStorageKey(scope) {
+    return 'kidzone_chat_bg_' + String(scope || 'default');
+}
+
+function getSafeChatBgTheme(scope) {
+    try {
+        const id = localStorage.getItem(safeChatBgStorageKey(scope)) || 'soft';
+        return SAFE_CHAT_BG_THEMES[id] ? id : 'soft';
+    } catch (e) {
+        return 'soft';
+    }
+}
+
+function setSafeChatBgTheme(scope, themeId) {
+    const id = SAFE_CHAT_BG_THEMES[themeId] ? themeId : 'soft';
+    try { localStorage.setItem(safeChatBgStorageKey(scope), id); } catch (e) {}
+    applySafeChatBackground(scope);
+    playSound(520, 'triangle', 0.1);
+    const t = SAFE_CHAT_BG_THEMES[id];
+    showToast(`Chat background: ${t.label}`, t.emoji, 1800);
+}
+
+function applySafeChatBackground(scope) {
+    const themeId = getSafeChatBgTheme(scope);
+    const theme = SAFE_CHAT_BG_THEMES[themeId] || SAFE_CHAT_BG_THEMES.soft;
+    const isGroup = scope === 'group_main';
+    const win = document.getElementById(isGroup ? 'safeGroupChatWindow' : 'safeChatWindow');
+    if (win) {
+        win.style.background = theme.css;
+        win.classList.toggle('chat-bg-dark', themeId === 'space' || themeId === 'stars');
+    }
+    // highlight active swatch
+    const picker = document.getElementById(isGroup ? 'safeGroupChatBgPicker' : 'safeChatBgPicker');
+    if (picker) {
+        picker.querySelectorAll('.chat-bg-swatch').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.theme === themeId);
+        });
+    }
+}
+
+function renderChatBgPicker(containerId, scope) {
+    const box = document.getElementById(containerId);
+    if (!box) return;
+    const scopeKey = String(scope || '');
+    // Rebuild only when the conversation changes — realtime chat refreshes
+    // must not wipe the picker (that made taps feel jumpy).
+    if (box.dataset.scope === scopeKey && box.dataset.ready === 'yes') {
+        applySafeChatBackground(scopeKey);
+        return;
+    }
+    const active = getSafeChatBgTheme(scopeKey);
+    const scopeJs = JSON.stringify(scopeKey);
+    box.dataset.scope = scopeKey;
+    box.dataset.ready = 'yes';
+    box.innerHTML = `
+        <span class="chat-bg-label" title="Pick a fun background for this chat">🎨 Background</span>
+        <div class="chat-bg-swatches" role="listbox" aria-label="Chat background themes">
+            ${Object.entries(SAFE_CHAT_BG_THEMES).map(([id, t]) => `
+                <button type="button" class="chat-bg-swatch ${id === active ? 'active' : ''}"
+                    data-theme="${id}"
+                    style="background:${t.css}"
+                    title="${escapeHtml(t.label)}"
+                    aria-label="${escapeHtml(t.label)}"
+                    onclick='setSafeChatBgTheme(${scopeJs}, ${JSON.stringify(id)})'>
+                    <span>${t.emoji}</span>
+                </button>
+            `).join('')}
+        </div>`;
+    applySafeChatBackground(scopeKey);
+}
+window.setSafeChatBgTheme = setSafeChatBgTheme;
+
+// ---- Seen-by popup (tap blue ticks to see who read the message) ----
+function resolveChatViewerName(id) {
+    if (!id) return 'Friend';
+    if (String(id).startsWith('admin')) return '🛠️ Admin';
+    const k = (cachedKidProfiles || []).find(p => p && p.id === id);
+    if (k) return `${k.avatar || '🚀'} ${k.name || 'Friend'}`;
+    return '🚀 Friend';
+}
+
+function getMessageSeenList(msgId) {
+    if (!msgId) return [];
+    const m = getAllSafeZoneChats().find(x => x && x.id === msgId);
+    if (!m) return [];
+    const ids = new Set();
+    if (Array.isArray(m.seenBy)) m.seenBy.forEach(id => { if (id && id !== m.fromId) ids.add(id); });
+    // 1:1 chats: if seenAt is set, the recipient has seen it even without seenBy.
+    if (!m.groupId && m.seenAt && m.toId && m.toId !== m.fromId) ids.add(m.toId);
+    return [...ids];
+}
+
+function showMessageSeenBy(msgId, evt) {
+    if (evt) {
+        try { evt.preventDefault(); evt.stopPropagation(); } catch (e) {}
+    }
+    playSound(560, 'sine', 0.1);
+    const ids = getMessageSeenList(msgId);
+    const m = getAllSafeZoneChats().find(x => x && x.id === msgId);
+    let existing = document.getElementById('chatSeenByPopover');
+    if (existing) existing.remove();
+
+    const pop = document.createElement('div');
+    pop.id = 'chatSeenByPopover';
+    pop.className = 'chat-seen-popover';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Who has seen this message');
+
+    const people = ids.length
+        ? ids.map(id => `<li><span class="seen-person">${escapeHtml(resolveChatViewerName(id))}</span></li>`).join('')
+        : '<li class="seen-empty">Nobody has opened this message yet.</li>';
+
+    const when = m && m.seenAt ? `<p class="seen-when">First seen ${escapeHtml(safePostTime(m.seenAt))}</p>` : '';
+    pop.innerHTML = `
+        <div class="chat-seen-popover-card">
+            <div class="chat-seen-popover-head">
+                <strong>👀 Seen by</strong>
+                <button type="button" class="chat-seen-close" onclick="closeMessageSeenBy()" aria-label="Close">✖</button>
+            </div>
+            ${when}
+            <ul class="chat-seen-list">${people}</ul>
+            <p class="seen-hint">Blue ✓✓ means your friend saw the message. Tap the ticks anytime!</p>
+        </div>`;
+    document.body.appendChild(pop);
+
+    // Position near the click, fall back to centered on small screens.
+    try {
+        const x = (evt && (evt.clientX || (evt.touches && evt.touches[0] && evt.touches[0].clientX))) || (window.innerWidth / 2);
+        const y = (evt && (evt.clientY || (evt.touches && evt.touches[0] && evt.touches[0].clientY))) || (window.innerHeight / 3);
+        const card = pop.querySelector('.chat-seen-popover-card');
+        if (card && window.innerWidth > 520) {
+            const left = Math.min(window.innerWidth - 280, Math.max(12, x - 120));
+            const top = Math.min(window.innerHeight - 220, Math.max(12, y - 10));
+            card.style.position = 'fixed';
+            card.style.left = left + 'px';
+            card.style.top = top + 'px';
+            card.style.transform = 'none';
+        }
+    } catch (e) {}
+
+    setTimeout(() => {
+        const closer = (e) => {
+            if (!pop.contains(e.target)) closeMessageSeenBy();
+        };
+        pop._closer = closer;
+        document.addEventListener('pointerdown', closer, true);
+    }, 30);
+}
+window.showMessageSeenBy = showMessageSeenBy;
+
+function closeMessageSeenBy() {
+    const pop = document.getElementById('chatSeenByPopover');
+    if (!pop) return;
+    if (pop._closer) {
+        try { document.removeEventListener('pointerdown', pop._closer, true); } catch (e) {}
+    }
+    pop.remove();
+}
+window.closeMessageSeenBy = closeMessageSeenBy;
 
 function getLatestSafeChatFriendId() {
     if (!currentActiveId) return '';
@@ -4460,6 +4711,7 @@ function buildSafeZone() {
     setSafeFeedFilterUI('all');
     populateSafeAudience();
     populateSafeChatFriends();
+    wireSafeChatScrollTracking();
     renderSafeZone();
     renderSafeGroupChat();
     renderSafeChat();
@@ -4675,6 +4927,8 @@ function selectSafeChatFriend(friendId) {
     playSound(480);
     const callBtn = document.getElementById('callFriendBtn');
     if (callBtn) callBtn.style.display = friendId ? 'inline-flex' : 'none';
+    const bgScope = friendId ? ('buddy_' + friendId) : 'buddy_default';
+    renderChatBgPicker('safeChatBgPicker', bgScope);
     renderSafeChat();
 }
 window.selectSafeChatFriend = selectSafeChatFriend;
@@ -4730,14 +4984,19 @@ window.addSafeGroupChatEmoji = addSafeGroupChatEmoji;
 function renderSafeGroupChat() {
     const win = document.getElementById('safeGroupChatWindow');
     if (!win) return;
+    wireSafeChatScrollTracking();
     const panel = document.getElementById('safezoneGroupChatPanel');
     if (panel) panel.style.display = currentRole === 'kid' || isAdminRole() ? 'block' : 'none';
     const pageY = window.scrollY || document.documentElement.scrollTop || 0;
     const chatY = win.scrollTop || 0;
+    const wasNearBottom = safeGroupChatStickBottom || isSafeChatNearBottom(win);
+    const forceBottom = !!safeGroupChatStickBottom;
+    renderChatBgPicker('safeGroupChatBgPicker', 'group_main');
     const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && m.groupId === 'main').sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
     if (!messages.length) {
         win.innerHTML = '<div class="safe-empty">👋 No group messages yet. Say hello to everyone!</div>';
-        preserveSafeZoneScroll(pageY, chatY);
+        applySafeChatBackground('group_main');
+        preserveSafeZoneScroll(pageY);
         return;
     }
     win.innerHTML = messages.map(m => {
@@ -4753,7 +5012,10 @@ function renderSafeGroupChat() {
         </div>`;
     }).join('');
     markSafeGroupChatMessagesSeen(messages);
-    preserveSafeZoneScroll(pageY, chatY);
+    applySafeChatBackground('group_main');
+    applySafeChatScroll(win, chatY, wasNearBottom, forceBottom);
+    if (forceBottom) safeGroupChatStickBottom = true;
+    preserveSafeZoneScroll(pageY);
 }
 window.renderSafeGroupChat = renderSafeGroupChat;
 
@@ -4814,6 +5076,7 @@ async function sendSafeGroupMessage(forcedText = null, quick = false) {
     if (input && !forcedText) input.value = '';
     if (attachmentInput && !forcedText) attachmentInput.value = '';
     clearSafeGroupChatAttachment();
+    safeGroupChatStickBottom = true;
     renderSafeGroupChat();
     playSound(720, 'triangle', 0.12);
     try {
@@ -4986,13 +5249,23 @@ async function safePostFileToDataUrl(file) {
 }
 
 function chatReceiptTicks(m, isMe) {
-    // WhatsApp-style: ✓ sent · ✓✓ delivered · blue ✓✓ seen
+    // WhatsApp-style: ✓ sent · ✓✓ delivered · blue ✓✓ seen (tap blue ticks to see who)
     if (!isMe) return '';
-    if (m.localOnly && !m.seenAt && !m.deliveredAt) {
+    const msgId = escapeHtml(m.id || '');
+    const seenIds = getMessageSeenList(m.id);
+    const isSeen = !!(m.seenAt || seenIds.length);
+    if (m.localOnly && !isSeen && !m.deliveredAt) {
         return `<span class="chat-ticks sent" title="Sent">✓</span>`;
     }
-    if (m.seenAt || (Array.isArray(m.seenBy) && m.seenBy.length)) {
-        return `<span class="chat-ticks seen" title="Seen">✓✓</span>`;
+    if (isSeen) {
+        const names = seenIds.slice(0, 3).map(resolveChatViewerName);
+        const extra = seenIds.length > 3 ? ` +${seenIds.length - 3}` : '';
+        const title = names.length
+            ? `Seen by ${names.join(', ')}${extra} — tap to open`
+            : 'Seen — tap to see who';
+        return `<button type="button" class="chat-ticks seen clickable" title="${escapeHtml(title)}"
+            aria-label="${escapeHtml(title)}"
+            onclick="showMessageSeenBy('${msgId}', event)">✓✓</button>`;
     }
     if (m.deliveredAt || m.ownProfileOutbox || m.profileFallback || m.progressFallback || !m.instantLocal) {
         return `<span class="chat-ticks delivered" title="Delivered">✓✓</span>`;
@@ -5006,25 +5279,31 @@ function groupChatSeenLabel(m, isMe) {
     if (!seenBy.length) {
         return chatReceiptTicks(m, true);
     }
-    // Resolve up to 3 names for "Seen by"
-    const names = seenBy.slice(0, 3).map(id => {
-        const k = (cachedKidProfiles || []).find(p => p.id === id);
-        return k ? `${k.avatar || '🚀'} ${k.name || 'Friend'}` : 'Friend';
-    });
+    const names = seenBy.slice(0, 3).map(id => resolveChatViewerName(id));
     const extra = seenBy.length > 3 ? ` +${seenBy.length - 3}` : '';
-    const title = `Seen by ${names.join(', ')}${extra}`;
-    return `<span class="chat-ticks seen" title="${escapeHtml(title)}">✓✓</span><span class="chat-seen-by" title="${escapeHtml(title)}">Seen by ${escapeHtml(names.join(', '))}${extra}</span>`;
+    const title = `Seen by ${names.join(', ')}${extra} — tap to open`;
+    const msgId = escapeHtml(m.id || '');
+    return `<button type="button" class="chat-ticks seen clickable" title="${escapeHtml(title)}"
+        aria-label="${escapeHtml(title)}"
+        onclick="showMessageSeenBy('${msgId}', event)">✓✓</button>
+        <button type="button" class="chat-seen-by clickable" title="${escapeHtml(title)}"
+            onclick="showMessageSeenBy('${msgId}', event)">Seen by ${escapeHtml(names.join(', '))}${extra}</button>`;
 }
 
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
     if (!win) return;
+    wireSafeChatScrollTracking();
     const _safePageY = window.scrollY || document.documentElement.scrollTop || 0;
     const _safeChatY = win.scrollTop || 0;
+    const wasNearBottom = safeChatStickBottom || isSafeChatNearBottom(win);
+    const forceBottom = !!safeChatStickBottom;
     const panel = document.getElementById('safezoneChatPanel');
     if (panel) panel.style.display = currentRole === 'kid' || isAdminRole() ? 'block' : 'none';
     populateSafeChatFriends();
 
+    const bgScope = selectedSafeChatFriend ? ('buddy_' + selectedSafeChatFriend) : 'buddy_default';
+    renderChatBgPicker('safeChatBgPicker', bgScope);
 
     if (!selectedSafeChatFriend) {
         const recentIds = [...new Set(getAllSafeZoneChats()
@@ -5039,7 +5318,8 @@ function renderSafeChat() {
         } else {
             win.innerHTML = '<div class="safe-empty">👋 Choose a friend to start a safe chat.</div>';
         }
-        preserveSafeZoneScroll(_safePageY, _safeChatY);
+        preserveSafeZoneScroll(_safePageY);
+        applySafeChatBackground(bgScope);
         return;
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
@@ -5050,15 +5330,17 @@ function renderSafeChat() {
     ));
     if (!messages.length) {
         win.innerHTML = `<div class="safe-empty">💬 No messages yet with ${escapeHtml(friend ? friend.name : 'this friend')}. Send a quick kind message!</div>`;
-        preserveSafeZoneScroll(_safePageY, _safeChatY);
+        preserveSafeZoneScroll(_safePageY);
+        applySafeChatBackground(bgScope);
         return;
     }
     win.innerHTML = messages.map(m => {
-        const isMe = m.fromId === currentActiveId || (isAdminRole() && m.fromId === 'admin');
+        const isMe = m.fromId === currentActiveId || (isAdminRole() && m.fromId && String(m.fromId).startsWith('admin'));
         const pending = m.status === 'pending';
         const ticks = chatReceiptTicks(m, isMe);
-        const seenHint = (isMe && m.seenAt)
-            ? ` · seen ${safePostTime(m.seenAt)}`
+        const seenIds = isMe ? getMessageSeenList(m.id) : [];
+        const seenHint = (isMe && (m.seenAt || seenIds.length))
+            ? ` · <button type="button" class="chat-seen-inline" onclick="showMessageSeenBy('${escapeHtml(m.id || '')}', event)">seen${m.seenAt ? ' ' + escapeHtml(safePostTime(m.seenAt)) : ''}</button>`
             : '';
         return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}" data-chat-id="${escapeHtml(m.id || '')}">
             ${escapeHtml(m.text || '')}
@@ -5073,10 +5355,13 @@ function renderSafeChat() {
     // Mark incoming messages as seen (WhatsApp blue ticks for the sender).
     markSafeChatMessagesSeen(messages);
 
-    // Do NOT change scrollTop here. Realtime Firebase/profile updates can arrive
-    // many times per second and moving scrollTop causes the up/down jumping on phones.
-    safeChatStickBottom = false;
-    preserveSafeZoneScroll(_safePageY, _safeChatY);
+    applySafeChatBackground(bgScope);
+    // Stick to bottom when the kid was already there, just opened the chat, or sent a message.
+    // Otherwise keep their scroll position so reading older messages does not jump.
+    applySafeChatScroll(win, _safeChatY, wasNearBottom, forceBottom);
+    // After a forced stick (open chat / send), follow live near-bottom tracking again.
+    if (forceBottom) safeChatStickBottom = true;
+    preserveSafeZoneScroll(_safePageY);
 }
 window.renderSafeChat = renderSafeChat;
 
@@ -5171,15 +5456,14 @@ function markSafeChatMessagesSeen(messages) {
         _safeChatSeenMarked.add(m.id);
         const patch = {
             seenAt: Date.now(),
-            seenBy: [currentActiveId],
+            seenBy: [...new Set([...(Array.isArray(m.seenBy) ? m.seenBy : []), currentActiveId])],
             deliveredAt: m.deliveredAt || Date.now()
         };
         // Update local copy immediately so ticks flip without waiting for cloud.
         upsertLocalSafeChatReceipt(m.id, patch);
         persistChatReceipt(m, patch).catch(() => {});
     });
-    // One gentle refresh so the current viewer sees delivered/seen state settle.
-    // (_safeChatSeenMarked prevents repeat writes.)
+    // (_safeChatSeenMarked prevents repeat writes on the next realtime pass.)
 }
 
 // When a message arrives for me, mark delivered (single grey double-tick for sender).
@@ -5306,6 +5590,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (attachmentInput && !forcedText) attachmentInput.value = '';
     const attPreview = document.getElementById('safeChatAttachmentPreview');
     if (attPreview && !forcedText) attPreview.innerHTML = '';
+    safeChatStickBottom = true;
     renderSafeChat();
     playSound(720, 'triangle', 0.12);
 
