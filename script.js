@@ -817,8 +817,13 @@ function listenToKidProfiles() {
         if (typeof populateSafeAudience === 'function') populateSafeAudience();
         if (typeof populateSafeChatFriends === 'function') populateSafeChatFriends();
         if (typeof updateSafeZoneIdentity === 'function') updateSafeZoneIdentity();
-    wireSafePostAttachmentPreview();
+        wireSafePostAttachmentPreview();
+        if (typeof markSafeChatMessagesDelivered === 'function') {
+            markSafeChatMessagesDelivered(safeZoneProfileChats.filter(m => m && !m.groupId));
+        }
         if (typeof renderSafeZone === 'function') renderSafeZone();
+        if (typeof renderSafeChat === 'function') renderSafeChat();
+        if (typeof renderSafeGroupChat === 'function') renderSafeGroupChat();
         if (typeof updateNotifications === 'function') updateNotifications();
         if (typeof renderErrorLogs === 'function' && document.getElementById('errorLogsModal')?.style.display === 'flex') renderErrorLogs();
         const adminModal = document.getElementById('adminPortalModal');
@@ -1400,7 +1405,8 @@ const BADGES = {
     safeFriend:   { icon: '🤝', name: 'Friendly Helper',   desc: 'Sent your first kind buddy note!' },
     safePopular:  { icon: '❤️', name: 'Heart Collector',   desc: 'Received 5 likes in the Safe Zone!' },
     spellingBee:  { icon: '🐝', name: 'Spelling Bee',      desc: 'Won a Spelling Bee Adventure round!' },
-    sentenceStar: { icon: '📝', name: 'Sentence Star',     desc: 'Built a whole Sentence Builder round!' }
+    sentenceStar: { icon: '📝', name: 'Sentence Star',     desc: 'Built a whole Sentence Builder round!' },
+    tablesChamp:  { icon: '✖️', name: 'Tables Champion',   desc: 'Perfect score on a Times Tables set!' }
 };
 
 async function saveProgress() {
@@ -1623,6 +1629,7 @@ function showGame(gameId, evt) {
     const quiz = document.getElementById('quiz-game');
     const spelling = document.getElementById('spelling-game');
     const sentence = document.getElementById('sentence-game');
+    const tables = document.getElementById('tables-game');
     const pacman = document.getElementById('pacman-game');
     const memory = document.getElementById('memory-match');
     const mauritius = document.getElementById('mauritius-game');
@@ -1633,6 +1640,7 @@ function showGame(gameId, evt) {
     if (quiz) quiz.style.display = (gameId === 'quiz-game') ? 'block' : 'none';
     if (spelling) spelling.style.display = (gameId === 'spelling-game') ? 'block' : 'none';
     if (sentence) sentence.style.display = (gameId === 'sentence-game') ? 'block' : 'none';
+    if (tables) tables.style.display = (gameId === 'tables-game') ? 'block' : 'none';
     if (pacman) pacman.style.display = (gameId === 'pacman-game') ? 'block' : 'none';
     if (memory) memory.style.display = (gameId === 'memory-match') ? 'block' : 'none';
     if (mauritius) mauritius.style.display = (gameId === 'mauritius-game') ? 'block' : 'none';
@@ -1644,6 +1652,7 @@ function showGame(gameId, evt) {
     if (gameId === 'quiz-game') initQuiz();
     if (gameId === 'spelling-game') initSpellingGame();
     if (gameId === 'sentence-game') initSentenceGame();
+    if (gameId === 'tables-game') initTablesGame();
     if (gameId === 'memory-match') initMemoryGame();
     if (gameId === 'mauritius-game') initMauritiusGame();
     if (gameId === 'body-game') {
@@ -2749,33 +2758,145 @@ function flipMemoryCard(card) {
 // ============================================================
 // GAME 6: SPELLING BEE ADVENTURE
 // Listen to the word, use the picture clue, and pick the correct spelling.
+// 3 levels × 30 words each.
 // ============================================================
+const SPELLING_LEVEL_META = {
+    1: { name: 'Easy', icon: '🌱' },
+    2: { name: 'Medium', icon: '⭐' },
+    3: { name: 'Hard', icon: '🔥' }
+};
+
 const spellingWords = [
-    { word: 'elephant', emoji: '🐘', hint: 'A huge animal with a long trunk.', decoys: ['elefant', 'elephent', 'eliphant'] },
-    { word: 'butterfly', emoji: '🦋', hint: 'An insect with colourful wings.', decoys: ['buterfly', 'butterflie', 'butterflay'] },
-    { word: 'rainbow', emoji: '🌈', hint: 'Colourful light you can see after rain.', decoys: ['rainbo', 'ranebow', 'rainboe'] },
-    { word: 'dinosaur', emoji: '🦖', hint: 'A giant reptile that lived long ago.', decoys: ['dinasaur', 'dinosar', 'dinausor'] },
-    { word: 'computer', emoji: '💻', hint: 'A machine you can use to learn and create.', decoys: ['computar', 'compewter', 'computor'] },
-    { word: 'friendship', emoji: '🤝', hint: 'A kind relationship between friends.', decoys: ['frendship', 'friendshipe', 'freindship'] },
-    { word: 'library', emoji: '📚', hint: 'A quiet place full of books.', decoys: ['libary', 'librery', 'libray'] },
-    { word: 'volcano', emoji: '🌋', hint: 'A mountain that can erupt with lava.', decoys: ['volcanno', 'volcaino', 'volcanoe'] },
-    { word: 'astronaut', emoji: '🚀', hint: 'A person who explores outside Earth.', decoys: ['astronot', 'astronaught', 'astranaut'] },
-    { word: 'penguin', emoji: '🐧', hint: 'A black-and-white bird that cannot fly.', decoys: ['pengwin', 'pengin', 'pengguin'] },
-    { word: 'scientist', emoji: '🔬', hint: 'A person who experiments and discovers things.', decoys: ['sientist', 'sciantist', 'sciencist'] },
-    { word: 'mountain', emoji: '🏔️', hint: 'A very tall piece of land.', decoys: ['moutain', 'mountian', 'mountane'] }
+    // LEVEL 1 — Easy everyday words (30)
+    { level: 1, word: 'apple', emoji: '🍎', hint: 'A red or green fruit that grows on trees.', decoys: ['aple', 'appel', 'applle'] },
+    { level: 1, word: 'banana', emoji: '🍌', hint: 'A long yellow fruit monkeys love.', decoys: ['bananna', 'bannana', 'banena'] },
+    { level: 1, word: 'cat', emoji: '🐱', hint: 'A soft pet that says meow.', decoys: ['kat', 'catt', 'cet'] },
+    { level: 1, word: 'dog', emoji: '🐶', hint: 'A friendly pet that barks.', decoys: ['dogg', 'doog', 'dag'] },
+    { level: 1, word: 'fish', emoji: '🐟', hint: 'An animal that swims in water.', decoys: ['fih', 'phish', 'fishe'] },
+    { level: 1, word: 'bird', emoji: '🐦', hint: 'An animal with feathers that can fly.', decoys: ['berd', 'burd', 'birde'] },
+    { level: 1, word: 'house', emoji: '🏠', hint: 'A place where people live.', decoys: ['howse', 'hous', 'hause'] },
+    { level: 1, word: 'school', emoji: '🏫', hint: 'A place where children learn.', decoys: ['scool', 'schol', 'skool'] },
+    { level: 1, word: 'water', emoji: '💧', hint: 'A clear liquid we drink every day.', decoys: ['watter', 'woter', 'watr'] },
+    { level: 1, word: 'happy', emoji: '😊', hint: 'The feeling when you smile a lot.', decoys: ['hapy', 'happi', 'hapee'] },
+    { level: 1, word: 'flower', emoji: '🌸', hint: 'A colorful plant that grows in gardens.', decoys: ['flour', 'flowr', 'flowar'] },
+    { level: 1, word: 'sunny', emoji: '☀️', hint: 'Weather when the sun is bright.', decoys: ['suny', 'sunni', 'sunnny'] },
+    { level: 1, word: 'friend', emoji: '🤝', hint: 'Someone you like to play with.', decoys: ['frend', 'freind', 'frind'] },
+    { level: 1, word: 'green', emoji: '🟢', hint: 'The color of grass and leaves.', decoys: ['greene', 'gren', 'greeen'] },
+    { level: 1, word: 'orange', emoji: '🍊', hint: 'A round citrus fruit and a color.', decoys: ['oranje', 'ornge', 'orrange'] },
+    { level: 1, word: 'purple', emoji: '💜', hint: 'A color mixed from red and blue.', decoys: ['purpel', 'purpl', 'perple'] },
+    { level: 1, word: 'rabbit', emoji: '🐰', hint: 'A soft animal with long ears.', decoys: ['rabbitt', 'rabit', 'rabbet'] },
+    { level: 1, word: 'turtle', emoji: '🐢', hint: 'A slow animal with a hard shell.', decoys: ['turtel', 'turttle', 'turtl'] },
+    { level: 1, word: 'pizza', emoji: '🍕', hint: 'A round food with cheese on top.', decoys: ['piza', 'pizaa', 'pitza'] },
+    { level: 1, word: 'music', emoji: '🎵', hint: 'Sounds and songs we love to hear.', decoys: ['musik', 'mussic', 'muisc'] },
+    { level: 1, word: 'smile', emoji: '😁', hint: 'What your face does when you are glad.', decoys: ['smyle', 'smille', 'smail'] },
+    { level: 1, word: 'cloud', emoji: '☁️', hint: 'A white fluffy shape in the sky.', decoys: ['clowd', 'cloude', 'clod'] },
+    { level: 1, word: 'bread', emoji: '🍞', hint: 'A soft food made from flour.', decoys: ['bred', 'braed', 'breade'] },
+    { level: 1, word: 'chair', emoji: '🪑', hint: 'Something you sit on.', decoys: ['chare', 'chear', 'chiar'] },
+    { level: 1, word: 'table', emoji: '🪵', hint: 'Furniture you put plates on.', decoys: ['tabel', 'tabble', 'taible'] },
+    { level: 1, word: 'sleep', emoji: '😴', hint: 'What you do at night in bed.', decoys: ['sleap', 'slepe', 'sleepp'] },
+    { level: 1, word: 'train', emoji: '🚂', hint: 'A long vehicle that rides on tracks.', decoys: ['tran', 'trane', 'trein'] },
+    { level: 1, word: 'plane', emoji: '✈️', hint: 'A flying machine that carries people.', decoys: ['plain', 'plaen', 'planne'] },
+    { level: 1, word: 'star', emoji: '⭐', hint: 'A bright light high up at night.', decoys: ['starr', 'ster', 'staar'] },
+    { level: 1, word: 'moon', emoji: '🌙', hint: 'The bright circle you see at night.', decoys: ['mune', 'moone', 'muun'] },
+
+    // LEVEL 2 — Medium school words (30)
+    { level: 2, word: 'elephant', emoji: '🐘', hint: 'A huge animal with a long trunk.', decoys: ['elefant', 'elephent', 'eliphant'] },
+    { level: 2, word: 'butterfly', emoji: '🦋', hint: 'An insect with colourful wings.', decoys: ['buterfly', 'butterflie', 'butterflay'] },
+    { level: 2, word: 'rainbow', emoji: '🌈', hint: 'Colourful light you can see after rain.', decoys: ['rainbo', 'ranebow', 'rainboe'] },
+    { level: 2, word: 'dinosaur', emoji: '🦖', hint: 'A giant reptile that lived long ago.', decoys: ['dinasaur', 'dinosar', 'dinausor'] },
+    { level: 2, word: 'computer', emoji: '💻', hint: 'A machine you can use to learn and create.', decoys: ['computar', 'compewter', 'computor'] },
+    { level: 2, word: 'friendship', emoji: '🤝', hint: 'A kind relationship between friends.', decoys: ['frendship', 'friendshipe', 'freindship'] },
+    { level: 2, word: 'library', emoji: '📚', hint: 'A quiet place full of books.', decoys: ['libary', 'librery', 'libray'] },
+    { level: 2, word: 'volcano', emoji: '🌋', hint: 'A mountain that can erupt with lava.', decoys: ['volcanno', 'volcaino', 'volcanoe'] },
+    { level: 2, word: 'astronaut', emoji: '🚀', hint: 'A person who explores outside Earth.', decoys: ['astronot', 'astronaught', 'astranaut'] },
+    { level: 2, word: 'penguin', emoji: '🐧', hint: 'A black-and-white bird that cannot fly.', decoys: ['pengwin', 'pengin', 'pengguin'] },
+    { level: 2, word: 'scientist', emoji: '🔬', hint: 'A person who experiments and discovers things.', decoys: ['sientist', 'sciantist', 'sciencist'] },
+    { level: 2, word: 'mountain', emoji: '🏔️', hint: 'A very tall piece of land.', decoys: ['moutain', 'mountian', 'mountane'] },
+    { level: 2, word: 'birthday', emoji: '🎂', hint: 'The special day you were born.', decoys: ['birtday', 'birthdy', 'brithday'] },
+    { level: 2, word: 'calendar', emoji: '📅', hint: 'A chart that shows days and months.', decoys: ['calender', 'calandar', 'calender'] },
+    { level: 2, word: 'treasure', emoji: '💎', hint: 'Gold or jewels found in a secret place.', decoys: ['treasur', 'tresure', 'treazure'] },
+    { level: 2, word: 'adventure', emoji: '🗺️', hint: 'An exciting journey full of discovery.', decoys: ['adventur', 'advencher', 'advanture'] },
+    { level: 2, word: 'chocolate', emoji: '🍫', hint: 'A sweet brown treat many kids love.', decoys: ['choclate', 'chocalate', 'chocolat'] },
+    { level: 2, word: 'umbrella', emoji: '☂️', hint: 'Something that keeps rain off your head.', decoys: ['umberella', 'umbralla', 'umbrellla'] },
+    { level: 2, word: 'sandwich', emoji: '🥪', hint: 'Food made with bread and a filling.', decoys: ['sandwitch', 'sandwiche', 'sandwhich'] },
+    { level: 2, word: 'hospital', emoji: '🏥', hint: 'A place where doctors help sick people.', decoys: ['hospitel', 'hosptial', 'hospittal'] },
+    { level: 2, word: 'keyboard', emoji: '⌨️', hint: 'The buttons you type on a computer.', decoys: ['keybord', 'keybaord', 'keeboard'] },
+    { level: 2, word: 'giraffe', emoji: '🦒', hint: 'A tall animal with a very long neck.', decoys: ['girafe', 'girraffe', 'geraffe'] },
+    { level: 2, word: 'octopus', emoji: '🐙', hint: 'A sea animal with eight arms.', decoys: ['octupus', 'octapus', 'octopuss'] },
+    { level: 2, word: 'diamond', emoji: '💍', hint: 'A shiny precious stone.', decoys: ['diamand', 'dimond', 'diamon'] },
+    { level: 2, word: 'whisper', emoji: '🤫', hint: 'To speak very quietly.', decoys: ['whispr', 'wisper', 'whisperr'] },
+    { level: 2, word: 'journey', emoji: '🧳', hint: 'A trip from one place to another.', decoys: ['journy', 'jurney', 'journay'] },
+    { level: 2, word: 'castle', emoji: '🏰', hint: 'A large strong home for kings and queens.', decoys: ['cassle', 'castel', 'casle'] },
+    { level: 2, word: 'planet', emoji: '🪐', hint: 'A large world that orbits a star.', decoys: ['planit', 'planett', 'plannet'] },
+    { level: 2, word: 'thunder', emoji: '⛈️', hint: 'The loud sound that follows lightning.', decoys: ['thundar', 'thundre', 'thnder'] },
+    { level: 2, word: 'garden', emoji: '🌻', hint: 'An outdoor place where flowers grow.', decoys: ['gardin', 'gardan', 'gardn'] },
+
+    // LEVEL 3 — Hard challenge words (30)
+    { level: 3, word: 'beautiful', emoji: '✨', hint: 'Very pretty or lovely to look at.', decoys: ['beatiful', 'beautifull', 'beutiful'] },
+    { level: 3, word: 'knowledge', emoji: '🧠', hint: 'Things you know and understand.', decoys: ['knowlege', 'knolledge', 'knowlage'] },
+    { level: 3, word: 'environment', emoji: '🌍', hint: 'The natural world around us.', decoys: ['enviroment', 'enviornment', 'environmant'] },
+    { level: 3, word: 'necessary', emoji: '📌', hint: 'Something you really need.', decoys: ['neccessary', 'necesary', 'neccesary'] },
+    { level: 3, word: 'restaurant', emoji: '🍽️', hint: 'A place where you buy cooked meals.', decoys: ['resturant', 'restraunt', 'restaraunt'] },
+    { level: 3, word: 'temperature', emoji: '🌡️', hint: 'How hot or cold something is.', decoys: ['temprature', 'temperture', 'temperiture'] },
+    { level: 3, word: 'dictionary', emoji: '📖', hint: 'A book that explains word meanings.', decoys: ['dictionery', 'dictonary', 'dicitionary'] },
+    { level: 3, word: 'mysterious', emoji: '🕵️', hint: 'Full of secrets that are hard to explain.', decoys: ['misterious', 'mysterous', 'mystirious'] },
+    { level: 3, word: 'opportunity', emoji: '🚪', hint: 'A good chance to do something useful.', decoys: ['oportunity', 'oppertunity', 'opportinity'] },
+    { level: 3, word: 'photograph', emoji: '📷', hint: 'A picture taken with a camera.', decoys: ['photograf', 'photgraph', 'photagraph'] },
+    { level: 3, word: 'responsibility', emoji: '🎯', hint: 'A duty you are trusted to do.', decoys: ['responsability', 'responibility', 'responsibilty'] },
+    { level: 3, word: 'extraordinary', emoji: '🌟', hint: 'Very special and better than ordinary.', decoys: ['extrordinary', 'extraodinary', 'extradordinary'] },
+    { level: 3, word: 'architecture', emoji: '🏛️', hint: 'The design of buildings.', decoys: ['architechture', 'arcitecture', 'architecure'] },
+    { level: 3, word: 'constellation', emoji: '🌌', hint: 'A group of stars that form a pattern.', decoys: ['constelation', 'constallation', 'constelletion'] },
+    { level: 3, word: 'microphone', emoji: '🎤', hint: 'A device that makes your voice louder.', decoys: ['microfone', 'micraphone', 'microphoen'] },
+    { level: 3, word: 'imagination', emoji: '💭', hint: 'The power to create ideas in your mind.', decoys: ['imaganation', 'imaginaton', 'immagination'] },
+    { level: 3, word: 'celebration', emoji: '🎉', hint: 'A joyful party for a special day.', decoys: ['celebartion', 'celibration', 'celebraition'] },
+    { level: 3, word: 'neighbourhood', emoji: '🏘️', hint: 'The area around where you live.', decoys: ['neighborhood', 'nieghbourhood', 'neighbourhod'] },
+    { level: 3, word: 'psychology', emoji: '🧩', hint: 'The study of how minds work.', decoys: ['physcology', 'pyschology', 'psychollogy'] },
+    { level: 3, word: 'questionnaire', emoji: '📝', hint: 'A list of questions to answer.', decoys: ['questionaire', 'questionnare', 'questionairre'] },
+    { level: 3, word: 'accommodate', emoji: '🛏️', hint: 'To provide space or make room for someone.', decoys: ['acommodate', 'accomodate', 'accommadate'] },
+    { level: 3, word: 'embarrassed', emoji: '😳', hint: 'Feeling shy because of a mistake.', decoys: ['embarassed', 'embarrased', 'embarrasd'] },
+    { level: 3, word: 'miscellaneous', emoji: '🗃️', hint: 'A mixed group of different things.', decoys: ['miscelaneous', 'miscellanous', 'misellaneous'] },
+    { level: 3, word: 'pronunciation', emoji: '🗣️', hint: 'The way a word is spoken.', decoys: ['pronounciation', 'pronunciaton', 'pronuniciation'] },
+    { level: 3, word: 'rhythm', emoji: '🥁', hint: 'A repeating pattern of beats in music.', decoys: ['rythm', 'rhythym', 'rhytm'] },
+    { level: 3, word: 'conscience', emoji: '💫', hint: 'The inner voice that helps you choose right from wrong.', decoys: ['concience', 'consience', 'conscence'] },
+    { level: 3, word: 'guarantee', emoji: '✅', hint: 'A promise that something is true or safe.', decoys: ['garantee', 'guarentee', 'guarante'] },
+    { level: 3, word: 'millennium', emoji: '⏳', hint: 'A period of one thousand years.', decoys: ['milennium', 'millenium', 'millennuim'] },
+    { level: 3, word: 'occurrence', emoji: '📌', hint: 'Something that happens or takes place.', decoys: ['occurence', 'occurrance', 'ocurence'] },
+    { level: 3, word: 'pneumonia', emoji: '🫁', hint: 'A serious illness that affects the lungs.', decoys: ['newmonia', 'pnuemonia', 'pneumoia'] }
 ];
 
+let spellingLevel = 1;
 let spellingRoundQuestions = [];
 let spellingIndex = 0;
 let spellingScore = 0;
 
+function setSpellingLevel(level, evt) {
+    spellingLevel = Math.min(3, Math.max(1, Number(level) || 1));
+    document.querySelectorAll('#spellingLevelBar .game-level-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.level) === spellingLevel);
+    });
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    playSound(520);
+    initSpellingGame();
+}
+window.setSpellingLevel = setSpellingLevel;
+
 function initSpellingGame() {
-    spellingRoundQuestions = shuffleArray(spellingWords).slice(0, 5).map(item => {
+    const pool = spellingWords.filter(w => w.level === spellingLevel);
+    // Prefer all 30 words for the chosen level; fall back to shuffle if fewer exist.
+    const chosen = pool.length >= 30
+        ? shuffleArray([...pool]).slice(0, 30)
+        : shuffleArray([...pool, ...spellingWords.filter(w => w.level !== spellingLevel)]).slice(0, 30);
+    spellingRoundQuestions = chosen.map(item => {
         const options = shuffleArray([item.word, ...item.decoys]);
         return { ...item, options, answer: options.indexOf(item.word) };
     });
     spellingIndex = 0;
     spellingScore = 0;
+    const label = document.getElementById('spellingLevelLabel');
+    if (label) label.innerText = (SPELLING_LEVEL_META[spellingLevel] || {}).name || ('L' + spellingLevel);
+    document.querySelectorAll('#spellingLevelBar .game-level-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.level) === spellingLevel);
+    });
     updateSpellingStats();
     renderSpellingQuestion();
 }
@@ -2784,15 +2905,14 @@ window.initSpellingGame = initSpellingGame;
 function updateSpellingStats() {
     const progress = document.getElementById('spellingProgress');
     const score = document.getElementById('spellingScoreDisplay');
-    if (progress) progress.innerText = `${Math.min(spellingIndex + 1, spellingRoundQuestions.length)} / ${spellingRoundQuestions.length || 5}`;
+    if (progress) progress.innerText = `${Math.min(spellingIndex + 1, spellingRoundQuestions.length)} / ${spellingRoundQuestions.length || 30}`;
     if (score) score.innerText = spellingScore;
 }
 
 function speakCurrentSpellingWord() {
     const q = spellingRoundQuestions[spellingIndex];
     if (!q) return;
-    playSound(520);
-    speakText(`${q.word}. ${q.hint}`, 'en-US');
+    speakText(q.word, 'en-US');
 }
 window.speakCurrentSpellingWord = speakCurrentSpellingWord;
 
@@ -2801,21 +2921,23 @@ function renderSpellingQuestion() {
     if (!container) return;
     const total = spellingRoundQuestions.length;
 
-    if (!total) return;
     if (spellingIndex >= total) {
         recordRoundScore('spelling', spellingScore, total);
         const perfect = spellingScore === total;
         if (perfect) unlockBadge('spellingBee');
-        const earnedStars = spellingScore * 5;
+        const earnedStars = spellingScore * 2;
         addStars(earnedStars);
         if (spellingScore >= Math.ceil(total * 0.8)) launchConfetti(35);
-
+        const levelName = (SPELLING_LEVEL_META[spellingLevel] || {}).name || ('Level ' + spellingLevel);
         container.innerHTML = `
             <div class="quiz-result">
                 <div class="quiz-result-icon">${perfect ? '🐝🏆' : '🐝'}</div>
                 <h3>Spelling Bee Complete!</h3>
-                <p>You spelled <strong>${spellingScore} / ${total}</strong> words correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
-                <button class="restart-btn" onclick="initSpellingGame()">🔄 New Spelling Round</button>
+                <p><strong>${levelName}</strong> · You spelled <strong>${spellingScore} / ${total}</strong> words correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
+                <div class="game-finish-actions">
+                    <button class="restart-btn" onclick="initSpellingGame()">🔄 New Spelling Round</button>
+                    ${spellingLevel < 3 ? `<button class="login-submit-btn" onclick="setSpellingLevel(${spellingLevel + 1})">Next Level ➔</button>` : ''}
+                </div>
             </div>`;
         playChime(perfect ? [523, 659, 784, 1046] : [523, 659]);
         return;
@@ -2826,7 +2948,8 @@ function renderSpellingQuestion() {
     container.innerHTML = `
         <div class="quiz-question spelling-question">
             <div class="quiz-question-icon spelling-icon" aria-hidden="true">${q.emoji}</div>
-            <h3>${escapeHtml(q.hint)}</h3>
+            <h3>Spell this word</h3>
+            <p class="learning-hint">${escapeHtml(q.hint)}</p>
             <p class="learning-hint">Tap the speaker, listen carefully, then choose the correct spelling.</p>
             <button class="book-btn audio-btn spelling-listen-btn" onclick="speakCurrentSpellingWord()">🔊 Hear the Word</button>
             <div class="quiz-options spelling-options">
@@ -2840,43 +2963,135 @@ function answerSpelling(choice) {
     if (!q) return;
     const buttons = document.querySelectorAll('#spellingContainer .quiz-option');
     buttons.forEach(btn => btn.onclick = null);
-
     if (buttons[q.answer]) buttons[q.answer].classList.add('correct');
     const correct = choice === q.answer;
     if (correct) {
         spellingScore++;
-        playSound(880, 'sine', 0.2);
+        playSound(800, 'sine', 0.2);
     } else {
+        playSound(200, 'sawtooth', 0.3);
         if (buttons[choice]) buttons[choice].classList.add('incorrect');
-        playSound(180, 'sawtooth', 0.3);
     }
-
     recordAnswer('spelling', correct, `Spell the word for: ${q.hint}`);
     updateSpellingStats();
     setTimeout(() => {
         spellingIndex++;
         renderSpellingQuestion();
-    }, 950);
+    }, 900);
 }
 window.answerSpelling = answerSpelling;
 
+
 // ============================================================
 // GAME 7: SENTENCE BUILDER ROCKET
-// Touch word cards in the right order to practise reading and grammar.
+// Tap word cards in order to build the sentence.
+// 3 levels × 30 sentences each.
 // ============================================================
+const SENTENCE_LEVEL_META = {
+    1: { name: 'Easy', icon: '🌱' },
+    2: { name: 'Medium', icon: '⭐' },
+    3: { name: 'Hard', icon: '🔥' }
+};
+
 const sentenceLessons = [
-    { icon: '🌙', words: ['The', 'Moon', 'shines', 'at', 'night.'], clue: 'A sentence about the Moon.', fact: 'The Moon reflects light from the Sun.' },
-    { icon: '🐬', words: ['Dolphins', 'can', 'talk', 'with', 'clicks.'], clue: 'A sentence about clever ocean animals.', fact: 'Dolphins use clicks and whistles to communicate.' },
-    { icon: '🌱', words: ['Plants', 'need', 'sunlight', 'and', 'water.'], clue: 'A sentence about how plants grow.', fact: 'Leaves use sunlight to make food.' },
-    { icon: '🦁', words: ['A', 'lion', 'is', 'a', 'strong', 'hunter.'], clue: 'A sentence about a big cat.', fact: 'Lions live in groups called prides.' },
-    { icon: '📖', words: ['Reading', 'helps', 'our', 'brains', 'grow.'], clue: 'A sentence about learning.', fact: 'Reading builds words, ideas and imagination.' },
-    { icon: '🌍', words: ['The', 'Earth', 'travels', 'around', 'the', 'Sun.'], clue: 'A sentence about our planet.', fact: 'One trip around the Sun takes one year.' },
-    { icon: '🧲', words: ['Magnets', 'can', 'pull', 'some', 'metals.'], clue: 'A sentence about a science tool.', fact: 'Iron and nickel are attracted to magnets.' },
-    { icon: '🐝', words: ['Bees', 'make', 'sweet', 'golden', 'honey.'], clue: 'A sentence about busy insects.', fact: 'Bees also help flowers make seeds.' },
-    { icon: '🚀', words: ['Astronauts', 'float', 'inside', 'the', 'spacecraft.'], clue: 'A sentence about space explorers.', fact: 'They float because they are in free fall around Earth.' },
-    { icon: '🏔️', words: ['Mount', 'Everest', 'is', 'very', 'tall.'], clue: 'A sentence about the highest mountain.', fact: 'Mount Everest grows a little taller as the plates push together.' }
+    // LEVEL 1 — short simple sentences (30)
+    { level: 1, icon: '🌙', words: ['The', 'Moon', 'shines', 'at', 'night.'], clue: 'A sentence about the Moon.', fact: 'The Moon reflects light from the Sun.' },
+    { level: 1, icon: '🐶', words: ['My', 'dog', 'likes', 'to', 'run.'], clue: 'A sentence about a playful pet.', fact: 'Dogs need walks and kind owners.' },
+    { level: 1, icon: '🍎', words: ['I', 'eat', 'an', 'apple', 'daily.'], clue: 'A healthy snack sentence.', fact: 'Apples are a crunchy fruit full of fiber.' },
+    { level: 1, icon: '☀️', words: ['The', 'Sun', 'is', 'very', 'bright.'], clue: 'A sentence about daytime light.', fact: 'The Sun is a star at the center of our solar system.' },
+    { level: 1, icon: '🐱', words: ['The', 'cat', 'sits', 'on', 'the', 'mat.'], clue: 'A classic short sentence.', fact: 'Cats love warm sunny spots.' },
+    { level: 1, icon: '📚', words: ['I', 'love', 'to', 'read', 'books.'], clue: 'A sentence about reading.', fact: 'Reading helps your brain grow stronger.' },
+    { level: 1, icon: '🌧️', words: ['Rain', 'falls', 'from', 'the', 'clouds.'], clue: 'A weather sentence.', fact: 'Rain helps plants and rivers stay healthy.' },
+    { level: 1, icon: '🚌', words: ['We', 'ride', 'the', 'bus', 'to', 'school.'], clue: 'A school morning sentence.', fact: 'Buses carry many children safely.' },
+    { level: 1, icon: '🐦', words: ['Birds', 'sing', 'in', 'the', 'morning.'], clue: 'A nature sentence.', fact: 'Bird songs help them find friends and homes.' },
+    { level: 1, icon: '🦷', words: ['I', 'brush', 'my', 'teeth', 'twice.'], clue: 'A healthy habit sentence.', fact: 'Brushing keeps smiles strong and clean.' },
+    { level: 1, icon: '⚽', words: ['We', 'play', 'football', 'after', 'lunch.'], clue: 'A playground sentence.', fact: 'Exercise makes bodies strong and happy.' },
+    { level: 1, icon: '🥛', words: ['Milk', 'helps', 'my', 'bones', 'grow.'], clue: 'A food fact sentence.', fact: 'Calcium in milk supports strong bones.' },
+    { level: 1, icon: '🌳', words: ['Trees', 'give', 'us', 'fresh', 'air.'], clue: 'A green Earth sentence.', fact: 'Leaves take in carbon dioxide and release oxygen.' },
+    { level: 1, icon: '🛏️', words: ['I', 'go', 'to', 'bed', 'early.'], clue: 'A sleep sentence.', fact: 'Kids need lots of sleep to grow.' },
+    { level: 1, icon: '🐟', words: ['Fish', 'swim', 'in', 'the', 'sea.'], clue: 'An ocean sentence.', fact: 'Fish use fins and gills to live in water.' },
+    { level: 1, icon: '🎨', words: ['I', 'paint', 'with', 'bright', 'colors.'], clue: 'An art sentence.', fact: 'Mixing colors can make brand-new shades.' },
+    { level: 1, icon: '🎂', words: ['Today', 'is', 'my', 'birthday', 'party.'], clue: 'A celebration sentence.', fact: 'Birthdays mark the day you were born.' },
+    { level: 1, icon: '🧊', words: ['Ice', 'is', 'frozen', 'cold', 'water.'], clue: 'A science sentence.', fact: 'Water freezes at 0 degrees Celsius.' },
+    { level: 1, icon: '🚗', words: ['Cars', 'drive', 'on', 'the', 'road.'], clue: 'A transport sentence.', fact: 'Always look both ways before crossing.' },
+    { level: 1, icon: '🌟', words: ['Stars', 'twinkle', 'in', 'the', 'sky.'], clue: 'A night sky sentence.', fact: 'Stars look tiny because they are very far away.' },
+    { level: 1, icon: '🖐️', words: ['Please', 'wash', 'your', 'hands', 'well.'], clue: 'A clean habits sentence.', fact: 'Clean hands stop germs from spreading.' },
+    { level: 1, icon: '🐝', words: ['Bees', 'make', 'sweet', 'golden', 'honey.'], clue: 'A sentence about busy insects.', fact: 'Bees also help flowers make seeds.' },
+    { level: 1, icon: '🦁', words: ['A', 'lion', 'is', 'a', 'strong', 'hunter.'], clue: 'A sentence about a big cat.', fact: 'Lions live in groups called prides.' },
+    { level: 1, icon: '🌱', words: ['Plants', 'need', 'sunlight', 'and', 'water.'], clue: 'A sentence about how plants grow.', fact: 'Leaves use sunlight to make food.' },
+    { level: 1, icon: '🏠', words: ['Home', 'is', 'where', 'I', 'feel', 'safe.'], clue: 'A cozy feeling sentence.', fact: 'Kind families help homes feel warm.' },
+    { level: 1, icon: '🧊', words: ['Please', 'share', 'your', 'toys', 'kindly.'], clue: 'A friendship sentence.', fact: 'Sharing is a kind way to make friends.' },
+    { level: 1, icon: '👟', words: ['I', 'tie', 'my', 'shoes', 'myself.'], clue: 'An independence sentence.', fact: 'Practice helps new skills become easy.' },
+    { level: 1, icon: '🌈', words: ['A', 'rainbow', 'has', 'many', 'colors.'], clue: 'A weather wonder sentence.', fact: 'Rainbows appear when sunlight hits raindrops.' },
+    { level: 1, icon: '🧩', words: ['Puzzles', 'help', 'my', 'brain', 'think.'], clue: 'A learning sentence.', fact: 'Solving problems builds clever thinking.' },
+    { level: 1, icon: '😊', words: ['Kind', 'words', 'make', 'people', 'smile.'], clue: 'A kindness sentence.', fact: 'Being kind makes everyone feel better.' },
+
+    // LEVEL 2 — medium science & world sentences (30)
+    { level: 2, icon: '🐬', words: ['Dolphins', 'can', 'talk', 'with', 'clicks.'], clue: 'A sentence about clever ocean animals.', fact: 'Dolphins use clicks and whistles to communicate.' },
+    { level: 2, icon: '🌍', words: ['The', 'Earth', 'travels', 'around', 'the', 'Sun.'], clue: 'A sentence about our planet.', fact: 'One trip around the Sun takes one year.' },
+    { level: 2, icon: '🧲', words: ['Magnets', 'can', 'pull', 'some', 'metals.'], clue: 'A sentence about a science tool.', fact: 'Iron and nickel are attracted to magnets.' },
+    { level: 2, icon: '🚀', words: ['Astronauts', 'float', 'inside', 'the', 'spacecraft.'], clue: 'A sentence about space explorers.', fact: 'They float because they are in free fall around Earth.' },
+    { level: 2, icon: '🏔️', words: ['Mount', 'Everest', 'is', 'very', 'tall.'], clue: 'A sentence about the highest mountain.', fact: 'Mount Everest grows a little taller as the plates push together.' },
+    { level: 2, icon: '📖', words: ['Reading', 'helps', 'our', 'brains', 'grow.'], clue: 'A sentence about learning.', fact: 'Reading builds words, ideas and imagination.' },
+    { level: 2, icon: '🌋', words: ['Hot', 'lava', 'flows', 'from', 'a', 'volcano.'], clue: 'A geology sentence.', fact: 'Lava cools and hardens into new rock.' },
+    { level: 2, icon: '🧬', words: ['Our', 'bodies', 'are', 'made', 'of', 'cells.'], clue: 'A biology sentence.', fact: 'Cells are the tiny building blocks of life.' },
+    { level: 2, icon: '🌊', words: ['Ocean', 'waves', 'crash', 'on', 'the', 'shore.'], clue: 'A coastal sentence.', fact: 'Waves are mostly powered by the wind.' },
+    { level: 2, icon: '🦋', words: ['A', 'caterpillar', 'becomes', 'a', 'butterfly.'], clue: 'A life-cycle sentence.', fact: 'This change is called metamorphosis.' },
+    { level: 2, icon: '🗺️', words: ['Maps', 'help', 'us', 'find', 'new', 'places.'], clue: 'A geography tool sentence.', fact: 'Compass directions are north, south, east and west.' },
+    { level: 2, icon: '⚡', words: ['Lightning', 'is', 'a', 'giant', 'electric', 'spark.'], clue: 'A weather science sentence.', fact: 'Thunder is the sound that lightning makes.' },
+    { level: 2, icon: '🧊', words: ['Antarctica', 'is', 'covered', 'in', 'thick', 'ice.'], clue: 'A polar sentence.', fact: 'It is the coldest continent on Earth.' },
+    { level: 2, icon: '🦒', words: ['Giraffes', 'have', 'the', 'longest', 'necks.'], clue: 'An animal fact sentence.', fact: 'Long necks help giraffes reach high leaves.' },
+    { level: 2, icon: '🏺', words: ['Ancient', 'Egypt', 'built', 'giant', 'stone', 'pyramids.'], clue: 'A history sentence.', fact: 'Pyramids were tombs for pharaohs.' },
+    { level: 2, icon: '🧪', words: ['Scientists', 'test', 'ideas', 'with', 'careful', 'experiments.'], clue: 'A lab sentence.', fact: 'A good experiment can be repeated by others.' },
+    { level: 2, icon: '🌬️', words: ['Wind', 'is', 'moving', 'air', 'around', 'us.'], clue: 'A weather sentence.', fact: 'Wind can turn turbines to make electricity.' },
+    { level: 2, icon: '🦴', words: ['Your', 'skeleton', 'supports', 'your', 'whole', 'body.'], clue: 'A body science sentence.', fact: 'Adults have 206 bones in their skeleton.' },
+    { level: 2, icon: '🛰️', words: ['Satellites', 'circle', 'Earth', 'high', 'above', 'us.'], clue: 'A technology sentence.', fact: 'Satellites help with weather maps and GPS.' },
+    { level: 2, icon: '🐪', words: ['Camels', 'can', 'live', 'in', 'hot', 'deserts.'], clue: 'A habitat sentence.', fact: 'Camels store fat in their humps for energy.' },
+    { level: 2, icon: '🎼', words: ['Music', 'uses', 'notes', 'rhythm', 'and', 'melody.'], clue: 'An arts sentence.', fact: 'Practice helps musicians play more smoothly.' },
+    { level: 2, icon: '🧠', words: ['Sleep', 'helps', 'your', 'brain', 'remember', 'lessons.'], clue: 'A healthy mind sentence.', fact: 'Dreams often happen during deep sleep cycles.' },
+    { level: 2, icon: '🏝️', words: ['Mauritius', 'is', 'an', 'island', 'in', 'the', 'ocean.'], clue: 'A local geography sentence.', fact: 'Mauritius sits in the Indian Ocean.' },
+    { level: 2, icon: '♻️', words: ['Recycling', 'helps', 'protect', 'our', 'planet.'], clue: 'An Earth care sentence.', fact: 'Paper, plastic and metal can often be reused.' },
+    { level: 2, icon: '👁️', words: ['Your', 'eyes', 'send', 'pictures', 'to', 'your', 'brain.'], clue: 'A senses sentence.', fact: 'The pupil opens wider in the dark.' },
+    { level: 2, icon: '🌾', words: ['Farmers', 'grow', 'food', 'for', 'whole', 'communities.'], clue: 'A community sentence.', fact: 'Crops need soil, water and sunlight.' },
+    { level: 2, icon: '🧭', words: ['Explorers', 'used', 'compasses', 'to', 'find', 'directions.'], clue: 'An adventure history sentence.', fact: 'A compass needle points toward magnetic north.' },
+    { level: 2, icon: '🐘', words: ['Elephants', 'are', 'the', 'largest', 'land', 'animals.'], clue: 'A wildlife sentence.', fact: 'Elephants use trunks like a hand and a nose.' },
+    { level: 2, icon: '🔥', words: ['Fire', 'needs', 'heat', 'fuel', 'and', 'oxygen.'], clue: 'A safety science sentence.', fact: 'Never play with matches or lighters.' },
+    { level: 2, icon: '🌕', words: ['The', 'Moon', 'changes', 'shape', 'each', 'night.'], clue: 'An astronomy sentence.', fact: 'Moon phases are caused by sunlight and shadows.' },
+
+    // LEVEL 3 — longer advanced sentences (30)
+    { level: 3, icon: '🔬', words: ['Careful', 'scientists', 'observe', 'nature', 'and', 'record', 'every', 'detail.'], clue: 'A research habits sentence.', fact: 'Good notes help other scientists learn from you.' },
+    { level: 3, icon: '🌐', words: ['The', 'internet', 'connects', 'computers', 'across', 'the', 'whole', 'world.'], clue: 'A technology sentence.', fact: 'Always stay kind and safe when you go online.' },
+    { level: 3, icon: '🦕', words: ['Fossils', 'show', 'us', 'animals', 'that', 'lived', 'millions', 'of', 'years', 'ago.'], clue: 'A paleontology sentence.', fact: 'Most fossils form when bones are buried in mud or sand.' },
+    { level: 3, icon: '🌪️', words: ['A', 'tornado', 'is', 'a', 'spinning', 'column', 'of', 'powerful', 'wind.'], clue: 'An extreme weather sentence.', fact: 'Tornadoes can form under strong thunderstorms.' },
+    { level: 3, icon: '🏛️', words: ['Ancient', 'Rome', 'built', 'roads', 'that', 'linked', 'many', 'cities', 'together.'], clue: 'A world history sentence.', fact: 'Some Roman roads are still used today.' },
+    { level: 3, icon: '🧬', words: ['DNA', 'carries', 'the', 'instructions', 'that', 'shape', 'living', 'things.'], clue: 'A genetics sentence.', fact: 'DNA looks like a twisted ladder called a double helix.' },
+    { level: 3, icon: '🛰️', words: ['Weather', 'satellites', 'watch', 'clouds', 'and', 'storms', 'from', 'space.'], clue: 'An Earth observation sentence.', fact: 'Forecasts help people prepare for rain and wind.' },
+    { level: 3, icon: '🏞️', words: ['Rivers', 'carve', 'valleys', 'as', 'they', 'flow', 'toward', 'the', 'sea.'], clue: 'A landforms sentence.', fact: 'Moving water is a powerful shaper of Earth.' },
+    { level: 3, icon: '🧠', words: ['Practice', 'and', 'patience', 'help', 'children', 'master', 'difficult', 'skills.'], clue: 'A growth mindset sentence.', fact: 'Mistakes are useful steps on the path to learning.' },
+    { level: 3, icon: '🔭', words: ['Telescopes', 'make', 'distant', 'planets', 'and', 'stars', 'appear', 'much', 'closer.'], clue: 'An astronomy tools sentence.', fact: 'Galileo used an early telescope to study Jupiter.' },
+    { level: 3, icon: '🪸', words: ['Coral', 'reefs', 'are', 'busy', 'underwater', 'homes', 'for', 'many', 'fish.'], clue: 'An ocean habitat sentence.', fact: 'Reefs need clean warm water to stay healthy.' },
+    { level: 3, icon: '⚖️', words: ['Fair', 'rules', 'help', 'everyone', 'feel', 'safe', 'and', 'respected.'], clue: 'A citizenship sentence.', fact: 'Listening carefully is part of being fair.' },
+    { level: 3, icon: '🧾', words: ['Writers', 'choose', 'clear', 'words', 'so', 'readers', 'understand', 'their', 'ideas.'], clue: 'A language arts sentence.', fact: 'Editing makes writing stronger and easier to read.' },
+    { level: 3, icon: '🧭', words: ['Brave', 'explorers', 'mapped', 'unknown', 'lands', 'with', 'compasses', 'and', 'courage.'], clue: 'An exploration sentence.', fact: 'Maps improve when explorers share careful measurements.' },
+    { level: 3, icon: '🧪', words: ['A', 'hypothesis', 'is', 'a', 'smart', 'guess', 'you', 'can', 'test.'], clue: 'A scientific method sentence.', fact: 'Experiments tell us if a hypothesis is likely true.' },
+    { level: 3, icon: '🌋', words: ['Volcanic', 'islands', 'can', 'form', 'when', 'lava', 'cools', 'above', 'the', 'ocean.'], clue: 'An Earth science sentence.', fact: 'Hawaii grew from undersea volcanoes over time.' },
+    { level: 3, icon: '📚', words: ['Libraries', 'keep', 'stories', 'knowledge', 'and', 'quiet', 'places', 'to', 'think.'], clue: 'A community sentence.', fact: 'Borrowing books lets many people share the same story.' },
+    { level: 3, icon: '🐘', words: ['Elephant', 'families', 'care', 'for', 'calves', 'and', 'travel', 'long', 'distances.'], clue: 'An animal behavior sentence.', fact: 'Elephants remember watering holes for many years.' },
+    { level: 3, icon: '🧮', words: ['Multiplication', 'is', 'a', 'fast', 'way', 'to', 'add', 'equal', 'groups.'], clue: 'A math idea sentence.', fact: 'Times tables help you solve bigger problems quickly.' },
+    { level: 3, icon: '🎭', words: ['Actors', 'use', 'voice', 'movement', 'and', 'emotion', 'to', 'tell', 'stories.'], clue: 'A performing arts sentence.', fact: 'Practice and teamwork make plays exciting.' },
+    { level: 3, icon: '🌍', words: ['Climate', 'describes', 'the', 'usual', 'weather', 'of', 'a', 'place', 'over', 'many', 'years.'], clue: 'A climate science sentence.', fact: 'Weather can change daily, but climate changes slowly.' },
+    { level: 3, icon: '🛡️', words: ['Trusted', 'adults', 'help', 'children', 'stay', 'safe', 'online', 'and', 'offline.'], clue: 'A safety sentence.', fact: 'If something feels wrong, tell a grown-up you trust.' },
+    { level: 3, icon: '🚀', words: ['Space', 'probes', 'send', 'photos', 'and', 'data', 'from', 'distant', 'planets.'], clue: 'A space exploration sentence.', fact: 'Robots can visit places too far or too dangerous for people.' },
+    { level: 3, icon: '🌾', words: ['Healthy', 'soil', 'supports', 'roots', 'insects', 'and', 'the', 'food', 'we', 'eat.'], clue: 'An agriculture sentence.', fact: 'Compost returns nutrients to the soil.' },
+    { level: 3, icon: '🎵', words: ['A', 'melody', 'is', 'a', 'memorable', 'line', 'of', 'musical', 'notes.'], clue: 'A music theory sentence.', fact: 'Harmony happens when different notes sound good together.' },
+    { level: 3, icon: '🧊', words: ['Glaciers', 'are', 'huge', 'rivers', 'of', 'ice', 'that', 'move', 'very', 'slowly.'], clue: 'A cryosphere sentence.', fact: 'Melting glaciers can raise sea levels over time.' },
+    { level: 3, icon: '🧙', words: ['Myths', 'are', 'old', 'stories', 'that', 'explain', 'nature', 'and', 'human', 'values.'], clue: 'A literature sentence.', fact: 'Every culture has myths that teach lessons.' },
+    { level: 3, icon: '🩺', words: ['Doctors', 'listen', 'carefully', 'before', 'they', 'choose', 'the', 'best', 'treatment.'], clue: 'A health careers sentence.', fact: 'Asking clear questions helps patients feel understood.' },
+    { level: 3, icon: '🌌', words: ['Our', 'galaxy', 'contains', 'billions', 'of', 'stars', 'and', 'countless', 'planets.'], clue: 'A cosmos sentence.', fact: 'Earth belongs to the Milky Way galaxy.' },
+    { level: 3, icon: '🤝', words: ['Teamwork', 'means', 'sharing', 'ideas', 'and', 'helping', 'each', 'other', 'succeed.'], clue: 'A cooperation sentence.', fact: 'Great projects often need many kind helpers.' }
 ];
 
+let sentenceLevel = 1;
 let sentenceRoundLessons = [];
 let sentenceIndex = 0;
 let sentenceScore = 0;
@@ -2885,10 +3100,29 @@ let sentenceAnswerIds = [];
 let sentenceLocked = false;
 let sentenceFeedback = '';
 
+function setSentenceLevel(level, evt) {
+    sentenceLevel = Math.min(3, Math.max(1, Number(level) || 1));
+    document.querySelectorAll('#sentenceLevelBar .game-level-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.level) === sentenceLevel);
+    });
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    playSound(520);
+    initSentenceGame();
+}
+window.setSentenceLevel = setSentenceLevel;
+
 function initSentenceGame() {
-    sentenceRoundLessons = shuffleArray(sentenceLessons).slice(0, 5);
+    const pool = sentenceLessons.filter(s => s.level === sentenceLevel);
+    sentenceRoundLessons = pool.length >= 30
+        ? shuffleArray([...pool]).slice(0, 30)
+        : shuffleArray([...pool, ...sentenceLessons.filter(s => s.level !== sentenceLevel)]).slice(0, 30);
     sentenceIndex = 0;
     sentenceScore = 0;
+    const label = document.getElementById('sentenceLevelLabel');
+    if (label) label.innerText = (SENTENCE_LEVEL_META[sentenceLevel] || {}).name || ('L' + sentenceLevel);
+    document.querySelectorAll('#sentenceLevelBar .game-level-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.level) === sentenceLevel);
+    });
     startSentenceRound();
 }
 window.initSentenceGame = initSentenceGame;
@@ -2906,13 +3140,12 @@ function startSentenceRound() {
 function updateSentenceStats() {
     const progress = document.getElementById('sentenceProgress');
     const score = document.getElementById('sentenceScoreDisplay');
-    if (progress) progress.innerText = `${Math.min(sentenceIndex + 1, sentenceRoundLessons.length)} / ${sentenceRoundLessons.length || 5}`;
+    if (progress) progress.innerText = `${Math.min(sentenceIndex + 1, sentenceRoundLessons.length)} / ${sentenceRoundLessons.length || 30}`;
     if (score) score.innerText = sentenceScore;
 }
 
 function moveSentenceToken(tokenId, toAnswer) {
     if (sentenceLocked) return;
-    playSound(toAnswer ? 520 : 360);
     if (toAnswer) {
         sentencePool = sentencePool.filter(id => id !== tokenId);
         sentenceAnswerIds.push(tokenId);
@@ -2927,7 +3160,6 @@ window.moveSentenceToken = moveSentenceToken;
 
 function clearSentenceAnswer() {
     if (sentenceLocked) return;
-    playSound(300);
     sentencePool.push(...sentenceAnswerIds);
     sentenceAnswerIds = [];
     sentenceFeedback = '';
@@ -2938,7 +3170,6 @@ window.clearSentenceAnswer = clearSentenceAnswer;
 function speakSentenceLesson() {
     const q = sentenceRoundLessons[sentenceIndex];
     if (!q) return;
-    playSound(520);
     speakText(`${q.clue} Build the sentence by tapping the word cards.`, 'en-US');
 }
 window.speakSentenceLesson = speakSentenceLesson;
@@ -2947,22 +3178,24 @@ function renderSentenceGame() {
     const container = document.getElementById('sentenceContainer');
     if (!container) return;
     const total = sentenceRoundLessons.length;
-    if (!total) return;
 
     if (sentenceIndex >= total) {
         recordRoundScore('sentence', sentenceScore, total);
         const perfect = sentenceScore === total;
         if (perfect) unlockBadge('sentenceStar');
-        const earnedStars = sentenceScore * 5;
+        const earnedStars = sentenceScore * 2;
         addStars(earnedStars);
         if (sentenceScore >= Math.ceil(total * 0.8)) launchConfetti(35);
-
+        const levelName = (SENTENCE_LEVEL_META[sentenceLevel] || {}).name || ('Level ' + sentenceLevel);
         container.innerHTML = `
             <div class="quiz-result">
-                <div class="quiz-result-icon">${perfect ? '📝🏆' : '🚀'}</div>
+                <div class="quiz-result-icon">${perfect ? '📝🚀' : '📝'}</div>
                 <h3>Sentence Builder Complete!</h3>
-                <p>You built <strong>${sentenceScore} / ${total}</strong> sentences correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
-                <button class="restart-btn" onclick="initSentenceGame()">🔄 Build More Sentences</button>
+                <p><strong>${levelName}</strong> · You built <strong>${sentenceScore} / ${total}</strong> sentences correctly and earned <strong>${earnedStars} stars</strong> ⭐.</p>
+                <div class="game-finish-actions">
+                    <button class="restart-btn" onclick="initSentenceGame()">🔄 Build More Sentences</button>
+                    ${sentenceLevel < 3 ? `<button class="login-submit-btn" onclick="setSentenceLevel(${sentenceLevel + 1})">Next Level ➔</button>` : ''}
+                </div>
             </div>`;
         playChime(perfect ? [523, 659, 784, 1046] : [523, 659]);
         return;
@@ -2982,20 +3215,17 @@ function renderSentenceGame() {
             <div class="quiz-question-icon sentence-icon" aria-hidden="true">${q.icon}</div>
             <h3>${escapeHtml(q.clue)}</h3>
             <button class="book-btn audio-btn" onclick="speakSentenceLesson()">🔊 Hear the Mission</button>
-
             <div class="sentence-answer-box" aria-label="Your sentence">${answerMarkup}</div>
             <div class="sentence-word-bank" aria-label="Word choices">${bankMarkup}</div>
-
             <div class="sentence-actions">
                 <button class="restart-btn" type="button" onclick="clearSentenceAnswer()" ${sentenceLocked || !sentenceAnswerIds.length ? 'disabled' : ''}>↩️ Clear</button>
                 <button class="login-submit-btn sentence-check-btn" type="button" onclick="checkSentenceAnswer()" ${sentenceLocked || sentencePool.length || !sentenceAnswerIds.length ? 'disabled' : ''}>✅ Check Sentence</button>
             </div>
-
             ${sentenceFeedback ? `<div class="sentence-feedback ${sentenceLocked ? (sentenceIsCorrect() ? 'good' : 'try') : ''}">${escapeHtml(sentenceFeedback)}</div>` : ''}
             ${sentenceLocked ? `
                 <div class="sentence-teach-box">
                     <strong>Correct sentence:</strong> ${escapeHtml(q.words.join(' '))}<br>
-                    <span>⭐ ${escapeHtml(q.fact)}</span>
+                    <em>${escapeHtml(q.fact || '')}</em>
                 </div>
                 <button class="restart-btn" type="button" onclick="nextSentenceRound()">${sentenceIndex + 1 >= total ? 'Finish Round 🏁' : 'Next Sentence ➔'}</button>
             ` : ''}
@@ -3013,37 +3243,254 @@ function checkSentenceAnswer() {
     if (!q || !sentenceAnswerIds.length || sentencePool.length) {
         sentenceFeedback = 'Use every word card before checking!';
         renderSentenceGame();
-        playSound(180, 'sawtooth', 0.2);
         return;
     }
-
     const correct = sentenceIsCorrect();
     sentenceLocked = true;
     if (correct) {
         sentenceScore++;
         sentenceFeedback = 'Wonderful! You built the sentence correctly. 🎉';
-        playChime([523, 659, 784]);
+        playSound(800, 'sine', 0.2);
     } else {
         sentenceFeedback = 'Almost! Read the correct sentence slowly and try another one. 💪';
-        playSound(180, 'sawtooth', 0.3);
+        playSound(200, 'sawtooth', 0.3);
     }
     recordAnswer('sentence', correct, `Build: ${q.clue}`);
     updateSentenceStats();
     renderSentenceGame();
-
-    if (!correct) {
-        // Hearing the target is a quick, gentle correction for early readers.
-        setTimeout(() => speakText(q.words.join(' '), 'en-US'), 450);
-    }
 }
 window.checkSentenceAnswer = checkSentenceAnswer;
 
 function nextSentenceRound() {
-    playSound(450);
     sentenceIndex++;
     startSentenceRound();
 }
 window.nextSentenceRound = nextSentenceRound;
+
+
+// ============================================================
+// GAME 8: MULTIPLICATION TIMES TABLES
+// Kid types their own answer. Auto-checked for practice stars,
+// and also sent to the teacher for review in Reports.
+// ============================================================
+const TABLES_FOCUS_LABELS = {
+    2: '×2 table', 3: '×3 table', 4: '×4 table', 5: '×5 table',
+    6: '×6 table', 7: '×7 table', 8: '×8 table', 9: '×9 table',
+    10: '×10 table', 12: '×12 table', mix: 'Mixed tables'
+};
+
+let tablesFocus = 2;
+let tablesRound = [];
+let tablesIndex = 0;
+let tablesSubmitted = 0;
+let tablesAnswersLog = []; // {q, kidAnswer, correctAnswer, isCorrect}
+let tablesLocked = false;
+
+function setTablesFocus(focus, evt) {
+    tablesFocus = focus === 'mix' ? 'mix' : (Number(focus) || 2);
+    document.querySelectorAll('#tablesLevelBar .game-level-btn').forEach(btn => {
+        const v = btn.dataset.table;
+        const active = (v === 'mix' && tablesFocus === 'mix') || String(v) === String(tablesFocus);
+        btn.classList.toggle('active', active);
+    });
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    playSound(520);
+    initTablesGame();
+}
+window.setTablesFocus = setTablesFocus;
+
+function buildTablesRound(focus, count = 12) {
+    const list = [];
+    const used = new Set();
+    let guard = 0;
+    while (list.length < count && guard < 200) {
+        guard++;
+        let a, b;
+        if (focus === 'mix') {
+            a = Math.floor(Math.random() * 11) + 2; // 2-12
+            b = Math.floor(Math.random() * 12) + 1; // 1-12
+        } else {
+            a = Number(focus) || 2;
+            b = Math.floor(Math.random() * 12) + 1;
+        }
+        const key = `${a}x${b}`;
+        if (used.has(key)) continue;
+        used.add(key);
+        list.push({
+            a, b,
+            answer: a * b,
+            q: `What is ${a} × ${b}?`,
+            icon: '✖️'
+        });
+    }
+    return list;
+}
+
+function initTablesGame() {
+    tablesRound = buildTablesRound(tablesFocus, 12);
+    tablesIndex = 0;
+    tablesSubmitted = 0;
+    tablesAnswersLog = [];
+    tablesLocked = false;
+    document.querySelectorAll('#tablesLevelBar .game-level-btn').forEach(btn => {
+        const v = btn.dataset.table;
+        const active = (v === 'mix' && tablesFocus === 'mix') || String(v) === String(tablesFocus);
+        btn.classList.toggle('active', active);
+    });
+    updateTablesStats();
+    renderTablesQuestion();
+}
+window.initTablesGame = initTablesGame;
+
+function updateTablesStats() {
+    const progress = document.getElementById('tablesProgress');
+    const score = document.getElementById('tablesScoreDisplay');
+    if (progress) progress.innerText = `${Math.min(tablesIndex + 1, tablesRound.length)} / ${tablesRound.length || 12}`;
+    if (score) score.innerText = tablesSubmitted;
+}
+
+function renderTablesQuestion() {
+    const container = document.getElementById('tablesContainer');
+    if (!container) return;
+    const total = tablesRound.length;
+    const focusLabel = TABLES_FOCUS_LABELS[tablesFocus] || 'Times tables';
+
+    if (tablesIndex >= total) {
+        // Save a teacher-review packet with the kid's typed answers.
+        const correctCount = tablesAnswersLog.filter(r => r.isCorrect).length;
+        recordRoundScore('tables', correctCount, total);
+        saveTablesSubmissionForTeacher({
+            focus: tablesFocus,
+            focusLabel,
+            answers: tablesAnswersLog,
+            correctCount,
+            total,
+            at: Date.now()
+        });
+        if (correctCount === total) unlockBadge('tablesChamp');
+        const earnedStars = correctCount * 3;
+        addStars(earnedStars);
+        if (correctCount >= Math.ceil(total * 0.8)) launchConfetti(30);
+        container.innerHTML = `
+            <div class="quiz-result">
+                <div class="quiz-result-icon">${correctCount === total ? '✖️🏆' : '✖️'}</div>
+                <h3>Times Tables Set Complete!</h3>
+                <p><strong>${escapeHtml(focusLabel)}</strong></p>
+                <p>You typed <strong>${tablesSubmitted}</strong> answers.
+                   Practice check: <strong>${correctCount} / ${total}</strong> look correct.
+                   Earned <strong>${earnedStars} stars</strong> ⭐.</p>
+                <p class="tables-teacher-note">👩‍🏫 Your answers were sent to the teacher for checking in <strong>Reports</strong>.</p>
+                <div class="tables-review-list">
+                    ${tablesAnswersLog.map(r => `
+                        <div class="tables-review-row ${r.isCorrect ? 'ok' : 'bad'}">
+                            <span>${escapeHtml(r.q)}</span>
+                            <span>You: <strong>${escapeHtml(String(r.kidAnswer))}</strong></span>
+                            <span>${r.isCorrect ? '✅' : '❌ correct: ' + r.correctAnswer}</span>
+                        </div>`).join('')}
+                </div>
+                <button class="restart-btn" onclick="initTablesGame()">🔄 New Times Tables Set</button>
+            </div>`;
+        playChime(correctCount === total ? [523, 659, 784, 1046] : [523, 659]);
+        return;
+    }
+
+    const q = tablesRound[tablesIndex];
+    tablesLocked = false;
+    updateTablesStats();
+    container.innerHTML = `
+        <div class="quiz-question tables-question">
+            <div class="quiz-question-icon" aria-hidden="true">${q.icon}</div>
+            <p class="tables-focus-chip">${escapeHtml(focusLabel)} · Question ${tablesIndex + 1} of ${total}</p>
+            <h3 class="tables-sum">${q.a} × ${q.b} = ?</h3>
+            <p class="learning-hint">Type the answer yourself — no multiple choice. Your teacher will review it.</p>
+            <form class="tables-answer-form" onsubmit="submitTablesAnswer(event)">
+                <label class="tables-input-label" for="tablesAnswerInput">Your answer</label>
+                <input id="tablesAnswerInput" class="tables-answer-input" type="number" inputmode="numeric" autocomplete="off" required placeholder="Type here…" aria-label="Type your multiplication answer">
+                <button class="login-submit-btn tables-submit-btn" type="submit">Submit Answer ➡️</button>
+            </form>
+            <div id="tablesLiveFeedback" class="tables-live-feedback" aria-live="polite"></div>
+        </div>`;
+    setTimeout(() => {
+        const input = document.getElementById('tablesAnswerInput');
+        if (input) input.focus();
+    }, 50);
+}
+
+function submitTablesAnswer(event) {
+    if (event) event.preventDefault();
+    if (tablesLocked) return;
+    const q = tablesRound[tablesIndex];
+    if (!q) return;
+    const input = document.getElementById('tablesAnswerInput');
+    const raw = String(input?.value ?? '').trim();
+    if (raw === '' || Number.isNaN(Number(raw))) {
+        showToast('Please type a number answer.', '✖️', 2200);
+        return;
+    }
+    tablesLocked = true;
+    const kidAnswer = Number(raw);
+    const isCorrect = kidAnswer === q.answer;
+    tablesSubmitted++;
+    tablesAnswersLog.push({
+        q: q.q,
+        a: q.a,
+        b: q.b,
+        kidAnswer,
+        correctAnswer: q.answer,
+        isCorrect
+    });
+    recordAnswer('tables', isCorrect, q.q, {
+        kidAnswer,
+        correctAnswer: q.answer,
+        needsReview: true
+    });
+
+    const fb = document.getElementById('tablesLiveFeedback');
+    if (fb) {
+        fb.className = 'tables-live-feedback ' + (isCorrect ? 'good' : 'try');
+        fb.innerHTML = isCorrect
+            ? '✅ Nice! That looks right. Moving on…'
+            : `💪 Saved for teacher check. Practice hint: ${q.a} × ${q.b} = <strong>${q.answer}</strong>`;
+    }
+    if (input) input.disabled = true;
+    const btn = document.querySelector('.tables-submit-btn');
+    if (btn) btn.disabled = true;
+    playSound(isCorrect ? 800 : 280, isCorrect ? 'sine' : 'sawtooth', 0.2);
+    updateTablesStats();
+    setTimeout(() => {
+        tablesIndex++;
+        renderTablesQuestion();
+    }, isCorrect ? 700 : 1400);
+}
+window.submitTablesAnswer = submitTablesAnswer;
+
+async function saveTablesSubmissionForTeacher(packet) {
+    if (!currentActiveId || currentRole !== 'kid') return;
+    try {
+        if (!quizStats._tablesReviews) quizStats._tablesReviews = [];
+        quizStats._tablesReviews.unshift({
+            ...packet,
+            kidId: currentActiveId,
+            kidName: (getActiveKidProfile() || {}).name || 'Explorer'
+        });
+        quizStats._tablesReviews = quizStats._tablesReviews.slice(0, 20);
+        // Also keep a compact teacher queue entry on recent answers.
+        if (!quizStats._recent) quizStats._recent = [];
+        quizStats._recent.unshift({
+            activity: 'tables',
+            correct: packet.correctCount === packet.total,
+            q: `${packet.focusLabel}: ${packet.correctCount}/${packet.total} typed answers`,
+            at: packet.at || Date.now(),
+            kidAnswer: `${packet.correctCount}/${packet.total}`,
+            needsReview: true,
+            reviewId: packet.at
+        });
+        quizStats._recent = quizStats._recent.slice(0, 40);
+        await saveQuizStats();
+    } catch (e) {
+        console.warn('[KidZone] tables teacher save failed:', e && (e.message || e));
+    }
+}
 
 // ============================================================
 // QUIZ RESULT TRACKING (per kid, per activity)
@@ -3054,6 +3501,7 @@ const ACTIVITY_LABELS = {
     trivia:   { icon: '🧠', name: 'Trivia Quiz' },
     spelling: { icon: '🐝', name: 'Spelling Bee Adventure' },
     sentence: { icon: '📝', name: 'Sentence Builder Rocket' },
+    tables:   { icon: '✖️', name: 'Times Tables Practice' },
     mauritius:{ icon: '🇲🇺', name: 'Mauritius History' },
     body:     { icon: '🧍', name: 'Body Parts Explorer' },
     planet:   { icon: '🪐', name: 'Planet Quiz' },
@@ -3072,7 +3520,7 @@ function blankActivityStat() {
     return { correct: 0, wrong: 0, attempts: 0, best: 0, lastPlayed: null };
 }
 
-function recordAnswer(activity, isCorrect, questionText = '') {
+function recordAnswer(activity, isCorrect, questionText = '', extra = null) {
     if (!quizStats[activity]) quizStats[activity] = blankActivityStat();
     const st = quizStats[activity];
     st.attempts++;
@@ -3080,10 +3528,16 @@ function recordAnswer(activity, isCorrect, questionText = '') {
     st.lastPlayed = Date.now();
 
     if (!quizStats._recent) quizStats._recent = [];
-    quizStats._recent.unshift({
+    const entry = {
         activity, correct: !!isCorrect,
         q: String(questionText).slice(0, 90), at: Date.now()
-    });
+    };
+    if (extra && typeof extra === 'object') {
+        if (extra.kidAnswer !== undefined) entry.kidAnswer = String(extra.kidAnswer).slice(0, 40);
+        if (extra.correctAnswer !== undefined) entry.correctAnswer = String(extra.correctAnswer).slice(0, 40);
+        if (extra.needsReview) entry.needsReview = true;
+    }
+    quizStats._recent.unshift(entry);
     quizStats._recent = quizStats._recent.slice(0, 40);
     saveQuizStats();
 }
@@ -3310,12 +3764,51 @@ function renderKidReport(kidId) {
         const meta = ACTIVITY_LABELS[r.activity] || { icon: '❔', name: r.activity };
         const when = new Date(r.at).toLocaleString(undefined,
             { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const typed = r.kidAnswer !== undefined
+            ? `<span class="rr-typed">Kid wrote: <strong>${escapeHtml(String(r.kidAnswer))}</strong>${r.correctAnswer !== undefined ? ` · answer: ${escapeHtml(String(r.correctAnswer))}` : ''}${r.needsReview ? ' · 👀 teacher check' : ''}</span>`
+            : '';
         return `<li class="${r.correct ? 'rr-ok' : 'rr-bad'}">
                     <span class="rr-mark">${r.correct ? '✅' : '❌'}</span>
-                    <span class="rr-q">${meta.icon} ${escapeHtml(r.q || meta.name)}</span>
+                    <span class="rr-q">${meta.icon} ${escapeHtml(r.q || meta.name)}${typed}</span>
                     <span class="rr-when">${when}</span>
                 </li>`;
     }).join('') : '<li class="rep-loading">No answers recorded yet.</li>';
+
+    const tablesReviews = Array.isArray(stats._tablesReviews) ? stats._tablesReviews.slice(0, 6) : [];
+    const tablesReviewHtml = tablesReviews.length ? tablesReviews.map((pack, idx) => {
+        const when = new Date(pack.at || Date.now()).toLocaleString(undefined,
+            { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const teacherNote = pack.teacherNote ? escapeHtml(pack.teacherNote) : '';
+        const teacherMark = pack.teacherMark || '';
+        const rows = (pack.answers || []).map(a => `
+            <div class="tables-teacher-row ${a.isCorrect ? 'ok' : 'bad'}">
+                <span>${escapeHtml(a.q || '')}</span>
+                <span>Kid: <strong>${escapeHtml(String(a.kidAnswer))}</strong></span>
+                <span>${a.isCorrect ? '✅ auto-ok' : '❌ expected ' + escapeHtml(String(a.correctAnswer))}</span>
+            </div>`).join('');
+        return `
+            <article class="tables-teacher-card">
+                <header>
+                    <strong>✖️ ${escapeHtml(pack.focusLabel || 'Times Tables')}</strong>
+                    <small>${when} · ${pack.correctCount || 0}/${pack.total || 0} auto-correct</small>
+                </header>
+                <div class="tables-teacher-rows">${rows}</div>
+                <div class="tables-teacher-actions">
+                    <label>Teacher mark:
+                        <select id="tm_mark_${kidId}_${idx}">
+                            <option value="">— choose —</option>
+                            <option value="excellent" ${teacherMark === 'excellent' ? 'selected' : ''}>🌟 Excellent</option>
+                            <option value="good" ${teacherMark === 'good' ? 'selected' : ''}>👍 Good</option>
+                            <option value="practice" ${teacherMark === 'practice' ? 'selected' : ''}>💪 Needs practice</option>
+                            <option value="retry" ${teacherMark === 'retry' ? 'selected' : ''}>🔁 Try again</option>
+                        </select>
+                    </label>
+                    <input id="tm_note_${kidId}_${idx}" maxlength="160" placeholder="Optional note for the kid..." value="${teacherNote}">
+                    <button class="book-btn" type="button" onclick="saveTablesTeacherReview('${kidId}', ${idx})">Save teacher check ✅</button>
+                </div>
+                ${teacherMark ? `<p class="tables-teacher-saved">Saved mark: <strong>${escapeHtml(teacherMark)}</strong>${teacherNote ? ' · ' + teacherNote : ''}</p>` : '<p class="tables-teacher-pending">👀 Waiting for teacher check</p>'}
+            </article>`;
+    }).join('') : '<p class="rep-loading">No typed times-tables sets yet.</p>';
 
     const weakest = activityKeys.map(k => {
         const st = stats[k];
@@ -3347,6 +3840,9 @@ function renderKidReport(kidId) {
         <h4 class="rep-sub">📊 Subject Breakdown</h4>
         <div class="rep-acts">${activityRows}</div>
 
+        <h4 class="rep-sub">✖️ Times Tables — Teacher Check</h4>
+        <div class="tables-teacher-list">${tablesReviewHtml}</div>
+
         <h4 class="rep-sub">🕒 Recent Answers</h4>
         <ul class="rep-recent">${recentRows}</ul>
 
@@ -3355,6 +3851,41 @@ function renderKidReport(kidId) {
             <button class="solar-tool-btn" onclick="resetKidStats('${kidId}')">🧹 Reset Results</button>
         </div>`;
 }
+
+async function saveTablesTeacherReview(kidId, reviewIndex) {
+    if (currentRole !== 'admin') return;
+    const stats = allKidStats[kidId] || {};
+    const list = Array.isArray(stats._tablesReviews) ? stats._tablesReviews : [];
+    const pack = list[reviewIndex];
+    if (!pack) { showToast('Could not find that times-tables set.', '❌', 2500); return; }
+    const markEl = document.getElementById(`tm_mark_${kidId}_${reviewIndex}`);
+    const noteEl = document.getElementById(`tm_note_${kidId}_${reviewIndex}`);
+    const mark = (markEl && markEl.value) || '';
+    const note = (noteEl && noteEl.value || '').trim().slice(0, 160);
+    if (!mark) { showToast('Choose a teacher mark first.', '👀', 2500); return; }
+    pack.teacherMark = mark;
+    pack.teacherNote = note;
+    pack.teacherCheckedAt = Date.now();
+    pack.teacherCheckedBy = 'admin';
+    list[reviewIndex] = pack;
+    stats._tablesReviews = list;
+    allKidStats[kidId] = stats;
+    const kid = cachedKidProfiles.find(p => p.id === kidId) || {};
+    try {
+        await setDoc(doc(db, 'kidStats', kidId), {
+            stats,
+            name: kid.name || '',
+            updatedAt: Date.now()
+        }, { merge: true });
+        showToast('Teacher check saved for times tables.', '✅', 2800);
+        playSound(720);
+        renderKidReport(kidId);
+    } catch (e) {
+        console.error(e);
+        showToast('Could not save teacher check.', '❌', 3000);
+    }
+}
+window.saveTablesTeacherReview = saveTablesTeacherReview;
 
 function exportKidCSV(kidId) {
     const kid = cachedKidProfiles.find(p => p.id === kidId);
@@ -3430,10 +3961,51 @@ function upsertLocalSafeChat(msg) {
     list.push(msg);
     saveLocalSafeChats(list);
 }
+
+function mergeChatReceiptFields(existing, patch) {
+    const next = { ...(existing || {}), ...(patch || {}) };
+    // Merge seenBy arrays without duplicates.
+    const a = Array.isArray(existing && existing.seenBy) ? existing.seenBy : [];
+    const b = Array.isArray(patch && patch.seenBy) ? patch.seenBy : [];
+    if (a.length || b.length) {
+        next.seenBy = [...new Set([...a, ...b].filter(Boolean))];
+    }
+    // Keep earliest deliveredAt / seenAt if both exist.
+    if (existing && existing.deliveredAt && patch && patch.deliveredAt) {
+        next.deliveredAt = Math.min(existing.deliveredAt, patch.deliveredAt);
+    }
+    if (existing && existing.seenAt && patch && patch.seenAt) {
+        next.seenAt = Math.min(existing.seenAt, patch.seenAt);
+    }
+    return next;
+}
+
 function getAllSafeZoneChats() {
     const map = new Map();
-    [...getLocalSafeChats(), ...safeZoneProgressChats, ...safeZoneProfileChats, ...safeZoneChats].forEach(m => { if (m && m.id) map.set(m.id, m); });
-    return [...map.values()].sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+    [...getLocalSafeChats(), ...safeZoneProgressChats, ...safeZoneProfileChats, ...safeZoneChats].forEach(m => {
+        if (!m || !m.id) return;
+        // Receipt-only stubs (kind: safeChatReceipt) merge into the real message.
+        const prev = map.get(m.id);
+        if (!prev) {
+            map.set(m.id, m);
+            return;
+        }
+        // Prefer the richer text/attachment copy, then overlay receipt fields.
+        const base = (m.text || m.attachment || m.fromName) ? m : prev;
+        const other = base === m ? prev : m;
+        map.set(m.id, mergeChatReceiptFields(base, {
+            seenAt: other.seenAt || base.seenAt,
+            deliveredAt: other.deliveredAt || base.deliveredAt,
+            seenBy: [...new Set([
+                ...(Array.isArray(base.seenBy) ? base.seenBy : []),
+                ...(Array.isArray(other.seenBy) ? other.seenBy : [])
+            ].filter(Boolean))]
+        }));
+    });
+    // Hide pure receipt stubs that never got a real message body.
+    return [...map.values()]
+        .filter(m => m && m.id && (m.kind !== 'safeChatReceipt' || m.text || m.attachment || m.fromName))
+        .sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 function preserveSafeZoneScroll(pageY, chatY) {
     // Mobile browsers try to keep focused/changed elements visible after every
@@ -3529,6 +4101,9 @@ function listenToSafeZone() {
         safeZoneChats = [];
         snapshot.forEach(docSnap => safeZoneChats.push(docSnap.data()));
         safeZoneChats.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+        if (typeof markSafeChatMessagesDelivered === 'function') {
+            markSafeChatMessagesDelivered(safeZoneChats.filter(m => m && !m.groupId));
+        }
         renderSafeChat();
         renderSafeGroupChat();
         renderSafeAdminPanel();
@@ -3828,15 +4403,39 @@ function renderSafeGroupChat() {
     }
     win.innerHTML = messages.map(m => {
         const isMe = m.fromId === currentActiveId;
-        return `<div class="safe-chat-bubble ${isMe ? 'group-me' : 'group-friend'}">
+        const ticks = groupChatSeenLabel(m, isMe);
+        return `<div class="safe-chat-bubble ${isMe ? 'group-me' : 'group-friend'}" data-chat-id="${escapeHtml(m.id || '')}">
             ${escapeHtml(m.text || '')}
             ${renderSafeChatAttachment(m.attachment)}
-            <small>${escapeHtml(m.fromAvatar || '🚀')} ${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}</small>
+            <small class="chat-meta-row">
+                <span>${escapeHtml(m.fromAvatar || '🚀')} ${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}</span>
+                ${ticks}
+            </small>
         </div>`;
     }).join('');
+    markSafeGroupChatMessagesSeen(messages);
     preserveSafeZoneScroll(pageY, chatY);
 }
 window.renderSafeGroupChat = renderSafeGroupChat;
+
+function markSafeGroupChatMessagesSeen(messages) {
+    if (!currentActiveId || currentRole === 'admin') return;
+    (messages || []).forEach(m => {
+        if (!m || !m.id || m.groupId !== 'main') return;
+        if (m.fromId === currentActiveId) return;
+        const already = Array.isArray(m.seenBy) && m.seenBy.includes(currentActiveId);
+        if (already || _safeChatSeenMarked.has('g_' + m.id)) return;
+        _safeChatSeenMarked.add('g_' + m.id);
+        const seenBy = [...new Set([...(Array.isArray(m.seenBy) ? m.seenBy : []), currentActiveId])];
+        const patch = {
+            seenBy,
+            seenAt: m.seenAt || Date.now(),
+            deliveredAt: m.deliveredAt || Date.now()
+        };
+        upsertLocalSafeChatReceipt(m.id, patch);
+        persistChatReceipt(m, patch).catch(() => {});
+    });
+}
 
 async function sendSafeGroupQuickMessage(text) {
     await sendSafeGroupMessage(text, true);
@@ -3867,7 +4466,10 @@ async function sendSafeGroupMessage(forcedText = null, quick = false) {
         toName: 'Everyone',
         toAvatar: '👨‍👩‍👧‍👦',
         status: 'approved',
-        attachment
+        attachment,
+        deliveredAt: null,
+        seenAt: null,
+        seenBy: []
     };
     upsertLocalSafeChat({ ...data, instantLocal: true });
     if (input && !forcedText) input.value = '';
@@ -4044,6 +4646,37 @@ async function safePostFileToDataUrl(file) {
     return fileToDataUrl(file, 120 * 1024);
 }
 
+function chatReceiptTicks(m, isMe) {
+    // WhatsApp-style: ✓ sent · ✓✓ delivered · blue ✓✓ seen
+    if (!isMe) return '';
+    if (m.localOnly && !m.seenAt && !m.deliveredAt) {
+        return `<span class="chat-ticks sent" title="Sent">✓</span>`;
+    }
+    if (m.seenAt || (Array.isArray(m.seenBy) && m.seenBy.length)) {
+        return `<span class="chat-ticks seen" title="Seen">✓✓</span>`;
+    }
+    if (m.deliveredAt || m.ownProfileOutbox || m.profileFallback || m.progressFallback || !m.instantLocal) {
+        return `<span class="chat-ticks delivered" title="Delivered">✓✓</span>`;
+    }
+    return `<span class="chat-ticks sent" title="Sent">✓</span>`;
+}
+
+function groupChatSeenLabel(m, isMe) {
+    if (!isMe) return '';
+    const seenBy = Array.isArray(m.seenBy) ? m.seenBy.filter(id => id && id !== m.fromId) : [];
+    if (!seenBy.length) {
+        return chatReceiptTicks(m, true);
+    }
+    // Resolve up to 3 names for "Seen by"
+    const names = seenBy.slice(0, 3).map(id => {
+        const k = (cachedKidProfiles || []).find(p => p.id === id);
+        return k ? `${k.avatar || '🚀'} ${k.name || 'Friend'}` : 'Friend';
+    });
+    const extra = seenBy.length > 3 ? ` +${seenBy.length - 3}` : '';
+    const title = `Seen by ${names.join(', ')}${extra}`;
+    return `<span class="chat-ticks seen" title="${escapeHtml(title)}">✓✓</span><span class="chat-seen-by" title="${escapeHtml(title)}">Seen by ${escapeHtml(names.join(', '))}${extra}</span>`;
+}
+
 function renderSafeChat() {
     const win = document.getElementById('safeChatWindow');
     if (!win) return;
@@ -4056,7 +4689,7 @@ function renderSafeChat() {
 
     if (!selectedSafeChatFriend) {
         const recentIds = [...new Set(getAllSafeZoneChats()
-            .filter(m => m.status !== 'deleted' && (m.fromId === currentActiveId || m.toId === currentActiveId))
+            .filter(m => m.status !== 'deleted' && !m.groupId && (m.fromId === currentActiveId || m.toId === currentActiveId))
             .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0))
             .map(m => m.fromId === currentActiveId ? m.toId : m.fromId))];
         if (recentIds.length) {
@@ -4071,7 +4704,7 @@ function renderSafeChat() {
         return;
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
-    const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && chatVisibleToCurrent(m) && (
+    const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && !m.groupId && chatVisibleToCurrent(m) && (
         currentRole === 'admin'
             ? (m.fromId === selectedSafeChatFriend || m.toId === selectedSafeChatFriend)
             : ((m.fromId === currentActiveId && m.toId === selectedSafeChatFriend) || (m.fromId === selectedSafeChatFriend && m.toId === currentActiveId))
@@ -4082,14 +4715,24 @@ function renderSafeChat() {
         return;
     }
     win.innerHTML = messages.map(m => {
-        const isMe = m.fromId === currentActiveId;
+        const isMe = m.fromId === currentActiveId || (currentRole === 'admin' && m.fromId === 'admin');
         const pending = m.status === 'pending';
-        return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}">
+        const ticks = chatReceiptTicks(m, isMe);
+        const seenHint = (isMe && m.seenAt)
+            ? ` · seen ${safePostTime(m.seenAt)}`
+            : '';
+        return `<div class="safe-chat-bubble ${isMe ? 'me' : 'friend'} ${pending ? 'pending' : ''}" data-chat-id="${escapeHtml(m.id || '')}">
             ${escapeHtml(m.text || '')}
             ${renderSafeChatAttachment(m.attachment)}
-            <small>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}</small>
+            <small class="chat-meta-row">
+                <span>${escapeHtml(m.fromName || 'Explorer')} · ${safePostTime(m.createdAt)}${seenHint}</span>
+                ${ticks}
+            </small>
         </div>`;
     }).join('');
+
+    // Mark incoming messages as seen (WhatsApp blue ticks for the sender).
+    markSafeChatMessagesSeen(messages);
 
     // Do NOT change scrollTop here. Realtime Firebase/profile updates can arrive
     // many times per second and moving scrollTop causes the up/down jumping on phones.
@@ -4097,6 +4740,122 @@ function renderSafeChat() {
     preserveSafeZoneScroll(_safePageY, _safeChatY);
 }
 window.renderSafeChat = renderSafeChat;
+
+// Track which message ids we already marked seen this session to avoid write storms.
+const _safeChatSeenMarked = new Set();
+
+function upsertLocalSafeChatReceipt(msgId, patch) {
+    if (!msgId || !patch) return;
+    const list = getLocalSafeChats();
+    const idx = list.findIndex(m => m && m.id === msgId);
+    if (idx >= 0) {
+        list[idx] = mergeChatReceiptFields(list[idx], patch);
+        saveLocalSafeChats(list);
+    } else {
+        // Keep a lightweight receipt stub so ticks survive refresh.
+        upsertLocalSafeChat(mergeChatReceiptFields({ id: msgId }, patch));
+    }
+    // Also patch in-memory arrays used by getAllSafeZoneChats.
+    [safeZoneChats, safeZoneProfileChats, safeZoneProgressChats].forEach(arr => {
+        if (!Array.isArray(arr)) return;
+        const i = arr.findIndex(m => m && m.id === msgId);
+        if (i >= 0) arr[i] = mergeChatReceiptFields(arr[i], patch);
+    });
+}
+
+async function persistChatReceipt(msg, patch) {
+    if (!msg || !msg.id || !patch) return;
+    upsertLocalSafeChatReceipt(msg.id, patch);
+
+    // Mirror into safeZoneChats if rules allow.
+    setDoc(doc(db, 'safeZoneChats', msg.id), patch, { merge: true })
+        .catch(e => console.warn('[KidZone] chat receipt collection mirror failed:', e && (e.code || e.message || e)));
+
+    // Update sender profile outbox entry so the sender device sees blue ticks.
+    if (msg.fromId) {
+        try {
+            const snap = await getDoc(doc(db, 'kidProfiles', msg.fromId));
+            if (snap.exists()) {
+                const data = snap.data() || {};
+                const outbox = Array.isArray(data.safeOutbox) ? data.safeOutbox : [];
+                let changed = false;
+                const updated = outbox.map(item => {
+                    if (!item || item.id !== msg.id) return item;
+                    changed = true;
+                    return mergeChatReceiptFields(item, patch);
+                });
+                if (changed) {
+                    await setDoc(doc(db, 'kidProfiles', msg.fromId), { safeOutbox: updated }, { merge: true });
+                } else {
+                    // Append a receipt-only outbox notice the sender can merge.
+                    await setDoc(doc(db, 'kidProfiles', msg.fromId), {
+                        safeOutbox: arrayUnion(mergeChatReceiptFields({
+                            id: msg.id,
+                            kind: 'safeChatReceipt',
+                            fromId: msg.fromId,
+                            toId: msg.toId || '',
+                            text: '',
+                            status: 'approved',
+                            createdAt: msg.createdAt || Date.now()
+                        }, patch))
+                    }, { merge: true });
+                }
+            }
+        } catch (e) {
+            console.warn('[KidZone] chat receipt profile update failed:', e && (e.code || e.message || e));
+        }
+    }
+
+    // Progress fallback for both sides.
+    if (msg.fromId || msg.toId) {
+        const receipt = mergeChatReceiptFields({ id: msg.id, kind: 'safeChatReceipt' }, patch);
+        const jobs = [];
+        if (msg.fromId) jobs.push(setDoc(doc(db, 'kidProgress', msg.fromId), { safeChats: arrayUnion(receipt) }, { merge: true }).catch(() => {}));
+        if (msg.toId && msg.toId !== 'group_main') jobs.push(setDoc(doc(db, 'kidProgress', msg.toId), { safeChats: arrayUnion(receipt) }, { merge: true }).catch(() => {}));
+        Promise.all(jobs).catch(() => {});
+    }
+}
+
+function markSafeChatMessagesSeen(messages) {
+    if (!currentActiveId || currentRole === 'admin') return;
+    const incoming = (messages || []).filter(m =>
+        m && m.id && m.status !== 'deleted' &&
+        m.fromId && m.fromId !== currentActiveId &&
+        m.toId === currentActiveId &&
+        !m.groupId &&
+        !m.seenAt &&
+        !(Array.isArray(m.seenBy) && m.seenBy.includes(currentActiveId)) &&
+        !_safeChatSeenMarked.has(m.id)
+    );
+    if (!incoming.length) return;
+    incoming.forEach(m => {
+        _safeChatSeenMarked.add(m.id);
+        const patch = {
+            seenAt: Date.now(),
+            seenBy: [currentActiveId],
+            deliveredAt: m.deliveredAt || Date.now()
+        };
+        // Update local copy immediately so ticks flip without waiting for cloud.
+        upsertLocalSafeChatReceipt(m.id, patch);
+        persistChatReceipt(m, patch).catch(() => {});
+    });
+    // One gentle refresh so the current viewer sees delivered/seen state settle.
+    // (_safeChatSeenMarked prevents repeat writes.)
+}
+
+// When a message arrives for me, mark delivered (single grey double-tick for sender).
+function markSafeChatMessagesDelivered(messages) {
+    if (!currentActiveId || currentRole === 'admin') return;
+    (messages || []).forEach(m => {
+        if (!m || !m.id || m.groupId) return;
+        if (m.toId !== currentActiveId || m.fromId === currentActiveId) return;
+        if (m.deliveredAt || m.seenAt) return;
+        const key = 'del_' + m.id;
+        if (_safeChatSeenMarked.has(key)) return;
+        _safeChatSeenMarked.add(key);
+        persistChatReceipt(m, { deliveredAt: Date.now() }).catch(() => {});
+    });
+}
 
 async function sendSafeQuickMessage(text) {
     await sendSafeChatMessage(text, true);
@@ -4134,6 +4893,9 @@ function setupSafeProgressChatListener() {
     safeProgressChatUnsub = onSnapshot(doc(db, 'kidProgress', currentActiveId), (snap) => {
         const data = snap.exists() ? (snap.data() || {}) : {};
         safeZoneProgressChats = Array.isArray(data.safeChats) ? data.safeChats.filter(m => m && m.id) : [];
+        if (typeof markSafeChatMessagesDelivered === 'function') {
+            markSafeChatMessagesDelivered(safeZoneProgressChats.filter(m => m && !m.groupId));
+        }
         if (typeof renderSafeChat === 'function') renderSafeChat();
         if (typeof renderSafeGroupChat === 'function') renderSafeGroupChat();
     }, (err) => console.warn('[KidZone] safe progress chat listener failed:', err && (err.code || err.message || err)));
@@ -4192,7 +4954,11 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
         toName: friend.name || 'Friend',
         toAvatar: friend.avatar || '🚀',
         status: 'approved',
-        attachment
+        attachment,
+        // WhatsApp-style receipt fields
+        deliveredAt: null,
+        seenAt: null,
+        seenBy: []
     };
 
     // Show it immediately for the sender, without waiting for Firebase.
