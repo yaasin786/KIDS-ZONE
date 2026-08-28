@@ -82,6 +82,7 @@
             <button class="nav-btn" onclick="switchTab('history', event)">🌍 World History</button>
             <button class="nav-btn" onclick="switchTab('geo', event)">🏔️ Mountains & Rivers</button>
             <button class="nav-btn" onclick="switchTab('homework', event)">📝 Homework</button>
+            <button class="nav-btn" onclick="switchTab('testpapers', event)">🧪 Test Papers</button>
             <button class="nav-btn" onclick="switchTab('safezone', event)">🛡️ Safe Zone</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
@@ -131,6 +132,7 @@
             <div class="home-quick-row">
                 <button class="home-quick-btn" onclick="openKidZoneSection('safezone')">🛡️ Safe Zone</button>
                 <button class="home-quick-btn" onclick="openKidZoneSection('homework')">📝 Homework</button>
+                <button class="home-quick-btn" onclick="openKidZoneSection('testpapers')">🧪 Test Papers</button>
                 <button class="home-quick-btn" onclick="openKidZoneSection('games')">🎮 Games</button>
                 <button class="home-quick-btn" onclick="openBadgesModal()">🏅 Badges</button>
             </div>
@@ -165,6 +167,7 @@
                     <p>Learn through quizzes, languages, spelling, sentence building, memory games, and challenges.</p>
                     <div class="home-cat-actions">
                         <button onclick="openKidZoneSection('games')">🎮 Learning Games</button>
+                        <button onclick="openKidZoneSection('testpapers')">🧪 Test Papers</button>
                         <button onclick="openKidZoneSection('books')">📖 Storybooks</button>
                     </div>
                 </div>
@@ -509,6 +512,40 @@
         </section>
 
 
+        <!-- TEST PAPERS TAB (Mauritius Syllabus · Grade 1-6 · Subject by Subject) -->
+        <section id="testpapers" class="tab-content" aria-label="Test Papers Section">
+            <div class="hero-banner testpapers-hero">
+                <h1>🧪 Test Papers</h1>
+                <p>Official-style practice papers following the <strong>Mauritius primary syllabus</strong>, Grade 1 to Grade 6. Pick your grade, choose a subject, and answer the paper yourself — then submit it to your teacher!</p>
+            </div>
+
+            <div class="testpapers-grade-row" id="testpapersGradeRow" role="tablist" aria-label="Choose your grade">
+                <button type="button" class="tp-grade-chip" data-grade="1" onclick="setTestPaperGrade(1, event)">Grade 1</button>
+                <button type="button" class="tp-grade-chip" data-grade="2" onclick="setTestPaperGrade(2, event)">Grade 2</button>
+                <button type="button" class="tp-grade-chip" data-grade="3" onclick="setTestPaperGrade(3, event)">Grade 3</button>
+                <button type="button" class="tp-grade-chip" data-grade="4" onclick="setTestPaperGrade(4, event)">Grade 4</button>
+                <button type="button" class="tp-grade-chip" data-grade="5" onclick="setTestPaperGrade(5, event)">Grade 5</button>
+                <button type="button" class="tp-grade-chip" data-grade="6" onclick="setTestPaperGrade(6, event)">Grade 6</button>
+            </div>
+
+            <p class="testpapers-hint" id="testpapersGradeHint"></p>
+
+            <div class="testpapers-layout">
+                <!-- Subject + paper picker -->
+                <div id="testpapersPicker" class="testpapers-picker"></div>
+
+                <!-- Admin: submission review -->
+                <div id="testpapersReviewPanel" class="testpapers-review-panel" style="display:none;"></div>
+            </div>
+
+            <!-- Kid: my submitted papers -->
+            <div id="testpapersMine" class="testpapers-mine" style="display:none;"></div>
+
+            <!-- The paper itself (questions + answer boxes) -->
+            <div id="testpapersPaper" class="testpapers-paper-wrap" style="display:none;"></div>
+        </section>
+
+
         <!-- SAFE ZONE SOCIAL HUB TAB -->
         <section id="safezone" class="tab-content" aria-label="Safe Zone Social Hub Section">
             <div class="hero-banner safezone-hero">
@@ -757,6 +794,7 @@
             <!-- Game: Multiplication Times Tables (typed answers, teacher checks) -->
             <div id="tables-game" class="game-wrapper" style="display:none;">
                 <div class="game-level-bar" id="tablesLevelBar" role="group" aria-label="Times tables practice set">
+                    <button type="button" class="game-level-btn" data-table="1" onclick="setTablesFocus(1, event)">×1</button>
                     <button type="button" class="game-level-btn active" data-table="2" onclick="setTablesFocus(2, event)">×2</button>
                     <button type="button" class="game-level-btn" data-table="3" onclick="setTablesFocus(3, event)">×3</button>
                     <button type="button" class="game-level-btn" data-table="4" onclick="setTablesFocus(4, event)">×4</button>
@@ -1360,6 +1398,19 @@
                         <button type="button" class="avatar-option avatar-tv" onclick="selectAvatar('🐼', this)" title="Panda Pal"><span>🐼</span><small>Panda</small></button>
                     </div>
                     <p class="avatar-note">🎬 TV-style avatars inspired by kids adventure shows — no official character images, so it stays safe and lightweight.</p>
+                </div>
+
+                <div class="input-group">
+                    <label for="newKidGrade">🎒 Grade (Mauritius Syllabus)</label>
+                    <select id="newKidGrade" required>
+                        <option value="" disabled selected>Choose grade...</option>
+                        <option value="1">Grade 1</option>
+                        <option value="2">Grade 2</option>
+                        <option value="3">Grade 3</option>
+                        <option value="4">Grade 4</option>
+                        <option value="5">Grade 5</option>
+                        <option value="6">Grade 6</option>
+                    </select>
                 </div>
 
                 <div class="input-group">
