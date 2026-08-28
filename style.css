@@ -5547,6 +5547,130 @@ body::after {
 .tp-score-banner.pending { background: #fef9c3; color: #854d0e; }
 
 /* ============================================================
+   Teacher-uploaded test papers (per grade)
+   ============================================================ */
+.testpapers-admin-panel {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-bottom: 5px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 22px;
+}
+.tp-builder { margin: 14px 0; }
+.tp-builder-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.tp-builder-head label { font-weight: 800; }
+.tp-total-chip {
+    background: #ede9fe;
+    color: #5b21b6;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: .8rem;
+    font-weight: 800;
+}
+.tp-qrow {
+    display: grid;
+    grid-template-columns: 42px 160px 1fr 80px 36px;
+    gap: 8px;
+    align-items: center;
+    background: #fff;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    margin-bottom: 8px;
+}
+.tp-qrow-num { font-weight: 800; color: #7c3aed; text-align: center; }
+.tp-qrow-type, .tp-qrow-text, .tp-qrow-marks {
+    padding: 9px 10px;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: .9rem;
+    outline: none;
+    background: #fff;
+    color: var(--text-color);
+}
+.tp-qrow-type { cursor: pointer; }
+.tp-qrow-text { width: 100%; }
+.tp-qrow-marks { text-align: center; }
+.tp-qrow-type:focus, .tp-qrow-text:focus, .tp-qrow-marks:focus { border-color: #7c3aed; }
+.tp-qrow-del {
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    font-weight: 800;
+    border-radius: 10px;
+    padding: 9px 0;
+    cursor: pointer;
+    font-size: .85rem;
+}
+.tp-qrow-del:hover { background: #fecaca; }
+.tp-paper-item { position: relative; }
+.tp-paper-item .tp-paper-btn { width: 100%; }
+.tp-paper-item.custom .tp-paper-btn { padding-right: 46px; }
+.tp-paper-del {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    font-size: .8rem;
+    font-weight: 800;
+    border-radius: 999px;
+    padding: 4px 9px;
+    cursor: pointer;
+}
+.tp-paper-del:hover { background: #fecaca; }
+.tp-custom-tag {
+    display: inline-block;
+    background: #ede9fe;
+    color: #5b21b6;
+    font-size: .68rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.tp-custom-note {
+    background: #f3e8ff;
+    border: 2px dashed #c084fc;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-weight: 700;
+    color: #7e22ce;
+    margin-bottom: 14px;
+}
+.tp-attach {
+    background: #eff6ff;
+    border: 2px solid #bfdbfe;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+.tp-attach a { color: #1d4ed8; word-break: break-all; }
+@media (max-width: 640px) {
+    .tp-qrow { grid-template-columns: 1fr 1fr; }
+    .tp-qrow-num { display: none; }
+    .tp-qrow-type { grid-column: 1 / -1; }
+    .tp-qrow-text { grid-column: 1 / -1; }
+    .tp-qrow-marks { grid-column: 1; }
+    .tp-qrow-del { grid-column: 2; justify-self: stretch; }
+}
+
+/* ============================================================
    TEACHER PROFILE CONTROLS
    ============================================================ */
 .admin-profile-role {
@@ -5567,6 +5691,71 @@ body::after {
 .admin-profile-role.teacher {
     background: #f3e8ff;
     color: #7e22ce;
+}
+.admin-profiles-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-weight: 800;
+    font-size: .85rem;
+    margin-bottom: 4px;
+}
+.admin-profiles-order {
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: .74rem;
+}
+.admin-profile-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+.admin-profile-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.admin-profile-avatar { font-size: 1.5rem; line-height: 1; }
+.admin-profile-name { font-size: 1.05rem; color: var(--text-color); }
+.admin-profile-grade-chip {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: .72rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 999px;
+}
+.admin-profile-pin { font-size: .72rem; font-weight: 700; }
+.admin-profile-pin.ok { color: #15803d; }
+.admin-profile-pin.warn { color: #b45309; }
+.admin-profile-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: .82rem;
+    color: var(--text-muted);
+}
+.admin-profile-meta-line strong { color: var(--primary-blue-dark); font-weight: 700; }
+.admin-profile-grade-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+}
+.admin-profile-grade-wrap select {
+    font: inherit;
+    padding: 3px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-color);
 }
 .admin-profile-actions {
     display: flex;
