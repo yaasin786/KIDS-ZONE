@@ -1163,6 +1163,7 @@ function setupUIForSession() {
     const nameElem = document.getElementById('activeName');
     const logoutBtn = document.querySelector('.logout-btn[onclick="handleLogout()"]');
     const homeworkAdminPanel = document.getElementById('homeworkAdminPanel');
+    const testpapersAdminPanel = document.getElementById('testpapersAdminPanel');
     const errorLogsBtn = document.getElementById('errorLogsBtn');
     const announceBtn = document.getElementById('announceBtn');
 
@@ -1174,6 +1175,7 @@ function setupUIForSession() {
         if (errorLogsBtn) errorLogsBtn.style.display = 'inline-block';
         if (announceBtn) announceBtn.style.display = 'inline-block';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
+        if (testpapersAdminPanel) testpapersAdminPanel.style.display = 'block';
         if (avatarElem) avatarElem.innerText = teacher?.avatar || '🛠️';
         if (nameElem) nameElem.innerText = teacher ? `${teacher.name || 'Teacher'} (Teacher)` : 'Admin (Yaasin)';
         if (logoutBtn) {
@@ -1187,6 +1189,7 @@ function setupUIForSession() {
         if (errorLogsBtn) errorLogsBtn.style.display = 'none';
         if (announceBtn) announceBtn.style.display = 'none';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'none';
+        if (testpapersAdminPanel) testpapersAdminPanel.style.display = 'none';
         if (logoutBtn) {
             logoutBtn.innerText = '🚪 Logout';
             logoutBtn.title = 'Log Out';
@@ -1422,14 +1425,28 @@ function renderAdminPortalProfiles() {
     const container = document.getElementById('adminProfilesList');
     if (!container) return;
     renderAdminCallLogs();   // 📞 recent kid calls, live at the top
-    
+
     if (cachedKidProfiles.length === 0) {
         container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No kid profiles created yet.</p>';
         return;
     }
 
-    container.innerHTML = '';
-    cachedKidProfiles.forEach(p => {
+    // Keep the list tidy and predictable: Grade 1 → 6 first, then A → Z by name.
+    const sorted = [...cachedKidProfiles].sort((a, b) => {
+        const ga = Number(a.grade) || 0;
+        const gb = Number(b.grade) || 0;
+        if (ga !== gb) return ga - gb;
+        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+    });
+    const teacherCount = sorted.filter(p => profileRole(p) === 'teacher').length;
+
+    container.innerHTML = `
+        <div class="admin-profiles-head">
+            <span>👧 ${sorted.length} profile${sorted.length === 1 ? '' : 's'}</span>
+            <span class="admin-profiles-order">Sorted: Grade 1 → 6 · then A → Z${teacherCount ? ` · ${teacherCount} teacher${teacherCount === 1 ? '' : 's'}` : ''}</span>
+        </div>`;
+
+    sorted.forEach(p => {
         const div = document.createElement('div');
         div.className = 'admin-profile-row';
         div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; gap: 14px; background: var(--bg-main); padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);';
@@ -1437,7 +1454,7 @@ function renderAdminPortalProfiles() {
         // Encode IDs/names before placing them in the existing inline handlers.
         const encodedId = encodeURIComponent(String(p.id)).replace(/'/g, '%27');
         const encodedName = encodeURIComponent(String(p.name || 'Explorer')).replace(/'/g, '%27');
-        
+
         let formattedDate = 'Never logged in';
         if (p.lastLogin) {
             const dateObj = new Date(p.lastLogin);
@@ -1450,23 +1467,23 @@ function renderAdminPortalProfiles() {
         }
 
         div.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
-                <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-color);">
-                    <span style="font-size: 1.2rem; margin-right: 6px;">${escapeHtml(p.avatar)}</span> ${escapeHtml(p.name)} 
-                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${p.pinHash ? '\ud83d\udd12 PIN secured' : '\u26a0\ufe0f PIN not yet secured'}</span>
+            <div class="admin-profile-main">
+                <div class="admin-profile-name-line">
+                    <span class="admin-profile-avatar">${escapeHtml(p.avatar)}</span>
+                    <strong class="admin-profile-name">${escapeHtml(p.name)}</strong>
+                    <span class="admin-profile-grade-chip">Grade ${Number(p.grade) || 1}</span>
+                    <span class="admin-profile-role ${isTeacher ? 'teacher' : 'kid'}">
+                        ${isTeacher ? '👩‍🏫 Teacher' : '🚀 Kid'}
+                    </span>
+                    <span class="admin-profile-pin ${p.pinHash ? 'ok' : 'warn'}">${p.pinHash ? '🔒 PIN secured' : '⚠️ PIN missing'}</span>
                 </div>
-                <div class="admin-profile-role ${isTeacher ? 'teacher' : 'kid'}">
-                    ${isTeacher ? '👩‍🏫 Teacher · Admin privileges enabled' : '🚀 Kid Explorer'}
-                </div>
-                <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-                    <span>🕒 Last Login:</span>
-                    <strong style="color: var(--primary-blue-dark); font-weight: 700;">${escapeHtml(formattedDate)}</strong>
-                </div>
-                <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <span>🎒 Grade:</span>
-                    <select onchange="updateKidGrade(decodeURIComponent('${encodedId}'), this.value)" style="font: inherit; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color);">
-                        ${[1,2,3,4,5,6].map(g => `<option value="${g}" ${Number(p.grade) === g ? 'selected' : ''}>Grade ${g}</option>`).join('')}
-                    </select>
+                <div class="admin-profile-meta-line">
+                    <span>🕒 Last login: <strong>${escapeHtml(formattedDate)}</strong></span>
+                    <label class="admin-profile-grade-wrap">🎒 Grade
+                        <select onchange="updateKidGrade(decodeURIComponent('${encodedId}'), this.value)" title="Change grade">
+                            ${[1,2,3,4,5,6].map(g => `<option value="${g}" ${Number(p.grade) === g ? 'selected' : ''}>Grade ${g}</option>`).join('')}
+                        </select>
+                    </label>
                 </div>
             </div>
             <div class="admin-profile-actions">
@@ -7015,12 +7032,13 @@ const TEST_PAPERS = [
 // ============================================================
 // TEST PAPERS — LOGIC (render, answer, submit, teacher review)
 // ============================================================
-const TP_SUBJECT_ICONS = { "English": "📖", "Mathematics": "🔢", "Science": "🔬", "French": "🇫🇷" };
-const TP_SUBJECT_COLORS = { "English": "#1cb0f6", "Mathematics": "#ff9600", "Science": "#58cc02", "French": "#ce82ff" };
+const TP_SUBJECT_ICONS = { "English": "📖", "Mathematics": "🔢", "Science": "🔬", "French": "🇫🇷", "History & Geography": "🌍", "Hindi": "🇮🇳" };
+const TP_SUBJECT_COLORS = { "English": "#1cb0f6", "Mathematics": "#ff9600", "Science": "#58cc02", "French": "#ce82ff", "History & Geography": "#14b8a6", "Hindi": "#f59e0b" };
 
 let tpSelectedGrade = 1;
 let testSubmissions = [];
 let testSubsListener = null;
+let customTestPapers = [];     // teacher-uploaded papers (Firestore: customTestPapers)
 let currentTestPaper = null;   // paper object being filled in
 let tpCurrentReviewId = null;  // submission id being reviewed by admin
 
@@ -7031,12 +7049,13 @@ function getKidGrade() {
 
 function findTestPaperById(pid) {
     for (const g of TEST_PAPERS) for (const p of g.papers) if (p.id === pid) return p;
-    return null;
+    return customTestPapers.find(p => p.id === pid) || null;
 }
 
 function testPaperMeta(pid) {
     for (const g of TEST_PAPERS) for (const p of g.papers) if (p.id === pid) return { grade: g.grade, subject: g.subject };
-    return null;
+    const custom = customTestPapers.find(p => p.id === pid);
+    return custom ? { grade: Number(custom.grade) || 1, subject: custom.subject || 'General' } : null;
 }
 
 function setTestPaperGrade(g, evt) {
@@ -7061,6 +7080,8 @@ function renderTestPapers() {
     document.querySelectorAll('#testpapersGradeRow .tp-grade-chip').forEach(c => {
         c.classList.toggle('active', Number(c.dataset.grade) === tpSelectedGrade);
     });
+    const adminPanel = document.getElementById('testpapersAdminPanel');
+    if (adminPanel) adminPanel.style.display = isAdminRole() ? 'block' : 'none';
     const hint = document.getElementById('testpapersGradeHint');
     if (hint) {
         hint.innerHTML = isAdminRole()
@@ -7078,14 +7099,34 @@ function renderTestPapersPicker() {
     const box = document.getElementById('testpapersPicker');
     if (!box) return;
     const gradeData = TEST_PAPERS.filter(g => g.grade === tpSelectedGrade);
-    if (!gradeData.length) {
+    const customForGrade = customTestPapers.filter(p => Number(p.grade) === tpSelectedGrade);
+    if (!gradeData.length && !customForGrade.length) {
         box.innerHTML = '<p class="tp-empty">No papers available for this grade yet.</p>';
         return;
     }
     const order = ['English', 'Mathematics', 'Science', 'French'];
-    const subjects = order
-        .map(s => ({ subject: s, papers: gradeData.filter(g => g.subject === s).flatMap(g => g.papers) }))
+    const customSubjects = [...new Set(customForGrade.map(p => p.subject).filter(Boolean))]
+        .filter(s => !order.includes(s))
+        .sort((a, b) => a.localeCompare(b));
+    const subjects = [...order, ...customSubjects]
+        .map(s => ({
+            subject: s,
+            papers: [
+                ...gradeData.filter(g => g.subject === s).flatMap(g => g.papers),
+                ...customForGrade.filter(p => p.subject === s)
+            ]
+        }))
         .filter(x => x.papers.length);
+
+    const paperCard = (p) => `
+        <div class="tp-paper-item ${p.isCustom ? 'custom' : ''}">
+            <button class="tp-paper-btn" onclick="openTestPaper('${p.id}')">
+                <div class="tp-paper-title">${escapeHtml(p.title)}${p.isCustom ? '<span class="tp-custom-tag">👩‍🏫 Teacher-made</span>' : ''}</div>
+                <div class="tp-paper-meta">⏱ ${escapeHtml(p.time || '—')} · 📊 ${p.totalMarks} marks${p.isCustom && p.questionCount ? ' · ❓ ' + p.questionCount + ' question' + (p.questionCount === 1 ? '' : 's') : ''}</div>
+            </button>
+            ${p.isCustom && isAdminRole() ? `<button class="tp-paper-del" onclick="deleteCustomTestPaper('${p.id}')" title="Delete this test paper">🗑️</button>` : ''}
+        </div>`;
+
     box.innerHTML = `
         <div class="tp-head-row">
             <h2>📚 Papers for Grade ${tpSelectedGrade}</h2>
@@ -7100,11 +7141,7 @@ function renderTestPapersPicker() {
                         <span class="tp-subject-count">${sub.papers.length} paper${sub.papers.length > 1 ? 's' : ''}</span>
                     </div>
                     <div class="tp-paper-list">
-                        ${sub.papers.map(p => `
-                            <button class="tp-paper-btn" onclick="openTestPaper('${p.id}')">
-                                <div class="tp-paper-title">${escapeHtml(p.title)}</div>
-                                <div class="tp-paper-meta">⏱ ${escapeHtml(p.time)} · 📊 ${p.totalMarks} marks</div>
-                            </button>`).join('')}
+                        ${sub.papers.map(p => paperCard(p)).join('')}
                     </div>
                 </div>`).join('')}
         </div>`;
@@ -7155,6 +7192,158 @@ function renderTestPapersReview() {
                     </button>`).join('')}
             </div>`}`;
 }
+
+// ---- Teacher tools: upload custom test papers per grade ----
+function toggleTestPaperForm(force) {
+    if (!isAdminRole()) return;
+    const form = document.getElementById('testPaperUploadForm');
+    if (!form) return;
+    tpFileInputWatcher();
+    const show = typeof force === 'boolean' ? force : form.style.display === 'none';
+    form.style.display = show ? 'block' : 'none';
+    if (show && !document.querySelector('#tpQuestionsList .tp-qrow')) addTestPaperQuestion();
+    if (show) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.toggleTestPaperForm = toggleTestPaperForm;
+
+function addTestPaperQuestion() {
+    const list = document.getElementById('tpQuestionsList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'tp-qrow';
+    const n = list.children.length + 1;
+    row.innerHTML = `
+        <span class="tp-qrow-num">Q${n}</span>
+        <select class="tp-qrow-type" title="Answer style">
+            <option value="short">✏️ Short answer</option>
+            <option value="essay">📝 Long answer</option>
+        </select>
+        <input type="text" class="tp-qrow-text" placeholder="Write the question here…" maxlength="300">
+        <input type="number" class="tp-qrow-marks" min="1" max="20" value="2" title="Marks" oninput="updateTestPaperTotal()">
+        <button type="button" class="tp-qrow-del" onclick="removeTestPaperQuestion(this)" title="Remove question">✖</button>`;
+    list.appendChild(row);
+    row.querySelector('.tp-qrow-text').focus();
+    updateTestPaperTotal();
+}
+window.addTestPaperQuestion = addTestPaperQuestion;
+
+function removeTestPaperQuestion(btn) {
+    const list = document.getElementById('tpQuestionsList');
+    if (!list || !btn) return;
+    btn.closest('.tp-qrow')?.remove();
+    list.querySelectorAll('.tp-qrow').forEach((row, i) => {
+        const num = row.querySelector('.tp-qrow-num');
+        if (num) num.innerText = 'Q' + (i + 1);
+    });
+    updateTestPaperTotal();
+}
+window.removeTestPaperQuestion = removeTestPaperQuestion;
+
+function updateTestPaperTotal() {
+    const chip = document.getElementById('tpTotalMarks');
+    if (!chip) return 0;
+    const total = [...document.querySelectorAll('#tpQuestionsList .tp-qrow-marks')]
+        .reduce((s, el) => s + Math.max(1, Math.min(20, parseInt(el.value, 10) || 0)), 0);
+    chip.innerText = total;
+    return total;
+}
+window.updateTestPaperTotal = updateTestPaperTotal;
+
+const tpFileInputWatcher = () => {
+    const input = document.getElementById('tpFile');
+    if (input && input.dataset.wired !== 'yes') {
+        input.dataset.wired = 'yes';
+        input.addEventListener('change', () => {
+            const box = document.getElementById('tpFilePreview');
+            const f = input.files && input.files[0];
+            if (box) box.innerText = f ? `Selected: ${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+        });
+    }
+};
+setTimeout(tpFileInputWatcher, 1000);
+
+async function handleTestPaperUpload(event) {
+    event.preventDefault();
+    if (!isAdminRole()) { showToast('Only Admin/Teacher can upload test papers.', '⚠️', 3000); return; }
+    const title = document.getElementById('tpTitle')?.value.trim();
+    const grade = Number(document.getElementById('tpGrade')?.value) || 1;
+    const subject = document.getElementById('tpSubject')?.value || 'General';
+    const time = document.getElementById('tpTime')?.value.trim() || '45 minutes';
+    const instructions = document.getElementById('tpInstructions')?.value.trim() || 'Read each question carefully and write your answers in the boxes.';
+    const file = document.getElementById('tpFile')?.files?.[0] || null;
+    if (!title) { showToast('Please give the paper a title.', '⚠️', 2800); return; }
+
+    const questions = [];
+    document.querySelectorAll('#tpQuestionsList .tp-qrow').forEach(row => {
+        const text = row.querySelector('.tp-qrow-text')?.value.trim();
+        const type = row.querySelector('.tp-qrow-type')?.value || 'short';
+        const marks = Math.max(1, Math.min(20, parseInt(row.querySelector('.tp-qrow-marks')?.value, 10) || 1));
+        if (text) questions.push({ type, q: text, marks });
+    });
+    if (!questions.length) { showToast('Add at least one question for the kids.', '⚠️', 2800); return; }
+    const totalMarks = questions.reduce((s, q) => s + q.marks, 0);
+
+    const submitBtn = document.querySelector('#testPaperUploadForm .login-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Publishing…'; }
+    try {
+        const fileObj = await fileToDataUrl(file);
+        const id = 'ctp_' + Date.now();
+        const data = {
+            id, isCustom: true, grade, subject, title, time, totalMarks, instructions,
+            questionCount: questions.length,
+            sections: [{ heading: 'Questions', questions }],
+            file: fileObj,
+            createdAt: Date.now(), createdBy: currentActiveId || 'admin', active: true
+        };
+        await setDoc(doc(db, 'customTestPapers', id), data);
+        event.target.reset();
+        const list = document.getElementById('tpQuestionsList'); if (list) list.innerHTML = '';
+        const preview = document.getElementById('tpFilePreview'); if (preview) preview.innerText = '';
+        updateTestPaperTotal();
+        toggleTestPaperForm(false);
+        playChime([523, 659, 784, 1046]);
+        launchConfetti(35);
+        showToast(`${title} published for Grade ${grade}!`, '🧪', 3500);
+        renderTestPapers();
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Could not publish the test paper.', '❌', 4000);
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Publish Test Paper 🚀'; }
+    }
+}
+window.handleTestPaperUpload = handleTestPaperUpload;
+
+async function deleteCustomTestPaper(id) {
+    if (!isAdminRole()) return;
+    const paper = customTestPapers.find(p => p.id === id);
+    if (!paper) return;
+    if (!confirm(`Delete "${paper.title}"? Kids will no longer see this paper.`)) return;
+    try {
+        await deleteDoc(doc(db, 'customTestPapers', id));
+        playSound(300);
+        showToast('Test paper deleted.', '🗑️', 3000);
+    } catch (e) {
+        console.error(e);
+        showToast('Could not delete the paper.', '❌', 3000);
+    }
+}
+window.deleteCustomTestPaper = deleteCustomTestPaper;
+
+function listenToCustomTestPapers() {
+    onSnapshot(collection(db, 'customTestPapers'), (snap) => {
+        customTestPapers = [];
+        snap.forEach(d => {
+            const data = d.data() || {};
+            if (data.active === false) return;
+            customTestPapers.push({ ...data, id: data.id || d.id });
+        });
+        customTestPapers.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const tab = document.getElementById('testpapers');
+        if (tab && tab.classList.contains('active')) renderTestPapers();
+    }, (error) => console.error('Custom test papers sync error:', error));
+}
+window.listenToCustomTestPapers = listenToCustomTestPapers;
 
 function openTestPaper(paperId) {
     const paper = findTestPaperById(paperId);
@@ -7219,6 +7408,8 @@ function renderTestPaperView(paper, meta) {
                 <span class="tp-grade-badge">${TP_SUBJECT_ICONS[meta.subject] || '📘'}</span>
             </div>
             ${paper.instructions ? `<div class="tp-instructions">📝 ${escapeHtml(paper.instructions)}</div>` : ''}
+            ${paper.isCustom ? `<div class="tp-custom-note">👩‍🏫 This paper was uploaded by your teacher.</div>` : ''}
+            ${paper.file && paper.file.dataUrl ? `<div class="tp-attach">📎 <a href="${paper.file.dataUrl}" download="${escapeHtml(paper.file.name || 'test-paper')}" target="_blank" rel="noopener">Open the attached paper: ${escapeHtml(paper.file.name || 'test-paper')}</a></div>` : ''}
             ${sectionsHtml}
             <div class="tp-submit-row">
                 <button class="login-submit-btn tp-submit-btn" onclick="submitTestPaper()">Submit to Teacher 📤</button>
@@ -11158,6 +11349,7 @@ window.addEventListener('DOMContentLoaded', () => {
     listenToHomework();
     listenToSafeZone();
     listenToTestPapers();      // 🧪 test paper submissions + teacher marking
+    listenToCustomTestPapers(); // 🧪 teacher-uploaded test papers (per grade)
     listenToAnnouncements();   // Admin "📣 Send Alert" -> kids' bell + phone alerts
     initPhoneAlerts();         // service worker + push permission/token
     listenToCallRooms();       // 📞 kid calls: rings, group rooms, live state

@@ -519,6 +519,77 @@
                 <p>Official-style practice papers following the <strong>Mauritius primary syllabus</strong>, Grade 1 to Grade 6. Pick your grade, choose a subject, and answer the paper yourself — then submit it to your teacher!</p>
             </div>
 
+            <!-- Teacher / Admin: upload custom test papers per grade -->
+            <div id="testpapersAdminPanel" class="testpapers-admin-panel" style="display:none;">
+                <div class="hw-admin-head">
+                    <div>
+                        <span class="hw-kicker">🛠️ Teacher Tools</span>
+                        <h2>Upload a Test Paper</h2>
+                        <p>Create your own paper for a chosen grade. It appears instantly under that grade so kids can answer it online and send it back to you.</p>
+                    </div>
+                    <button class="solar-tool-btn active" onclick="toggleTestPaperForm()">➕ New Test Paper</button>
+                </div>
+
+                <form id="testPaperUploadForm" class="homework-form" onsubmit="handleTestPaperUpload(event)" style="display:none;">
+                    <div class="hw-form-grid">
+                        <div class="input-group">
+                            <label for="tpTitle">📌 Paper title</label>
+                            <input type="text" id="tpTitle" placeholder="e.g. Grade 3 English Mid-Year Test" required maxlength="80">
+                        </div>
+                        <div class="input-group">
+                            <label for="tpGrade">🎒 Grade</label>
+                            <select id="tpGrade" required>
+                                <option value="1">Grade 1</option>
+                                <option value="2">Grade 2</option>
+                                <option value="3">Grade 3</option>
+                                <option value="4">Grade 4</option>
+                                <option value="5">Grade 5</option>
+                                <option value="6">Grade 6</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="tpSubject">📚 Subject</label>
+                            <select id="tpSubject" required>
+                                <option value="English">English</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="Science">Science</option>
+                                <option value="French">French</option>
+                                <option value="History & Geography">History &amp; Geography</option>
+                                <option value="Hindi">Hindi</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="tpTime">⏱ Time allowed</label>
+                            <input type="text" id="tpTime" placeholder="45 minutes" maxlength="40">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="tpInstructions">✍️ Instructions for kids</label>
+                        <textarea id="tpInstructions" rows="3" maxlength="600" placeholder="Read each question carefully and write your answers in the boxes."></textarea>
+                    </div>
+                    <div class="hw-upload-box">
+                        <label for="tpFile">📎 Attach the paper file (optional)</label>
+                        <input type="file" id="tpFile" accept=".pdf,.png,.jpg,.jpeg,.webp">
+                        <small>Kids can open this file while answering online. PDF or image, max 750 KB.</small>
+                        <div id="tpFilePreview" class="hw-file-preview"></div>
+                    </div>
+
+                    <div class="tp-builder">
+                        <div class="tp-builder-head">
+                            <label>❓ Questions for the kids to answer online</label>
+                            <span class="tp-total-chip">Total: <strong id="tpTotalMarks">0</strong> marks</span>
+                        </div>
+                        <div id="tpQuestionsList"></div>
+                        <button type="button" class="book-btn" onclick="addTestPaperQuestion()">➕ Add Question</button>
+                    </div>
+
+                    <div class="hw-form-actions">
+                        <button type="submit" class="login-submit-btn">Publish Test Paper 🚀</button>
+                        <button type="button" class="book-btn" onclick="toggleTestPaperForm(false)">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
             <div class="testpapers-grade-row" id="testpapersGradeRow" role="tablist" aria-label="Choose your grade">
                 <button type="button" class="tp-grade-chip" data-grade="1" onclick="setTestPaperGrade(1, event)">Grade 1</button>
                 <button type="button" class="tp-grade-chip" data-grade="2" onclick="setTestPaperGrade(2, event)">Grade 2</button>
