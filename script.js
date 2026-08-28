@@ -614,9 +614,19 @@ function sanitiseProgress(d) {
 // NOT a secret - Firestore rules enforce it server-side.
 const ADMIN_UID = "l9skt6UUdcdMrmR1jKLRXQyhv4c2";
 
-let currentRole = null; // 'admin' or 'kid'
+let currentRole = null; // 'admin' (the owner), 'teacher' (promoted profile), or 'kid'
 let currentActiveId = null;
 let adminLoginInProgress = false; // true only after the admin submits the password form
+
+// A promoted profile uses the same admin tools as the owner. Keep this helper
+// in one place so every admin-only button and action grants the same access.
+function isAdminRole() {
+    return currentRole === 'admin' || currentRole === 'teacher';
+}
+
+function profileRole(profile) {
+    return profile && profile.role === 'teacher' ? 'teacher' : 'kid';
+}
 
 // ---------- Kid profile device lock ----------
 // A successful kid login "locks" the browser/PWA to that explorer. Closing
@@ -704,7 +714,7 @@ function getActiveKidProfile() {
 function updateSafeZoneIdentity() {
     const composerAvatar = document.getElementById('safeComposerAvatar');
     if (!composerAvatar) return;
-    if (currentRole === 'admin') {
+    if (isAdminRole()) {
         composerAvatar.innerText = '🛠️';
         return;
     }
@@ -750,7 +760,32 @@ function checkLoginSession() {
     }
 
     if (isLoggedIn === 'true' && activeId) {
-        currentRole = role;
+        // Teacher sessions are restored only as a profile session. The live
+        // kidProfiles listener below re-checks the profile's role before the
+        // teacher tools are shown, so a forged sessionStorage value cannot
+        // promote an ordinary kid to Admin in the UI.
+        if (role === 'teacher') {
+            // Wait for the live profile snapshot before restoring teacher tools.
+            if (!kidProfilesLoaded) {
+                currentRole = null;
+                currentActiveId = null;
+                if (loginOverlay) loginOverlay.classList.remove('hidden');
+                populateKidSelect();
+                return;
+            }
+            const profile = cachedKidProfiles.find(p => p.id === activeId);
+            if (!profile || profileRole(profile) !== 'teacher') {
+                sessionStorage.removeItem('kidzone_logged_in');
+                sessionStorage.removeItem('kidzone_user_role');
+                sessionStorage.removeItem('kidzone_active_id');
+                currentRole = null;
+                currentActiveId = null;
+                if (loginOverlay) loginOverlay.classList.remove('hidden');
+                populateKidSelect();
+                return;
+            }
+        }
+        currentRole = role === 'teacher' ? 'teacher' : 'kid';
         currentActiveId = activeId;
         if (loginOverlay) loginOverlay.classList.add('hidden');
         setupUIForSession();
@@ -811,6 +846,27 @@ function listenToKidProfiles() {
         });
         kidProfilesLoaded = true;
         populateKidSelect();
+
+        // The owner can promote or demote a profile while that explorer is
+        // already signed in on another device. Apply the live role immediately.
+        if (currentActiveId && (currentRole === 'kid' || currentRole === 'teacher')) {
+            const activeProfile = cachedKidProfiles.find(p => p.id === currentActiveId);
+            const nextRole = profileRole(activeProfile);
+            if (currentRole !== nextRole) {
+                currentRole = nextRole;
+                sessionStorage.setItem('kidzone_user_role', nextRole);
+                showToast(nextRole === 'teacher'
+                    ? 'You are now a Teacher with Admin tools! 👩‍🏫'
+                    : 'Teacher access has been removed. You are a Kid Explorer again. 🚀',
+                    nextRole === 'teacher' ? '👩‍🏫' : '🚀', 4000);
+            }
+        }
+
+        // On a fresh page load, checkLoginSession waits for this snapshot so
+        // that a teacher's role is verified before Admin controls appear.
+        if (!currentRole && sessionStorage.getItem('kidzone_user_role') === 'teacher') {
+            checkLoginSession();
+        }
         setupUIForSession();
         syncLockedDevicePushToken().catch(e => console.warn('[KidZone] locked profile push sync skipped:', e && (e.code || e.message || e)));
         // Keep Safe Zone friend lists live when Admin creates a new kid profile.
@@ -845,7 +901,7 @@ function populateKidSelect() {
         opt.value = p.id;
         // textContent is already safe; using escapeHtml here would show literal
         // &amp; / &lt; strings to children when a name contains punctuation.
-        opt.textContent = `${p.avatar || '🚀'} ${p.name || 'Explorer'}`;
+        opt.textContent = `${p.avatar || '🚀'} ${p.name || 'Explorer'}${profileRole(p) === 'teacher' ? ' · Teacher' : ''}`;
         selectElem.appendChild(opt);
     });
 
@@ -890,11 +946,12 @@ async function handleKidLogin(event) {
         rememberDeviceProfileLock(kid);
         applyDeviceProfileLockUI();
 
+        const signedInRole = profileRole(kid);
         sessionStorage.setItem('kidzone_logged_in', 'true');
-        sessionStorage.setItem('kidzone_user_role', 'kid');
+        sessionStorage.setItem('kidzone_user_role', signedInRole);
         sessionStorage.setItem('kidzone_active_id', kid.id);
 
-        currentRole = 'kid';
+        currentRole = signedInRole;
         currentActiveId = kid.id;
 
         const loginTimeISO = new Date().toISOString();
@@ -915,7 +972,10 @@ async function handleKidLogin(event) {
         loadProgress();
         playChime([523, 659, 784, 1046]);
         launchConfetti(40);
-        showToast(`Welcome back, ${kid.name || 'Explorer'}! Profile locked and alerts stay active. 🚀`, '✨', 4200);
+        showToast(signedInRole === 'teacher'
+            ? `Welcome, Teacher ${kid.name || 'Explorer'}! Admin tools are ready. 👩‍🏫`
+            : `Welcome back, ${kid.name || 'Explorer'}! Profile locked and alerts stay active. 🚀`,
+            signedInRole === 'teacher' ? '👩‍🏫' : '✨', 4200);
 
         // ---- phone alerts: connect this kid's device ----
         phoneAlertBaseline = null;   // don't alert about old notifications
@@ -1028,10 +1088,11 @@ function watchAdminAuth() {
                 // Do not kick out a child just because Firebase found an old
                 // admin token from another visit. Keep the kid session/lock and
                 // quietly revoke admin in the background.
-                const kidSessionActive = sessionStorage.getItem('kidzone_user_role') === 'kid' &&
+                const storedProfileRole = sessionStorage.getItem('kidzone_user_role');
+                const kidSessionActive = (storedProfileRole === 'kid' || storedProfileRole === 'teacher') &&
                     !!sessionStorage.getItem('kidzone_active_id');
                 if (kidSessionActive) {
-                    currentRole = 'kid';
+                    currentRole = storedProfileRole;
                     currentActiveId = sessionStorage.getItem('kidzone_active_id');
                     const overlay = document.getElementById('loginScreen');
                     if (overlay) overlay.classList.add('hidden');
@@ -1063,7 +1124,8 @@ function watchAdminAuth() {
             playChime([523, 659, 784, 1046]);
             showToast('Welcome Admin! \ud83d\udee0\ufe0f', '\ud83d\udc51', 3500);
         } else if (currentRole === 'admin') {
-            // Admin signed out or the token expired.
+            // The Firebase owner signed out or the token expired. A teacher
+            // profile is not a Firebase Auth session, so leave it untouched.
             adminLoginInProgress = false;
             currentRole = null;
             currentActiveId = null;
@@ -1104,18 +1166,19 @@ function setupUIForSession() {
     const errorLogsBtn = document.getElementById('errorLogsBtn');
     const announceBtn = document.getElementById('announceBtn');
 
-    if (currentRole === 'admin') {
+    if (isAdminRole()) {
+        const teacher = currentRole === 'teacher' ? getActiveKidProfile() : null;
         if (addKidBtn) addKidBtn.style.display = 'inline-block';
         if (manageProfilesBtn) manageProfilesBtn.style.display = 'inline-block';
         if (reportsBtn) reportsBtn.style.display = 'inline-block';
         if (errorLogsBtn) errorLogsBtn.style.display = 'inline-block';
         if (announceBtn) announceBtn.style.display = 'inline-block';
         if (homeworkAdminPanel) homeworkAdminPanel.style.display = 'block';
-        if (avatarElem) avatarElem.innerText = '🛠️';
-        if (nameElem) nameElem.innerText = 'Admin (Yaasin)';
+        if (avatarElem) avatarElem.innerText = teacher?.avatar || '🛠️';
+        if (nameElem) nameElem.innerText = teacher ? `${teacher.name || 'Teacher'} (Teacher)` : 'Admin (Yaasin)';
         if (logoutBtn) {
-            logoutBtn.innerText = '🔒 Admin Logout';
-            logoutBtn.title = 'Log out of Admin';
+            logoutBtn.innerText = teacher ? '🔒 Teacher Logout' : '🔒 Admin Logout';
+            logoutBtn.title = teacher ? 'Log out of Teacher' : 'Log out of Admin';
         }
     } else {
         if (addKidBtn) addKidBtn.style.display = 'none';
@@ -1194,7 +1257,7 @@ window.handleLogout = handleLogout;
 let selectedAvatar = '🚀';
 
 function openCreateAccountModal() {
-    if (currentRole !== 'admin') {
+    if (!isAdminRole()) {
         showToast('Only Admin can create new kid profiles!', '⚠️', 3000);
         return;
     }
@@ -1255,6 +1318,7 @@ async function handleCreateKidAccount(event) {
         id: newId,
         name: kidName,
         avatar: selectedAvatar,
+        role: 'kid', // Admin can later promote this profile to Teacher.
         grade: Number(gradeInput ? gradeInput.value : 1) || 1, // Mauritius syllabus grade 1-6
         pinHash: await hashPin(kidPin)   // never store the raw PIN
     };
@@ -1277,7 +1341,7 @@ async function handleCreateKidAccount(event) {
 window.handleCreateKidAccount = handleCreateKidAccount;
 
 function openAdminPortalModal() {
-    if (currentRole !== 'admin') {
+    if (!isAdminRole()) {
         showToast('Only Admin can manage profiles!', '⚠️', 3000);
         return;
     }
@@ -1301,7 +1365,7 @@ function closeAdminPortalModalOnBg(e) {
 window.closeAdminPortalModalOnBg = closeAdminPortalModalOnBg;
 
 async function updateKidGrade(kidId, grade) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const g = Number(grade) || 1;
     try {
         await setDoc(doc(db, 'kidProfiles', kidId), { grade: g }, { merge: true });
@@ -1313,6 +1377,46 @@ async function updateKidGrade(kidId, grade) {
     }
 }
 window.updateKidGrade = updateKidGrade;
+
+/**
+ * Promote an existing kid profile to Teacher. Teachers use the same PIN login
+ * but receive the complete Admin workspace (profiles, reports, homework,
+ * moderation, alerts, and test-paper review).
+ */
+async function toggleTeacherRole(kidId) {
+    if (!isAdminRole()) {
+        showToast('Only Admin can change teacher access.', '⚠️', 3000);
+        return;
+    }
+
+    const kid = cachedKidProfiles.find(p => p.id === kidId);
+    if (!kid) {
+        showToast('That explorer profile could not be found.', '❌', 3000);
+        return;
+    }
+
+    const makeTeacher = profileRole(kid) !== 'teacher';
+    const action = makeTeacher ? 'make' : 'remove Teacher access from';
+    if (!confirm(`Are you sure you want to ${action} ${kid.name || 'this explorer'}?\n\n${makeTeacher ? 'They will keep using their PIN and will get all Admin tools.' : 'They will become a normal Kid Explorer again.'}`)) return;
+
+    try {
+        await setDoc(doc(db, 'kidProfiles', kidId), {
+            role: makeTeacher ? 'teacher' : 'kid',
+            roleUpdatedAt: Date.now(),
+            roleUpdatedBy: currentRole === 'teacher' ? currentActiveId : 'admin'
+        }, { merge: true });
+        playSound(makeTeacher ? 760 : 420);
+        showToast(makeTeacher
+            ? `${kid.name || 'Explorer'} is now a Teacher with Admin privileges! 👩‍🏫`
+            : `${kid.name || 'Explorer'} is a Kid Explorer again. 🚀`,
+            makeTeacher ? '👩‍🏫' : '🚀', 4000);
+        renderAdminPortalProfiles();
+    } catch (e) {
+        console.error('Error updating teacher role:', e);
+        showToast('Could not update teacher access.', '❌', 3000);
+    }
+}
+window.toggleTeacherRole = toggleTeacherRole;
 
 function renderAdminPortalProfiles() {
     const container = document.getElementById('adminProfilesList');
@@ -1327,7 +1431,12 @@ function renderAdminPortalProfiles() {
     container.innerHTML = '';
     cachedKidProfiles.forEach(p => {
         const div = document.createElement('div');
-        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);';
+        div.className = 'admin-profile-row';
+        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; gap: 14px; background: var(--bg-main); padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);';
+        const isTeacher = profileRole(p) === 'teacher';
+        // Encode IDs/names before placing them in the existing inline handlers.
+        const encodedId = encodeURIComponent(String(p.id)).replace(/'/g, '%27');
+        const encodedName = encodeURIComponent(String(p.name || 'Explorer')).replace(/'/g, '%27');
         
         let formattedDate = 'Never logged in';
         if (p.lastLogin) {
@@ -1346,25 +1455,33 @@ function renderAdminPortalProfiles() {
                     <span style="font-size: 1.2rem; margin-right: 6px;">${escapeHtml(p.avatar)}</span> ${escapeHtml(p.name)} 
                     <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">${p.pinHash ? '\ud83d\udd12 PIN secured' : '\u26a0\ufe0f PIN not yet secured'}</span>
                 </div>
+                <div class="admin-profile-role ${isTeacher ? 'teacher' : 'kid'}">
+                    ${isTeacher ? '👩‍🏫 Teacher · Admin privileges enabled' : '🚀 Kid Explorer'}
+                </div>
                 <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
                     <span>🕒 Last Login:</span>
-                    <strong style="color: var(--primary-blue-dark); font-weight: 700;">${formattedDate}</strong>
+                    <strong style="color: var(--primary-blue-dark); font-weight: 700;">${escapeHtml(formattedDate)}</strong>
                 </div>
                 <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span>🎒 Grade:</span>
-                    <select onchange="updateKidGrade('${p.id}', this.value)" style="font: inherit; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color);">
+                    <select onchange="updateKidGrade(decodeURIComponent('${encodedId}'), this.value)" style="font: inherit; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color);">
                         ${[1,2,3,4,5,6].map(g => `<option value="${g}" ${Number(p.grade) === g ? 'selected' : ''}>Grade ${g}</option>`).join('')}
                     </select>
                 </div>
             </div>
-            <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
+            <div class="admin-profile-actions">
+                <button class="teacher-role-btn ${isTeacher ? 'is-teacher' : ''}" type="button" onclick="toggleTeacherRole(decodeURIComponent('${encodedId}'))">
+                    ${isTeacher ? '↩️ Remove Teacher' : '👩‍🏫 Make Teacher'}
+                </button>
+                <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile(decodeURIComponent('${encodedId}'), decodeURIComponent('${encodedName}'))">🗑️ Remove</button>
+            </div>
         `;
         container.appendChild(div);
     });
 }
 
 async function deleteKidProfile(kidId, kidName) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     if (!confirm(`Are you sure you want to permanently delete ${kidName}'s profile?`)) return;
 
     try {
@@ -3323,24 +3440,38 @@ function setTablesFocus(focus, evt) {
 window.setTablesFocus = setTablesFocus;
 
 function buildTablesRound(focus, count = 12) {
+    // A selected table is written in the traditional learning order: the
+    // explorer factor counts up on the left and the chosen table stays on the
+    // right. For example, ×2 is 1×2, 2×2, 3×2 ... 12×2.
+    if (focus !== 'mix') {
+        const table = Number(focus) || 2;
+        return Array.from({ length: Math.min(count, 12) }, (_, index) => {
+            const a = index + 1;
+            const b = table;
+            return {
+                a,
+                b,
+                answer: a * b,
+                q: `What is ${a} × ${b}?`,
+                icon: '✖️'
+            };
+        });
+    }
+
+    // Mixed practice remains varied, but still includes both factors from 1-12.
     const list = [];
     const used = new Set();
     let guard = 0;
     while (list.length < count && guard < 200) {
         guard++;
-        let a, b;
-        if (focus === 'mix') {
-            a = Math.floor(Math.random() * 12) + 1; // 1-12 (so 1x2, 1x3, ... appear too)
-            b = Math.floor(Math.random() * 12) + 1; // 1-12
-        } else {
-            a = Number(focus) || 2;
-            b = Math.floor(Math.random() * 12) + 1;
-        }
+        const a = Math.floor(Math.random() * 12) + 1;
+        const b = Math.floor(Math.random() * 12) + 1;
         const key = `${a}x${b}`;
         if (used.has(key)) continue;
         used.add(key);
         list.push({
-            a, b,
+            a,
+            b,
             answer: a * b,
             q: `What is ${a} × ${b}?`,
             icon: '✖️'
@@ -3648,7 +3779,7 @@ function accuracyClass(pct) {
 }
 
 async function openReportsModal() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     playSound(600);
     adminReportKid = null;
     const modal = document.getElementById('reportsModal');
@@ -3876,7 +4007,7 @@ function renderKidReport(kidId) {
 }
 
 async function saveTablesTeacherReview(kidId, reviewIndex) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const stats = allKidStats[kidId] || {};
     const list = Array.isArray(stats._tablesReviews) ? stats._tablesReviews : [];
     const pack = list[reviewIndex];
@@ -4204,26 +4335,26 @@ function renderSafeZone() {
     populateSafeChatFriends();
 
     const adminPanel = document.getElementById('safezoneAdminPanel');
-    if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
-    document.querySelectorAll('.admin-only-filter').forEach(el => el.style.display = currentRole === 'admin' ? 'inline-block' : 'none');
+    if (adminPanel) adminPanel.style.display = isAdminRole() ? 'block' : 'none';
+    document.querySelectorAll('.admin-only-filter').forEach(el => el.style.display = isAdminRole() ? 'inline-block' : 'none');
 
     updateSafeZoneIdentity();
 
     const composer = document.getElementById('safezoneComposer');
-    if (composer) composer.style.display = currentRole === 'admin' || currentRole === 'kid' ? 'flex' : 'none';
+    if (composer) composer.style.display = isAdminRole() || currentRole === 'kid' ? 'flex' : 'none';
     const hint = document.getElementById('safeComposerHint');
-    if (hint) hint.innerText = safeZonePaused && currentRole !== 'admin'
+    if (hint) hint.innerText = safeZonePaused && !isAdminRole()
         ? 'Admin has paused posting for now. You can still read posts.'
-        : (currentRole === 'admin' ? 'Admin posts appear immediately.' : 'Kids can post instantly. Admin can still remove anything unkind.');
+        : (isAdminRole() ? 'Admin posts appear immediately.' : 'Kids can post instantly. Admin can still remove anything unkind.');
     const postBtn = document.querySelector('#safezoneComposer .login-submit-btn');
-    if (postBtn) postBtn.disabled = safeZonePaused && currentRole !== 'admin';
+    if (postBtn) postBtn.disabled = safeZonePaused && !isAdminRole();
 
     renderSafeAdminPanel();
 
     const q = ((document.getElementById('safezoneSearch') || {}).value || '').trim().toLowerCase();
     let list = getAllSafeZonePosts().filter(p => p.status !== 'deleted');
 
-    if (currentRole !== 'admin') {
+    if (!isAdminRole()) {
         list = list.filter(p => p.status === 'approved' || p.authorId === currentActiveId);
     }
     if (safeZoneFilter === 'mine') list = list.filter(p => p.authorId === currentActiveId);
@@ -4242,7 +4373,7 @@ function renderSafeZone() {
 window.renderSafeZone = renderSafeZone;
 
 function renderSafeAdminPanel() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const stats = document.getElementById('safezoneAdminStats');
     const pendingBox = document.getElementById('safezonePendingQueue');
     const allPosts = getAllSafeZonePosts();
@@ -4293,12 +4424,12 @@ function renderSafePostCard(p) {
         <div class="safe-post-actions">
             <button class="safe-action-btn ${liked ? 'liked' : ''}" onclick="toggleSafeLike('${p.id}')">❤️ ${(p.likes || []).length} Like</button>
             <button class="safe-action-btn" onclick="focusSafeComment('${p.id}')">💬 ${visibleComments.length} Comment</button>
-            ${currentRole === 'admin' ? `<button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
+            ${isAdminRole() ? `<button class="safe-action-btn" onclick="safeHidePost('${p.id}')">🙈 Hide</button><button class="safe-action-btn" onclick="safeDeletePost('${p.id}')">🗑️ Delete</button>` : ''}
         </div>
         <div class="safe-comments">
             ${visibleComments.map(c => `<div class="safe-comment"><strong>${escapeHtml(c.authorAvatar || '🚀')} ${escapeHtml(c.authorName || 'Explorer')}:</strong> ${escapeHtml(c.text || '')}</div>`).join('')}
         </div>
-        ${currentRole === 'kid' || currentRole === 'admin' ? `<div class="safe-comment-box"><input id="comment_${p.id}" maxlength="220" placeholder="Write a kind comment..."><button class="book-btn" onclick="submitSafeComment('${p.id}')">Send 💬</button></div>` : ''}
+        ${currentRole === 'kid' || isAdminRole() ? `<div class="safe-comment-box"><input id="comment_${p.id}" maxlength="220" placeholder="Write a kind comment..."><button class="book-btn" onclick="submitSafeComment('${p.id}')">Send 💬</button></div>` : ''}
     </article>`;
 }
 
@@ -4320,10 +4451,10 @@ function populateSafeChatFriends() {
     // Admin sees all kid profiles for monitoring/testing chat.
     const friends = (cachedKidProfiles || [])
         .filter(k => k && k.id)
-        .filter(k => currentRole === 'admin' || k.id !== currentActiveId)
+        .filter(k => isAdminRole() || k.id !== currentActiveId)
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
-    const latestFriendId = (!old && currentRole !== 'admin') ? getLatestSafeChatFriendId() : '';
+    const latestFriendId = (!old && !isAdminRole()) ? getLatestSafeChatFriendId() : '';
     friends.forEach(k => {
         const opt = document.createElement('option');
         opt.value = k.id;
@@ -4336,7 +4467,7 @@ function populateSafeChatFriends() {
         const opt = document.createElement('option');
         opt.value = '';
         opt.disabled = true;
-        opt.innerText = currentRole === 'admin'
+        opt.innerText = isAdminRole()
             ? 'No kid profiles yet — create kids first'
             : 'No friends yet — ask Admin to add another kid';
         sel.appendChild(opt);
@@ -4364,7 +4495,7 @@ function selectSafeChatFriend(friendId) {
 window.selectSafeChatFriend = selectSafeChatFriend;
 
 function chatVisibleToCurrent(m) {
-    if (currentRole === 'admin') return true;
+    if (isAdminRole()) return true;
     if (!currentActiveId) return false;
     const mine = m.fromId === currentActiveId || m.toId === currentActiveId;
     if (!mine) return false;
@@ -4415,7 +4546,7 @@ function renderSafeGroupChat() {
     const win = document.getElementById('safeGroupChatWindow');
     if (!win) return;
     const panel = document.getElementById('safezoneGroupChatPanel');
-    if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
+    if (panel) panel.style.display = currentRole === 'kid' || isAdminRole() ? 'block' : 'none';
     const pageY = window.scrollY || document.documentElement.scrollTop || 0;
     const chatY = win.scrollTop || 0;
     const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && m.groupId === 'main').sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
@@ -4442,7 +4573,7 @@ function renderSafeGroupChat() {
 window.renderSafeGroupChat = renderSafeGroupChat;
 
 function markSafeGroupChatMessagesSeen(messages) {
-    if (!currentActiveId || currentRole === 'admin') return;
+    if (!currentActiveId || isAdminRole()) return;
     (messages || []).forEach(m => {
         if (!m || !m.id || m.groupId !== 'main') return;
         if (m.fromId === currentActiveId) return;
@@ -4467,7 +4598,7 @@ window.sendSafeGroupQuickMessage = sendSafeGroupQuickMessage;
 
 async function sendSafeGroupMessage(forcedText = null, quick = false) {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 2500); return; }
-    if (safeZonePaused && currentRole !== 'admin') { showToast('Group chat is paused by Admin right now.', '⏸️', 3000); return; }
+    if (safeZonePaused && !isAdminRole()) { showToast('Group chat is paused by Admin right now.', '⏸️', 3000); return; }
     const input = document.getElementById('safeGroupChatInput');
     const text = String(forcedText || input?.value || '').trim();
     const attachmentInput = document.getElementById('safeGroupChatAttachment');
@@ -4483,8 +4614,8 @@ async function sendSafeGroupMessage(forcedText = null, quick = false) {
         id, text, createdAt: Date.now(), quick: !!quick,
         groupId: 'main',
         fromId: currentActiveId,
-        fromName: currentRole === 'admin' ? 'Admin' : (me.name || 'Explorer'),
-        fromAvatar: currentRole === 'admin' ? '🛠️' : (me.avatar || '🚀'),
+        fromName: isAdminRole() ? 'Admin' : (me.name || 'Explorer'),
+        fromAvatar: isAdminRole() ? '🛠️' : (me.avatar || '🚀'),
         toId: 'group_main',
         toName: 'Everyone',
         toAvatar: '👨‍👩‍👧‍👦',
@@ -4706,7 +4837,7 @@ function renderSafeChat() {
     const _safePageY = window.scrollY || document.documentElement.scrollTop || 0;
     const _safeChatY = win.scrollTop || 0;
     const panel = document.getElementById('safezoneChatPanel');
-    if (panel) panel.style.display = currentRole === 'kid' || currentRole === 'admin' ? 'block' : 'none';
+    if (panel) panel.style.display = currentRole === 'kid' || isAdminRole() ? 'block' : 'none';
     populateSafeChatFriends();
 
 
@@ -4728,7 +4859,7 @@ function renderSafeChat() {
     }
     const friend = cachedKidProfiles.find(k => k.id === selectedSafeChatFriend);
     const messages = getAllSafeZoneChats().filter(m => m.status !== 'deleted' && !m.groupId && chatVisibleToCurrent(m) && (
-        currentRole === 'admin'
+        isAdminRole()
             ? (m.fromId === selectedSafeChatFriend || m.toId === selectedSafeChatFriend)
             : ((m.fromId === currentActiveId && m.toId === selectedSafeChatFriend) || (m.fromId === selectedSafeChatFriend && m.toId === currentActiveId))
     ));
@@ -4738,7 +4869,7 @@ function renderSafeChat() {
         return;
     }
     win.innerHTML = messages.map(m => {
-        const isMe = m.fromId === currentActiveId || (currentRole === 'admin' && m.fromId === 'admin');
+        const isMe = m.fromId === currentActiveId || (isAdminRole() && m.fromId === 'admin');
         const pending = m.status === 'pending';
         const ticks = chatReceiptTicks(m, isMe);
         const seenHint = (isMe && m.seenAt)
@@ -4840,7 +4971,7 @@ async function persistChatReceipt(msg, patch) {
 }
 
 function markSafeChatMessagesSeen(messages) {
-    if (!currentActiveId || currentRole === 'admin') return;
+    if (!currentActiveId || isAdminRole()) return;
     const incoming = (messages || []).filter(m =>
         m && m.id && m.status !== 'deleted' &&
         m.fromId && m.fromId !== currentActiveId &&
@@ -4868,7 +4999,7 @@ function markSafeChatMessagesSeen(messages) {
 
 // When a message arrives for me, mark delivered (single grey double-tick for sender).
 function markSafeChatMessagesDelivered(messages) {
-    if (!currentActiveId || currentRole === 'admin') return;
+    if (!currentActiveId || isAdminRole()) return;
     (messages || []).forEach(m => {
         if (!m || !m.id || m.groupId) return;
         if (m.toId !== currentActiveId || m.fromId === currentActiveId) return;
@@ -4912,7 +5043,7 @@ function setupSafeProgressChatListener() {
         safeProgressChatUnsub = null;
     }
     safeZoneProgressChats = [];
-    if (!currentActiveId || currentRole === 'admin') return;
+    if (!currentActiveId || isAdminRole()) return;
     safeProgressChatUnsub = onSnapshot(doc(db, 'kidProgress', currentActiveId), (snap) => {
         const data = snap.exists() ? (snap.data() || {}) : {};
         safeZoneProgressChats = Array.isArray(data.safeChats) ? data.safeChats.filter(m => m && m.id) : [];
@@ -4949,7 +5080,7 @@ async function syncLocalSafeChatsToCloud() {
 
 async function sendSafeChatMessage(forcedText = null, quick = false) {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 2500); return; }
-    if (safeZonePaused && currentRole !== 'admin') { showToast('Chat is paused by Admin right now.', '⏸️', 3000); return; }
+    if (safeZonePaused && !isAdminRole()) { showToast('Chat is paused by Admin right now.', '⏸️', 3000); return; }
     if (!selectedSafeChatFriend) { showToast('Choose a friend first.', '👋', 2500); return; }
     const input = document.getElementById('safeChatInput');
     const text = String(forcedText || input?.value || '').trim();
@@ -4971,8 +5102,8 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
     const data = {
         id, text, createdAt: Date.now(), quick: !!quick,
         fromId: currentActiveId,
-        fromName: currentRole === 'admin' ? 'Admin' : (me.name || 'Explorer'),
-        fromAvatar: currentRole === 'admin' ? '🛠️' : (me.avatar || '🚀'),
+        fromName: isAdminRole() ? 'Admin' : (me.name || 'Explorer'),
+        fromAvatar: isAdminRole() ? '🛠️' : (me.avatar || '🚀'),
         toId: selectedSafeChatFriend,
         toName: friend.name || 'Friend',
         toAvatar: friend.avatar || '🚀',
@@ -5028,7 +5159,7 @@ async function sendSafeChatMessage(forcedText = null, quick = false) {
 window.sendSafeChatMessage = sendSafeChatMessage;
 
 async function safeApproveChat(chatId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const local = getLocalSafeChats();
     const localMsg = local.find(m => m.id === chatId);
     try {
@@ -5048,7 +5179,7 @@ async function safeApproveChat(chatId) {
 window.safeApproveChat = safeApproveChat;
 
 async function safeDeleteChat(chatId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const local = getLocalSafeChats();
     const localMsg = local.find(m => m.id === chatId);
     try {
@@ -5154,7 +5285,7 @@ async function saveSafePostDeleteTombstone(postId, authorId) {
 
 async function submitSafePost() {
     if (!currentRole || !currentActiveId) { showToast('Please log in first.', '🔒', 3000); return; }
-    if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
+    if (safeZonePaused && !isAdminRole()) { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
     const textEl = document.getElementById('safePostText');
     const text = (textEl?.value || '').trim();
     const mood = document.getElementById('safePostMood')?.value || '😊';
@@ -5173,8 +5304,8 @@ async function submitSafePost() {
     const data = {
         id, text, mood, audienceId, createdAt: Date.now(),
         authorId: currentActiveId,
-        authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
-        authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
+        authorName: isAdminRole() ? 'Admin' : (kid.name || 'Explorer'),
+        authorAvatar: isAdminRole() ? '🛠️' : (kid.avatar || '🚀'),
         status: 'approved',
         attachment,
         likes: [], comments: []
@@ -5235,7 +5366,7 @@ window.toggleSafeLike = toggleSafeLike;
 
 async function submitSafeComment(postId) {
     if (!currentActiveId) return;
-    if (safeZonePaused && currentRole !== 'admin') { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
+    if (safeZonePaused && !isAdminRole()) { showToast('Posting is paused by Admin right now.', '⏸️', 3000); return; }
     const input = document.getElementById('comment_' + postId);
     const text = (input?.value || '').trim();
     if (!text) return;
@@ -5245,8 +5376,8 @@ async function submitSafeComment(postId) {
     const comments = Array.isArray(p.comments) ? [...p.comments] : [];
     comments.push({
         id: 'c_' + Date.now(), text, createdAt: Date.now(), authorId: currentActiveId,
-        authorName: currentRole === 'admin' ? 'Admin' : (kid.name || 'Explorer'),
-        authorAvatar: currentRole === 'admin' ? '🛠️' : (kid.avatar || '🚀'),
+        authorName: isAdminRole() ? 'Admin' : (kid.name || 'Explorer'),
+        authorAvatar: isAdminRole() ? '🛠️' : (kid.avatar || '🚀'),
         status: 'approved'
     });
     try {
@@ -5273,7 +5404,7 @@ async function submitSafeComment(postId) {
 window.submitSafeComment = submitSafeComment;
 
 async function safeApprovePost(postId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const patch = { status: 'approved', approvedAt: Date.now() };
     try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
     catch(e) { console.warn('[KidZone] approve post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
@@ -5283,7 +5414,7 @@ async function safeApprovePost(postId) {
 window.safeApprovePost = safeApprovePost;
 
 async function safeHidePost(postId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const patch = { status: 'hidden', hiddenAt: Date.now() };
     try { await setDoc(doc(db, 'safeZonePosts', postId), patch, { merge: true }); }
     catch(e) { console.warn('[KidZone] hide post collection failed; trying profile fallback:', e && (e.code || e.message || e)); }
@@ -5293,7 +5424,7 @@ async function safeHidePost(postId) {
 window.safeHidePost = safeHidePost;
 
 async function safeDeletePost(postId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     if (!confirm('Delete this Safe Zone post for everyone?')) return;
     const post = getSafePost(postId);
     const authorId = post ? post.authorId : '';
@@ -5325,7 +5456,7 @@ async function safeDeletePost(postId) {
 window.safeDeletePost = safeDeletePost;
 
 async function safeApproveComment(postId, commentId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const p = getSafePost(postId); if (!p) return;
     const comments = (p.comments || []).map(c => c.id === commentId ? { ...c, status:'approved', approvedAt: Date.now() } : c);
     try { await setDoc(doc(db, 'safeZonePosts', postId), { comments }, { merge: true }); showToast('Comment approved.', '✅', 2200); }
@@ -5334,7 +5465,7 @@ async function safeApproveComment(postId, commentId) {
 window.safeApproveComment = safeApproveComment;
 
 async function safeApproveAllPending() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const pending = safeZonePosts.filter(p => p.status === 'pending' || (p.comments || []).some(c => c.status === 'pending'));
     const pendingChats = getAllSafeZoneChats().filter(m => m.status === 'pending');
     try {
@@ -5351,7 +5482,7 @@ async function safeApproveAllPending() {
 window.safeApproveAllPending = safeApproveAllPending;
 
 async function toggleSafeZonePause() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     try { await setDoc(doc(db, 'safeZoneSettings', 'main'), { paused: !safeZonePaused, updatedAt: Date.now() }, { merge: true }); }
     catch(e) { console.error(e); showToast('Could not update Safe Zone settings.', '❌', 3000); }
 }
@@ -5815,7 +5946,7 @@ function listenToAnnouncements() {
 window.listenToAnnouncements = listenToAnnouncements;
 
 function openAnnounceModal() {
-    if (currentRole !== 'admin') {
+    if (!isAdminRole()) {
         showToast('Only Admin can send alerts!', '⚠️', 3000);
         return;
     }
@@ -5856,7 +5987,7 @@ window.tryCloudPush = tryCloudPush;
 
 async function handleAnnounceSubmit(event) {
     event.preventDefault();
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const tEl = document.getElementById('announceTitleInput');
     const bEl = document.getElementById('announceBodyInput');
     const title = (tEl && tEl.value || '').trim();
@@ -5922,8 +6053,8 @@ function makeErrorLog(kind, message, extra = {}) {
         at: Date.now(),
         role: currentRole || 'not-logged-in',
         activeId: currentActiveId || '',
-        kidName: currentRole === 'admin' ? 'Admin' : (activeKid ? activeKid.name : ''),
-        kidAvatar: currentRole === 'admin' ? '🛠️' : (activeKid ? activeKid.avatar : ''),
+        kidName: isAdminRole() ? 'Admin' : (activeKid ? activeKid.name : ''),
+        kidAvatar: isAdminRole() ? '🛠️' : (activeKid ? activeKid.avatar : ''),
         page: document.querySelector('.tab-content.active')?.id || ''
     };
 }
@@ -5939,7 +6070,7 @@ async function recordAppError(kind, message, extra = {}) {
     try {
         if (currentRole === 'kid' && currentActiveId) {
             await setDoc(doc(db, 'kidProfiles', currentActiveId), { errorOutbox: arrayUnion(log) }, { merge: true });
-        } else if (currentRole === 'admin') {
+        } else if (isAdminRole()) {
             await setDoc(doc(db, 'appErrorLogs', log.id), log, { merge: true });
         }
     } catch (e) {
@@ -5974,7 +6105,7 @@ function installErrorLogging() {
 }
 
 function openErrorLogsModal() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const m = document.getElementById('errorLogsModal');
     if (m) m.style.display = 'flex';
     renderErrorLogs();
@@ -6092,7 +6223,7 @@ function buildHomeworkHub() {
 window.buildHomeworkHub = buildHomeworkHub;
 
 function toggleHomeworkForm(force) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const form = document.getElementById('homeworkUploadForm');
     if (!form) return;
     const show = typeof force === 'boolean' ? force : form.style.display === 'none';
@@ -6116,7 +6247,7 @@ setTimeout(hwFileInputWatcher, 1000);
 
 async function handleHomeworkUpload(event) {
     event.preventDefault();
-    if (currentRole !== 'admin') { showToast('Only Admin can upload homework.', '⚠️', 3000); return; }
+    if (!isAdminRole()) { showToast('Only Admin can upload homework.', '⚠️', 3000); return; }
     const title = document.getElementById('hwTitle')?.value.trim();
     const type = document.getElementById('hwType')?.value || 'Homework';
     const dueDate = document.getElementById('hwDueDate')?.value || '';
@@ -6178,14 +6309,14 @@ function renderHomeworkHub() {
     const grid = document.getElementById('homeworkGrid');
     if (!grid) return;
     const adminPanel = document.getElementById('homeworkAdminPanel');
-    if (adminPanel) adminPanel.style.display = currentRole === 'admin' ? 'block' : 'none';
+    if (adminPanel) adminPanel.style.display = isAdminRole() ? 'block' : 'none';
     hwFileInputWatcher();
 
     const term = (document.getElementById('homeworkSearch') || {}).value || '';
     const q = term.trim().toLowerCase();
     let list = homeworkAssignments.filter(a => a.active !== false);
     list = list.filter(a => !q || (a.title || '').toLowerCase().includes(q) || (a.type || '').toLowerCase().includes(q) || (a.instructions || '').toLowerCase().includes(q));
-    if (currentRole !== 'admin') {
+    if (!isAdminRole()) {
         list = list.filter(a => {
             const submitted = !!getHomeworkSubmission(a.id);
             if (homeworkFilter === 'todo') return !submitted;
@@ -6198,20 +6329,20 @@ function renderHomeworkHub() {
     const done = currentRole === 'kid' ? homeworkAssignments.filter(a => getHomeworkSubmission(a.id)).length : homeworkSubmissions.length;
     const stats = document.getElementById('homeworkStats');
     if (stats) {
-        stats.innerHTML = currentRole === 'admin'
+        stats.innerHTML = isAdminRole()
             ? `<div class="hw-stat-card"><strong>${total}</strong><span>Assignments</span></div><div class="hw-stat-card"><strong>${homeworkSubmissions.length}</strong><span>Submissions</span></div><div class="hw-stat-card"><strong>${cachedKidProfiles.length}</strong><span>Kids</span></div>`
             : `<div class="hw-stat-card"><strong>${total}</strong><span>Total Tasks</span></div><div class="hw-stat-card"><strong>${done}</strong><span>Submitted</span></div><div class="hw-stat-card"><strong>${Math.max(0,total-done)}</strong><span>To Do</span></div>`;
     }
 
     if (!list.length) {
-        grid.innerHTML = `<div class="homework-card"><div class="hw-card-icon">📭</div><h3>No homework found</h3><p>${currentRole === 'admin' ? 'Create the first assignment using the Admin Teacher Tools.' : 'Nothing to do right now. Great job!'}</p></div>`;
+        grid.innerHTML = `<div class="homework-card"><div class="hw-card-icon">📭</div><h3>No homework found</h3><p>${isAdminRole() ? 'Create the first assignment using the Admin Teacher Tools.' : 'Nothing to do right now. Great job!'}</p></div>`;
         return;
     }
 
     grid.innerHTML = list.map(a => {
         const sub = getHomeworkSubmission(a.id);
-        const statusClass = currentRole === 'admin' ? 'admin' : (sub ? 'done' : 'todo');
-        const statusText = currentRole === 'admin' ? `${homeworkSubmissions.filter(s => s.assignmentId === a.id).length} answer(s)` : (sub ? 'Submitted' : 'To Do');
+        const statusClass = isAdminRole() ? 'admin' : (sub ? 'done' : 'todo');
+        const statusText = isAdminRole() ? `${homeworkSubmissions.filter(s => s.assignmentId === a.id).length} answer(s)` : (sub ? 'Submitted' : 'To Do');
         return `<div class="homework-card" role="button" tabindex="0" onclick="openHomework('${a.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHomework('${a.id}');}">
             <span class="hw-due-badge">${escapeHtml(formatHomeworkDate(a.dueDate))}</span>
             <div class="hw-card-icon">${homeworkTypeIcon(a.type)}</div>
@@ -6248,7 +6379,7 @@ function openHomework(id) {
     const submitBox = document.getElementById('homeworkKidSubmitBox');
     const adminActions = document.getElementById('homeworkAdminModalActions');
     const answer = document.getElementById('homeworkAnswerText');
-    if (currentRole === 'admin') {
+    if (isAdminRole()) {
         if (submitBox) submitBox.style.display = 'none';
         if (adminActions) adminActions.style.display = 'flex';
     } else {
@@ -6340,7 +6471,7 @@ function closeHomeworkReview() { const p = document.getElementById('homeworkRevi
 window.closeHomeworkReview = closeHomeworkReview;
 
 async function saveHomeworkFeedback(submissionId) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const sub = homeworkSubmissions.find(s => s.id === submissionId);
     if (!sub) return;
     const feedback = document.getElementById('fb_' + submissionId)?.value || '';
@@ -6354,7 +6485,7 @@ async function saveHomeworkFeedback(submissionId) {
 window.saveHomeworkFeedback = saveHomeworkFeedback;
 
 async function deleteCurrentHomework() {
-    if (currentRole !== 'admin' || !currentHomeworkId) return;
+    if (!isAdminRole() || !currentHomeworkId) return;
     const a = homeworkAssignments.find(x => x.id === currentHomeworkId);
     if (!a) return;
     if (!confirm(`Delete assignment "${a.title}"? Submissions will stay in reports.`)) return;
@@ -6932,7 +7063,7 @@ function renderTestPapers() {
     });
     const hint = document.getElementById('testpapersGradeHint');
     if (hint) {
-        hint.innerHTML = currentRole === 'admin'
+        hint.innerHTML = isAdminRole()
             ? '👩‍🏫 Admin view — showing <strong>Grade ' + tpSelectedGrade + '</strong>. Use the buttons above to switch grade.'
             : '🎒 These papers are for <strong>Grade ' + tpSelectedGrade + '</strong>' +
               (getKidGrade() === tpSelectedGrade ? '.' : ' (your profile grade is ' + getKidGrade() + ').');
@@ -7003,7 +7134,7 @@ function renderTestPapersMine() {
 function renderTestPapersReview() {
     const box = document.getElementById('testpapersReviewPanel');
     if (!box) return;
-    if (currentRole !== 'admin') { box.style.display = 'none'; return; }
+    if (!isAdminRole()) { box.style.display = 'none'; return; }
     box.style.display = '';
     const pending = testSubmissions.filter(s => s.status !== 'graded').length;
     box.innerHTML = `
@@ -7150,7 +7281,7 @@ async function submitTestPaper() {
 window.submitTestPaper = submitTestPaper;
 
 function openTestReview(id) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     tpCurrentReviewId = id;
     const sub = testSubmissions.find(s => s.id === id);
     if (!sub) return;
@@ -7188,7 +7319,7 @@ function openTestReview(id) {
 window.openTestReview = openTestReview;
 
 async function saveTestReview(id) {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     const sub = testSubmissions.find(s => s.id === id);
     if (!sub) return;
     const answers = sub.answers.map((a, i) => {
@@ -7258,7 +7389,7 @@ function closeTestPaperView() {
     if (paper) paper.style.display = 'none';
     if (picker) picker.style.display = '';
     if (mine) mine.style.display = currentRole === 'kid' ? '' : 'none';
-    if (review) review.style.display = currentRole === 'admin' ? '' : 'none';
+    if (review) review.style.display = isAdminRole() ? '' : 'none';
     renderTestPapersReview();
     renderTestPapersMine();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -10319,7 +10450,7 @@ let callCameraOn = false;
 let callHasVideoTrack = false;
 
 function callProfile() {
-    if (currentRole === 'admin') {
+    if (isAdminRole()) {
         return { kidId: currentActiveId || 'admin', name: 'Admin (Yaasin)', avatar: '🛠️' };
     }
     const kid = getActiveKidProfile();
@@ -10397,7 +10528,7 @@ function listenToCallSettings() {
 window.listenToCallSettings = listenToCallSettings;
 
 async function toggleCallsPause() {
-    if (currentRole !== 'admin') return;
+    if (!isAdminRole()) return;
     try {
         await setDoc(doc(db, 'callSettings', 'main'), { paused: !callsPaused, updatedAt: Date.now() }, { merge: true });
         showToast(callsPaused ? 'Calls are now allowed. 📞' : 'All kid calls are paused. ⏸️', '📞', 3000);
@@ -10479,7 +10610,7 @@ window.groupCallButtonAction = groupCallButtonAction;
 // ---------- starting calls ----------
 function callsAllowedGuard() {
     if (!currentActiveId) { showToast('Log in first to call friends!', '🔐', 3000); return false; }
-    if (callsPaused && currentRole !== 'admin') {
+    if (callsPaused && !isAdminRole()) {
         showToast('Calls are paused by Admin right now. ⏸️', '📵', 3000);
         return false;
     }
@@ -10598,7 +10729,7 @@ async function joinCall(roomId, mode) {
     const room = cachedCallRooms.find(r => r.id === roomId) ||
         (await getDoc(doc(db, 'callRooms', roomId))).data();
     if (!room) { showToast('This call has ended.', '📵', 3000); return; }
-    if (!room.isGroup && room.toId !== currentActiveId && room.fromId !== currentActiveId && currentRole !== 'admin') {
+    if (!room.isGroup && room.toId !== currentActiveId && room.fromId !== currentActiveId && !isAdminRole()) {
         showToast('This call is private.', '🔒', 3000); return;
     }
     const headcount = (room.participants || []).length;
