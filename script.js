@@ -1240,6 +1240,7 @@ function handleLogout() {
     hideIncomingCall();
     if (safeProgressChatUnsub) { try { safeProgressChatUnsub(); } catch (e) {} safeProgressChatUnsub = null; }
     safeZoneProgressChats = [];
+    locHandleLogout(); // 📍 stop location sharing + remove the explorer's pin
 
     const pinElem = document.getElementById('loginKidPin');
     const passElem = document.getElementById('adminPassword');
@@ -1808,6 +1809,7 @@ window.openKidZoneSection = openKidZoneSection;
 function switchTab(tabId, evt) {
     if (tabId === 'solar') { setTimeout(buildSolarSystem, 30); setTimeout(buildMoonDance, 30); }
     if (tabId === 'animals') setTimeout(buildAnimalKingdom, 30);
+    if (tabId === 'location') setTimeout(buildLocationHub, 30);
     if (tabId === 'docs') setTimeout(buildDocumentaries, 30);
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
     if (tabId === 'geo') setTimeout(buildGeoExplorer, 30);
@@ -12088,6 +12090,639 @@ function leaveCallCleanup() {
     updateGroupCallButton();
 }
 window.leaveCallCleanup = leaveCallCleanup;
+
+// ============================================================
+// LIVE LOCATION — MAURITIUS MAP  (📍 Live Map tab)
+// ============================================================
+// Kids (and teachers) can share their live position with the
+// school. The map is Leaflet + OpenStreetMap/Esri tiles, so it
+// behaves like Google Maps (pan, zoom, satellite) WITHOUT
+// needing a Google Maps API key or a billing account.
+//
+// How it works:
+//   1. Explorer taps "Enable My Location" -> the browser shows
+//      its allow/block prompt for this website.
+//   2. While sharing is ON the device position is watched and
+//      written to Firestore `liveLocations/{profileId}`.
+//   3. Admin & teachers subscribe to that collection and see
+//      every explorer as a friendly avatar pin on the map.
+//   4. Kids only ever load their OWN pin document.
+//   5. Logging out (or tapping Stop) deletes the pin, so the
+//      school can only see explorers while KidZone is open.
+// ============================================================
+
+const LEAFLET_CDN = 'https://unpkg.com/leaflet@1.9.4/dist/';
+const MAURITIUS_CENTER = [-20.2741, 57.5541];          // middle of the island
+const MAURITIUS_BOUNDS = [[-20.56, 57.24], [-19.94, 57.87]]; // whole Mauritius
+const LOC_MAX_BOUNDS = [[-30.0, 52.0], [-8.0, 64.0]];  // Indian Ocean playground
+const LOC_STALE_MS = 10 * 60 * 1000;                   // pin greys out after 10 min
+const LOC_WRITE_MIN_GAP_MS = 8000;                     // at most 1 write / 8 s
+const LOC_WRITE_HEARTBEAT_MS = 60000;                  // refresh "last seen" every 60 s
+const LOC_PREF_KEY = 'kidzone_loc_sharing_v1';         // remembers "sharing was ON"
+const LOC_TICKER_MS = 30000;                           // refresh labels/lists
+
+let leafletPromise = null;
+let locMap = null;
+let locBaseLayer = null;
+let locSatLayer = null;
+let locUsingSat = false;
+let locMarkers = new Map();      // profileId -> { marker, data }
+let locAccuracyCircle = null;
+let locWatchId = null;
+let locSharing = false;
+let locSharedAsId = null;        // profileId whose pin doc we are writing
+let locMyFix = null;             // { lat, lng, accuracy, at }
+let locLastWrite = { at: 0, lat: null, lng: null };
+let locRemote = new Map();       // profileId -> data from Firestore
+let locUnsub = null;
+let locSubMode = null;           // 'all' | 'self'
+let locTicker = null;
+let locDidAutoFit = false;
+let locPositionError = null;     // 'denied' | 'unavailable' | 'timeout' | ...
+
+function loadLeaflet() {
+    if (window.L) return Promise.resolve(window.L);
+    if (leafletPromise) return leafletPromise;
+    leafletPromise = new Promise((resolve, reject) => {
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = LEAFLET_CDN + 'leaflet.css';
+        document.head.appendChild(css);
+        const script = document.createElement('script');
+        script.src = LEAFLET_CDN + 'leaflet.js';
+        script.onload = () => {
+            if (window.L) resolve(window.L);
+            else { leafletPromise = null; reject(new Error('Map library loaded without L')); }
+        };
+        script.onerror = () => {
+            leafletPromise = null;
+            reject(new Error('Could not download the map. Check your internet connection.'));
+        };
+        document.head.appendChild(script);
+    });
+    return leafletPromise;
+}
+
+function locStale(entry) {
+    return !entry || !entry.updatedAt || (Date.now() - entry.updatedAt) > LOC_STALE_MS;
+}
+
+function locTimeAgo(ms) {
+    if (!ms) return 'never';
+    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 45) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h} hr ago`;
+    return `${Math.round(h / 24)} d ago`;
+}
+
+function locRoleLabel(entry) {
+    if (!entry) return '';
+    if (entry.role === 'admin') return '🛠️ Admin';
+    if (entry.role === 'teacher') return '👩‍🏫 Teacher';
+    return entry.grade ? `🚀 Kid · Grade ${entry.grade}` : '🚀 Kid';
+}
+
+function locSelfName() {
+    const profile = getActiveKidProfile();
+    return {
+        name: profile ? (profile.name || 'Explorer') : 'Admin',
+        avatar: profile ? (profile.avatar || '🚀') : '🛠️',
+        role: currentRole === 'admin' ? 'admin' : profileRole(profile),
+        grade: profile ? (Number(profile.grade) || null) : null
+    };
+}
+
+// ---------- Map construction ----------
+async function buildLocationHub(force) {
+    const mapEl = document.getElementById('locationMap');
+    if (!mapEl) return;
+
+    updateLocShareCard();
+    const livePanel = document.getElementById('locLivePanel');
+    if (livePanel) livePanel.style.display = isAdminRole() ? 'block' : 'none';
+
+    // Map already built? Just refresh sizes + subscriptions.
+    if (locMap && !force) {
+        setTimeout(() => { if (locMap) locMap.invalidateSize(); }, 60);
+        subscribeLocLive();
+        locAutoResumeSharing();
+        renderLocMarkers();
+        renderLocLivePanel();
+        return;
+    }
+
+    if (force && locMap) { locMap.remove(); locMap = null; locMarkers.clear(); }
+
+    const fallback = document.getElementById('locMapFallback');
+    if (fallback) fallback.style.display = 'none';
+
+    try {
+        const L = await loadLeaflet();
+        if (locMap) { subscribeLocLive(); locAutoResumeSharing(); return; }
+
+        locMap = L.map(mapEl, {
+            center: MAURITIUS_CENTER,
+            zoom: 10,
+            minZoom: 7,
+            maxZoom: 18,
+            maxBounds: L.latLngBounds(LOC_MAX_BOUNDS),
+            maxBoundsViscosity: 0.7,
+            zoomControl: true
+        });
+
+        locBaseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+        locSatLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18,
+            attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics'
+        });
+        locBaseLayer.addTo(locMap);
+        locUsingSat = false;
+        L.control.scale({ imperial: false }).addTo(locMap);
+
+        locMap.fitBounds(MAURITIUS_BOUNDS);
+
+        subscribeLocLive();
+        locAutoResumeSharing();
+        renderLocMarkers();
+        renderLocLivePanel();
+
+        if (!locTicker) {
+            locTicker = setInterval(() => {
+                if (!locMap) return;
+                renderLocMarkers();
+                renderLocLivePanel();
+            }, LOC_TICKER_MS);
+        }
+    } catch (err) {
+        console.warn('[KidZone] Map failed to load:', err);
+        if (fallback) fallback.style.display = 'flex';
+        showToast('The Mauritius map could not load. Check your internet and tap Try Again.', '🗺️', 4000);
+    }
+}
+window.buildLocationHub = buildLocationHub;
+
+// ---------- Live Firestore subscription ----------
+function subscribeLocLive() {
+    if (!currentActiveId) return;
+    const wantMode = isAdminRole() ? 'all' : 'self';
+    if (locUnsub && locSubMode === wantMode) return;
+    if (locUnsub) { try { locUnsub(); } catch (e) {} locUnsub = null; }
+    locSubMode = wantMode;
+
+    if (wantMode === 'all') {
+        // Teachers & admin watch every explorer's pin.
+        locUnsub = onSnapshot(collection(db, 'liveLocations'), (snap) => {
+            locRemote = new Map();
+            snap.forEach((d) => {
+                const v = d.data() || {};
+                if (typeof v.lat === 'number' && typeof v.lng === 'number') locRemote.set(d.id, v);
+            });
+            renderLocMarkers();
+            renderLocLivePanel();
+        }, (err) => console.warn('[KidZone] liveLocations listener:', err && (err.code || err.message)));
+    } else {
+        // Kids only ever listen to their own pin.
+        locUnsub = onSnapshot(doc(db, 'liveLocations', String(currentActiveId)), (snap) => {
+            const v = snap.data ? snap.data() : null;
+            if (v && typeof v.lat === 'number' && typeof v.lng === 'number') locRemote.set(snap.id, v);
+            else locRemote.delete(snap.id);
+            renderLocMarkers();
+        }, (err) => console.warn('[KidZone] own location listener:', err && (err.code || err.message)));
+    }
+}
+
+// ---------- Markers ----------
+function locMarkerIcon(entry, isMe) {
+    const L = window.L;
+    const stale = locStale(entry);
+    const cls = 'loc-marker-pin' + (isMe ? ' is-me' : '') + (stale ? ' is-stale' : '') + (entry.role === 'teacher' ? ' is-teacher' : '');
+    return L.divIcon({
+        className: '',
+        html: `<div class="${cls}">
+                <div class="loc-marker-avatar">${escapeHtml(entry.avatar || '🚀')}</div>
+                <div class="loc-marker-label">${escapeHtml(entry.name || 'Explorer')}</div>
+                ${stale ? '' : '<div class="loc-marker-dot"></div>'}
+               </div>`,
+        iconSize: [44, 74],
+        iconAnchor: [22, 66]
+    });
+}
+
+function locPopupHtml(entry, isMe) {
+    const name = escapeHtml(entry.name || 'Explorer');
+    if (isMe) {
+        return `<div class="loc-popup-name">${escapeHtml(entry.avatar || '🚀')} You are here!</div>
+                <div class="loc-popup-meta">Accuracy: about ${Math.round(entry.accuracy || 0)} m<br>${locRoleLabel(entry)}</div>`;
+    }
+    const mapsLink = `https://www.google.com/maps?q=${entry.lat},${entry.lng}`;
+    return `<div class="loc-popup-name">${escapeHtml(entry.avatar || '🚀')} ${name}</div>
+            <div class="loc-popup-meta">
+                ${locRoleLabel(entry)}<br>
+                🕒 Last seen: ${locTimeAgo(entry.updatedAt)}<br>
+                🎯 Accuracy: about ${Math.round(entry.accuracy || 0)} m
+            </div>
+            <a class="loc-popup-link" href="${mapsLink}" target="_blank" rel="noopener">🧭 Open in Google Maps</a>`;
+}
+
+function renderLocMarkers() {
+    const L = window.L;
+    if (!L || !locMap) return;
+
+    // Combine Firestore pins with the freshest live fix for myself.
+    const visible = new Map(locRemote);
+    const myId = currentActiveId ? String(currentActiveId) : null;
+    if (locMyFix && myId) {
+        const me = locSelfName();
+        visible.set(myId, Object.assign({}, visible.get(myId) || {}, me, {
+            lat: locMyFix.lat,
+            lng: locMyFix.lng,
+            accuracy: locMyFix.accuracy,
+            updatedAt: Date.now()
+        }));
+    }
+    // Kids must only ever see their own pin.
+    if (!isAdminRole() && myId) {
+        const mine = visible.get(myId);
+        visible.clear();
+        if (mine) visible.set(myId, mine);
+    }
+
+    // Remove markers that vanished.
+    locMarkers.forEach((m, id) => {
+        if (!visible.has(id)) {
+            m.marker.remove();
+            locMarkers.delete(id);
+        }
+    });
+
+    visible.forEach((entry, id) => {
+        const isMe = id === myId;
+        const existing = locMarkers.get(id);
+        if (existing) {
+            existing.data = entry;
+            existing.marker.setLatLng([entry.lat, entry.lng]);
+            existing.marker.setIcon(locMarkerIcon(entry, isMe));
+            if (!existing.marker.isPopupOpen()) existing.marker.setPopupContent(locPopupHtml(entry, isMe));
+        } else {
+            const marker = L.marker([entry.lat, entry.lng], {
+                icon: locMarkerIcon(entry, isMe),
+                keyboard: false,
+                riseOnHover: true
+            }).addTo(locMap);
+            marker.bindPopup(locPopupHtml(entry, isMe));
+            locMarkers.set(id, { marker, data: entry });
+        }
+        if (isMe) locUpdateAccuracyCircle(entry);
+    });
+
+    // Admin/teacher: frame every pin once, the very first time they open the tab.
+    if (isAdminRole() && !locDidAutoFit && visible.size > 0) {
+        locDidAutoFit = true;
+        locFitAllPins();
+    }
+}
+
+function locUpdateAccuracyCircle(entry) {
+    const L = window.L;
+    if (!L || !locMap || !entry) return;
+    if (locAccuracyCircle) { locAccuracyCircle.remove(); locAccuracyCircle = null; }
+    if (entry.accuracy && entry.accuracy < 500) {
+        locAccuracyCircle = L.circle([entry.lat, entry.lng], {
+            radius: Math.max(15, entry.accuracy),
+            color: '#7c3aed',
+            weight: 1,
+            fillColor: '#7c3aed',
+            fillOpacity: 0.08
+        }).addTo(locMap);
+    }
+}
+
+function locFitAllPins() {
+    if (!locMap || locMarkers.size === 0) { locFitMauritius(); return; }
+    const pts = [...locMarkers.values()].map(m => [m.data.lat, m.data.lng]);
+    const L = window.L;
+    if (pts.length === 1) locMap.flyTo(pts[0], 14);
+    else locMap.fitBounds(L.latLngBounds(pts).pad(0.35), { maxZoom: 15 });
+}
+
+// ---------- "Who is on the map" panel (teachers & admin) ----------
+function renderLocLivePanel() {
+    if (!isAdminRole()) return;
+    const list = document.getElementById('locLiveList');
+    const count = document.getElementById('locLiveCount');
+    if (!list || !count) return;
+
+    const entries = [...locRemote.entries()]
+        .map(([id, v]) => ({ id, ...v }))
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }));
+    const liveCount = entries.filter(e => !locStale(e)).length;
+
+    count.textContent = `${liveCount} live · ${entries.length} sharing`;
+    if (entries.length === 0) {
+        list.innerHTML = '<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 0.9rem;">No one is sharing a location yet. When a kid taps 📍 Enable My Location, their pin appears here.</div>';
+        return;
+    }
+    list.innerHTML = entries.map(e => {
+        const stale = locStale(e);
+        const encodedId = encodeURIComponent(String(e.id));
+        return `<div class="loc-live-item ${stale ? 'is-stale' : ''}" onclick="locFlyTo(decodeURIComponent('${encodedId}'))" title="Show ${escapeHtml(e.name || 'Explorer')} on the map">
+                    <span class="loc-live-avatar">${escapeHtml(e.avatar || '🚀')}</span>
+                    <span class="loc-live-info">
+                        <strong>${escapeHtml(e.name || 'Explorer')}</strong>
+                        <span>${locRoleLabel(e)} · ${stale ? '⏸️ ' : '🟢 '}${locTimeAgo(e.updatedAt)}</span>
+                    </span>
+                </div>`;
+    }).join('');
+}
+
+function locFlyTo(id) {
+    const m = locMarkers.get(String(id));
+    if (!m || !locMap) { showToast('That pin is not on the map right now.', '📍', 2500); return; }
+    playSound(520);
+    locMap.flyTo([m.data.lat, m.data.lng], Math.max(locMap.getZoom(), 15), { duration: 0.9 });
+    setTimeout(() => m.marker.openPopup(), 950);
+}
+window.locFlyTo = locFlyTo;
+
+// ---------- Share controls ----------
+function updateLocShareCard() {
+    const card = document.getElementById('locShareCard');
+    const icon = document.getElementById('locShareIcon');
+    const title = document.getElementById('locShareTitle');
+    const hint = document.getElementById('locShareHint');
+    const btn = document.getElementById('locShareBtn');
+    const badge = document.getElementById('locGpsBadge');
+    if (!card || !btn) return;
+
+    btn.disabled = false;
+    btn.classList.remove('is-on');
+    card.classList.remove('is-live', 'is-error');
+
+    if (locSharing) {
+        card.classList.add('is-live');
+        if (icon) icon.textContent = '📡';
+        if (title) title.textContent = 'Sharing live! You are on the map';
+        if (hint) hint.textContent = isAdminRole()
+            ? 'Your admin/teacher pin is visible to other staff while KidZone is open.'
+            : 'Your teachers can see your pin while KidZone is open. Tap Stop any time.';
+        btn.textContent = '⏹️ Stop Sharing';
+        btn.classList.add('is-on');
+        if (badge) badge.style.display = 'inline-block';
+    } else if (locPositionError === 'denied') {
+        card.classList.add('is-error');
+        if (icon) icon.textContent = '🚫';
+        if (title) title.textContent = 'Location is blocked';
+        if (hint) hint.textContent = 'Tap the 🔒 / ℹ️ icon next to the website address, set Location to "Allow", then try again.';
+        btn.textContent = '📍 Try Again';
+        if (badge) badge.style.display = 'none';
+    } else if (locPositionError) {
+        card.classList.add('is-error');
+        if (icon) icon.textContent = '😵';
+        if (title) title.textContent = 'We could not find you';
+        if (hint) hint.textContent = locPositionError === 'timeout'
+            ? 'Finding you took too long. Make sure you are outside or near a window, then try again.'
+            : 'Your device could not share a position right now. Try again in a moment.';
+        btn.textContent = '📍 Try Again';
+        if (badge) badge.style.display = 'none';
+    } else {
+        if (icon) icon.textContent = '🛰️';
+        if (title) title.textContent = 'Find me on the map!';
+        if (hint) hint.textContent = isAdminRole()
+            ? 'Tap the button and allow location to place your admin/teacher pin on the Mauritius map.'
+            : 'Tap the button and allow location. Your pin shows on the Mauritius map while KidZone is open.';
+        btn.textContent = '📍 Enable My Location';
+        if (badge) badge.style.display = 'none';
+    }
+}
+
+function locToggleSharing(evt) {
+    if (evt && evt.currentTarget) evt.currentTarget.blur();
+    playSound(500);
+    if (locSharing) { stopLocationSharing(true); return; }
+    startLocationSharing(false);
+}
+window.locToggleSharing = locToggleSharing;
+
+function locGeoErrorMessage(err) {
+    if (!err) return 'unavailable';
+    if (err.code === 1) return 'denied';        // PERMISSION_DENIED
+    if (err.code === 3) return 'timeout';       // POSITION_UNAVAILABLE/TIMEOUT
+    return 'unavailable';
+}
+
+async function startLocationSharing(silent) {
+    if (!currentActiveId) { showToast('Log in first, then share your location.', '🔐', 3000); return; }
+    if (!('geolocation' in navigator)) {
+        locPositionError = 'unavailable';
+        updateLocShareCard();
+        showToast('This device does not support location sharing.', '😵', 3500);
+        return;
+    }
+
+    const btn = document.getElementById('locShareBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🛰️ Finding you...'; }
+
+    const geoOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 };
+
+    const gotFix = (pos) => {
+        const c = pos.coords;
+        locPositionError = null;
+        locSharing = true;
+        locMyFix = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy || 0, at: Date.now() };
+        try { localStorage.setItem(LOC_PREF_KEY, String(currentActiveId)); } catch (e) {}
+        if (locWatchId === null) {
+            locWatchId = navigator.geolocation.watchPosition(locOnFix, locOnGeoError, geoOptions);
+        }
+        locMaybeWrite(true);
+        renderLocMarkers();
+        updateLocShareCard();
+        if (!silent) {
+            showToast('You are on the map! Teachers can see your pin now. 📡', '📍', 3500);
+            if (!isAdminRole()) setTimeout(() => locZoomToMe(null, true), 400);
+        }
+    };
+
+    const failed = (err) => {
+        locPositionError = locGeoErrorMessage(err);
+        if (locPositionError === 'denied') {
+            // Stop auto-resuming while the browser permission is revoked.
+            try { localStorage.removeItem(LOC_PREF_KEY); } catch (e) {}
+        }
+        updateLocShareCard();
+        if (locPositionError === 'denied') {
+            showToast('Location was blocked. Allow it in your browser settings to appear on the map.', '🚫', 4500);
+        } else {
+            showToast('Could not get your location. Please try again.', '😵', 3500);
+        }
+    };
+
+    try {
+        const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, geoOptions);
+        });
+        // The user answered the browser prompt while we waited.
+        if (!locSharing && currentActiveId) gotFix(pos);
+    } catch (err) {
+        failed(err);
+    }
+}
+
+function locOnFix(pos) {
+    if (!locSharing) return;
+    const c = pos.coords;
+    locMyFix = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy || 0, at: Date.now() };
+    renderLocMarkers();
+    locMaybeWrite(false);
+}
+
+function locOnGeoError(err) {
+    console.warn('[KidZone] geolocation watch error:', err && err.message);
+    if (err && err.code === 1) {
+        locPositionError = 'denied';
+        stopLocationSharing(false);
+        updateLocShareCard();
+        showToast('Location was turned off, so sharing stopped.', '🚫', 3500);
+    }
+}
+
+function locMaybeWrite(force) {
+    if (!locSharing || !currentActiveId || !locMyFix) return;
+    const now = Date.now();
+    const last = locLastWrite;
+    let moved = Infinity;
+    if (last.lat !== null) {
+        moved = Math.hypot((locMyFix.lat - last.lat) * 111000, (locMyFix.lng - last.lng) * 105000);
+    }
+    if (!force && moved < 18 && (now - last.at) < LOC_WRITE_HEARTBEAT_MS) return;
+    if (!force && (now - last.at) < LOC_WRITE_MIN_GAP_MS) return;
+
+    locLastWrite = { at: now, lat: locMyFix.lat, lng: locMyFix.lng };
+    locSharedAsId = String(currentActiveId);
+    const me = locSelfName();
+    setDoc(doc(db, 'liveLocations', locSharedAsId), {
+        profileId: locSharedAsId,
+        name: me.name,
+        avatar: me.avatar,
+        role: me.role,
+        grade: me.grade,
+        lat: locMyFix.lat,
+        lng: locMyFix.lng,
+        accuracy: Math.round(locMyFix.accuracy || 0),
+        updatedAt: Date.now()
+    }, { merge: true }).catch((err) => {
+        console.warn('[KidZone] Could not save location:', err && (err.code || err.message));
+        showToast('Your location could not be saved. Check the internet connection.', '⚠️', 3500);
+    });
+}
+
+function stopLocationSharing(byUser) {
+    if (locWatchId !== null) {
+        navigator.geolocation.clearWatch(locWatchId);
+        locWatchId = null;
+    }
+    locSharing = false;
+    locMyFix = null;
+    locLastWrite = { at: 0, lat: null, lng: null };
+    try { localStorage.removeItem(LOC_PREF_KEY); } catch (e) {}
+    const myId = currentActiveId ? String(currentActiveId) : locSharedAsId;
+    if (myId) {
+        locRemote.delete(myId);
+        const m = locMarkers.get(myId);
+        if (m) { m.marker.remove(); locMarkers.delete(myId); }
+    }
+    if (locAccuracyCircle) { locAccuracyCircle.remove(); locAccuracyCircle = null; }
+    if (byUser && currentActiveId && locSharedAsId) {
+        deleteDoc(doc(db, 'liveLocations', locSharedAsId)).catch((e) =>
+            console.warn('[KidZone] Could not delete location pin:', e && (e.code || e.message)));
+    }
+    updateLocShareCard();
+    if (byUser) { showToast('Sharing stopped. You are hidden from the map. 🙈', '⏹️', 3000); playSound(300); }
+}
+
+// If this profile had sharing ON last time, turn it back on silently.
+function locAutoResumeSharing() {
+    if (locSharing || !currentActiveId) return;
+    let pref = null;
+    try { pref = localStorage.getItem(LOC_PREF_KEY); } catch (e) {}
+    if (pref === String(currentActiveId)) startLocationSharing(true);
+}
+
+function locHandleLogout() {
+    const hadWatch = locWatchId !== null;
+    if (hadWatch) navigator.geolocation.clearWatch(locWatchId);
+    locWatchId = null;
+    locSharing = false;
+    locMyFix = null;
+    locPositionError = null;
+    locLastWrite = { at: 0, lat: null, lng: null };
+    if (locUnsub) { try { locUnsub(); } catch (e) {} locUnsub = null; }
+    locSubMode = null;
+    locRemote = new Map();
+    locDidAutoFit = false;
+    if (locTicker) { clearInterval(locTicker); locTicker = null; }
+    locMarkers.forEach((m) => { try { m.marker.remove(); } catch (e) {} });
+    locMarkers.clear();
+    if (locAccuracyCircle) { try { locAccuracyCircle.remove(); } catch (e) {} locAccuracyCircle = null; }
+    // Remove the pin we shared so the school no longer sees this explorer.
+    if (locSharedAsId) {
+        const docId = locSharedAsId;
+        locSharedAsId = null;
+        deleteDoc(doc(db, 'liveLocations', docId)).catch((e) =>
+            console.warn('[KidZone] Could not remove pin on logout:', e && (e.code || e.message)));
+    }
+    if (hadWatch) { try { localStorage.removeItem(LOC_PREF_KEY); } catch (e) {} }
+}
+
+// ---------- Map toolbar ----------
+function locFitMauritius(evt) {
+    if (evt && evt.currentTarget) evt.currentTarget.blur();
+    if (!locMap) return;
+    playSound(460);
+    locMap.flyToBounds(MAURITIUS_BOUNDS, { duration: 0.8 });
+}
+window.locFitMauritius = locFitMauritius;
+
+function locZoomToMe(evt, silent) {
+    if (evt && evt.currentTarget) evt.currentTarget.blur();
+    if (!locMap) return;
+    if (!locMyFix) {
+        if (!silent) {
+            showToast('Enable your location first so we can find you! 📍', '🎯', 3000);
+            startLocationSharing(false);
+        }
+        return;
+    }
+    playSound(540);
+    locMap.flyTo([locMyFix.lat, locMyFix.lng], 16, { duration: 1 });
+}
+window.locZoomToMe = locZoomToMe;
+
+function locToggleLayer(evt) {
+    if (evt && evt.currentTarget) evt.currentTarget.blur();
+    if (!locMap || !window.L) return;
+    playSound(430);
+    if (locUsingSat) {
+        locMap.removeLayer(locSatLayer);
+        locBaseLayer.addTo(locMap);
+        locUsingSat = false;
+        const b = document.getElementById('locLayerToggle');
+        if (b) b.textContent = '🛰️ Satellite';
+    } else {
+        locMap.removeLayer(locBaseLayer);
+        locSatLayer.addTo(locMap);
+        locUsingSat = true;
+        const b = document.getElementById('locLayerToggle');
+        if (b) b.textContent = '🗺️ Street Map';
+    }
+}
+window.locToggleLayer = locToggleLayer;
+
 
 // ============================================================
 // APP INITIALIZATION ENTRY POINT

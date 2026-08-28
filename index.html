@@ -84,6 +84,7 @@
             <button class="nav-btn" onclick="switchTab('homework', event)">📝 Homework</button>
             <button class="nav-btn" onclick="switchTab('testpapers', event)">🧪 Test Papers</button>
             <button class="nav-btn" onclick="switchTab('safezone', event)">🛡️ Safe Zone</button>
+            <button class="nav-btn" onclick="switchTab('location', event)">📍 Live Map</button>
             <button class="nav-btn" onclick="switchTab('games', event)">🎮 HTML Games</button>
             <button class="nav-btn" onclick="switchTab('books', event)">📖 Storybooks</button>
             <button class="nav-btn" onclick="switchTab('animals', event)">🦁 Animal Kingdom</button>
@@ -131,6 +132,7 @@
 
             <div class="home-quick-row">
                 <button class="home-quick-btn" onclick="openKidZoneSection('safezone')">🛡️ Safe Zone</button>
+                <button class="home-quick-btn" onclick="openKidZoneSection('location')">📍 Live Map</button>
                 <button class="home-quick-btn" onclick="openKidZoneSection('homework')">📝 Homework</button>
                 <button class="home-quick-btn" onclick="openKidZoneSection('testpapers')">🧪 Test Papers</button>
                 <button class="home-quick-btn" onclick="openKidZoneSection('games')">🎮 Games</button>
@@ -779,6 +781,54 @@
             </div>
 
             <div id="safezoneFeed" class="safezone-feed"></div>
+        </section>
+
+        <!-- LIVE LOCATION TAB (Mauritius Map) -->
+        <section id="location" class="tab-content" aria-label="Live Location Map Section">
+            <div class="hero-banner location-hero">
+                <h1>📍 Live Location — Mauritius</h1>
+                <p>Explore the whole island on a real map, just like Google Maps! Share your live spot so teachers always know you are safe. 🇲🇺</p>
+            </div>
+
+            <!-- Sharing prompt / status card -->
+            <div id="locShareCard" class="loc-share-card">
+                <div class="loc-share-icon" id="locShareIcon">🛰️</div>
+                <div class="loc-share-copy">
+                    <strong id="locShareTitle">Find me on the map!</strong>
+                    <span id="locShareHint">Tap the button and allow location. Your pin shows on the Mauritius map while KidZone is open.</span>
+                </div>
+                <button id="locShareBtn" class="loc-share-btn" onclick="locToggleSharing(event)">📍 Enable My Location</button>
+            </div>
+
+            <!-- Map shell with toolbar -->
+            <div class="location-map-shell">
+                <div id="locationMapToolbar" class="location-map-toolbar">
+                    <button class="loc-tool-btn" onclick="locFitMauritius(event)" title="Show the whole island">🇲🇺 Whole Mauritius</button>
+                    <button class="loc-tool-btn" onclick="locZoomToMe(event)" title="Fly to my location">🎯 Find Me</button>
+                    <button class="loc-tool-btn" id="locLayerToggle" onclick="locToggleLayer(event)" title="Switch map style">🛰️ Satellite</button>
+                    <span id="locGpsBadge" class="loc-gps-badge" style="display:none;">🔴 LIVE</span>
+                </div>
+                <div id="locationMap" class="location-map" aria-label="Interactive map of Mauritius"></div>
+                <div id="locMapFallback" class="loc-map-fallback" style="display:none;">
+                    <span>🗺️</span>
+                    <p>The map could not load. Check your internet connection and try again.</p>
+                    <button class="loc-share-btn" onclick="buildLocationHub(true)">🔄 Try Again</button>
+                </div>
+            </div>
+
+            <!-- Who is on the map (teachers & admin only) -->
+            <div id="locLivePanel" class="loc-live-panel" style="display:none;">
+                <div class="loc-live-head">
+                    <h3>👀 Who is on the map?</h3>
+                    <span id="locLiveCount" class="loc-live-count">0 sharing</span>
+                </div>
+                <div id="locLiveList" class="loc-live-list"></div>
+            </div>
+
+            <div class="home-tip-box">
+                <span>🔐</span>
+                <p><strong>Privacy:</strong> A pin is only shared while you are logged in and sharing is ON. Kids see only their own pin. Admin and teachers can see every explorer's pin so everyone stays safe.</p>
+            </div>
         </section>
 
         <!-- GAMES TAB -->

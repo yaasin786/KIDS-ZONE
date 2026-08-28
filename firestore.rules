@@ -31,5 +31,15 @@ service cloud.firestore {
       // denied error. Owner Admin requests are authenticated as well.
       allow write: if ownerAdmin() || request.auth == null;
     }
+
+    // 📍 Live Location map: each explorer (kid/teacher/admin session) owns one
+    // pin document named after their profile id, written while sharing is ON
+    // and deleted on logout. Kids read only their own pin; teachers/admin read
+    // the collection. This stays consistent with the PIN (unauthenticated)
+    // session model documented above.
+    match /liveLocations/{profileId} {
+      allow read: if true;
+      allow write: if ownerAdmin() || request.auth == null;
+    }
   }
 }
