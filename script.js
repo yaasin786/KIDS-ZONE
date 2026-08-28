@@ -1250,10 +1250,12 @@ async function handleCreateKidAccount(event) {
     }
 
     const newId = `kid_${Date.now()}`;
+    const gradeInput = document.getElementById('newKidGrade');
     const newProfile = {
         id: newId,
         name: kidName,
         avatar: selectedAvatar,
+        grade: Number(gradeInput ? gradeInput.value : 1) || 1, // Mauritius syllabus grade 1-6
         pinHash: await hashPin(kidPin)   // never store the raw PIN
     };
 
@@ -1298,6 +1300,20 @@ function closeAdminPortalModalOnBg(e) {
 }
 window.closeAdminPortalModalOnBg = closeAdminPortalModalOnBg;
 
+async function updateKidGrade(kidId, grade) {
+    if (currentRole !== 'admin') return;
+    const g = Number(grade) || 1;
+    try {
+        await setDoc(doc(db, 'kidProfiles', kidId), { grade: g }, { merge: true });
+        playSound(500);
+        showToast('Grade updated to Grade ' + g, '🎒', 2800);
+    } catch (e) {
+        console.error('Error updating grade:', e);
+        showToast('Could not update grade.', '❌', 3000);
+    }
+}
+window.updateKidGrade = updateKidGrade;
+
 function renderAdminPortalProfiles() {
     const container = document.getElementById('adminProfilesList');
     if (!container) return;
@@ -1333,6 +1349,12 @@ function renderAdminPortalProfiles() {
                 <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
                     <span>🕒 Last Login:</span>
                     <strong style="color: var(--primary-blue-dark); font-weight: 700;">${formattedDate}</strong>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span>🎒 Grade:</span>
+                    <select onchange="updateKidGrade('${p.id}', this.value)" style="font: inherit; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color);">
+                        ${[1,2,3,4,5,6].map(g => `<option value="${g}" ${Number(p.grade) === g ? 'selected' : ''}>Grade ${g}</option>`).join('')}
+                    </select>
                 </div>
             </div>
             <button class="logout-btn" style="padding: 8px 14px; font-size: 0.85rem;" onclick="deleteKidProfile('${p.id}', '${p.name}')">🗑️ Remove</button>
@@ -1586,6 +1608,7 @@ function switchTab(tabId, evt) {
     if (tabId === 'history') setTimeout(buildWorldHistory, 30);
     if (tabId === 'geo') setTimeout(buildGeoExplorer, 30);
     if (tabId === 'homework') setTimeout(buildHomeworkHub, 30);
+    if (tabId === 'testpapers') setTimeout(buildTestPapers, 30);
     if (tabId === 'safezone') setTimeout(buildSafeZone, 30);
     if (tabId !== 'docs' && typeof closeDocModal === 'function') {
         const dp = document.getElementById('docPlayer');
@@ -3274,7 +3297,7 @@ window.nextSentenceRound = nextSentenceRound;
 // and also sent to the teacher for review in Reports.
 // ============================================================
 const TABLES_FOCUS_LABELS = {
-    2: '×2 table', 3: '×3 table', 4: '×4 table', 5: '×5 table',
+    1: '×1 table', 2: '×2 table', 3: '×3 table', 4: '×4 table', 5: '×5 table',
     6: '×6 table', 7: '×7 table', 8: '×8 table', 9: '×9 table',
     10: '×10 table', 12: '×12 table', mix: 'Mixed tables'
 };
@@ -3307,7 +3330,7 @@ function buildTablesRound(focus, count = 12) {
         guard++;
         let a, b;
         if (focus === 'mix') {
-            a = Math.floor(Math.random() * 11) + 2; // 2-12
+            a = Math.floor(Math.random() * 12) + 1; // 1-12 (so 1x2, 1x3, ... appear too)
             b = Math.floor(Math.random() * 12) + 1; // 1-12
         } else {
             a = Number(focus) || 2;
@@ -6345,8 +6368,913 @@ window.deleteCurrentHomework = deleteCurrentHomework;
 
 
 // ============================================================
-// MOUNTAINS & RIVERS OF THE WORLD
+// TEST PAPERS — MAURITIUS SYLLABUS · GRADE 1-6 · SUBJECT BY SUBJECT
+// Children write their own answers (no multiple choice) and
+// submit the paper to their teacher for marking.
+// ------------------------------------------------------------
+// Question types:
+//   'short'  -> single-line text / numeric box (own answer)
+//   'essay'  -> a big textarea (used for composition/paragraphs)
+//   'math'   -> numeric-style input
+// Sections can carry a 'passage' (comprehension) and questions,
+// and/or a 'prompt' for an open composition.
 // ============================================================
+const TEST_PAPERS = [
+  {
+    grade: 1, subject: "English", papers: [
+      { id: "g1-en-1", title: "English Test 1", time: "30 minutes", totalMarks: 20,
+        instructions: "Read carefully and write your answers in the spaces given.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "This is Tom. Tom has a dog. The dog is brown. The dog can run fast. Tom loves his dog.",
+            questions: [
+              { type: "short", q: "What is the boy's name?", marks: 2 },
+              { type: "short", q: "What colour is the dog?", marks: 2 },
+              { type: "short", q: "What can the dog do?", marks: 2 } ] },
+          { heading: "Section B · Grammar and Words", questions: [
+              { type: "short", q: "Write the missing letter: c _ t (a word for a small animal)", marks: 2 },
+              { type: "short", q: "Write one word that rhymes with cat.", marks: 2 },
+              { type: "short", q: "Circle the correct word to complete the sentence: I (has / have) a red book.", marks: 2 } ] },
+          { heading: "Section C · Composition", prompt: "Write two sentences about yourself. Tell me your name and one thing you like.", marks: 8 }
+        ] },
+      { id: "g1-en-2", title: "English Test 2", time: "30 minutes", totalMarks: 20,
+        instructions: "Try your best. Write neatly.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "The sun is bright in the sky. A little bird sits on a tree. The bird sings a happy song.",
+            questions: [
+              { type: "short", q: "Where does the bird sit?", marks: 2 },
+              { type: "short", q: "What does the bird do?", marks: 2 } ] },
+          { heading: "Section B · Grammar and Words", questions: [
+              { type: "short", q: "Write the missing letter: b _ g (a small insect)", marks: 2 },
+              { type: "short", q: "Write the plural of ball.", marks: 2 },
+              { type: "short", q: "Use the word sunny in a sentence.", marks: 3 } ] },
+          { heading: "Section C · Composition", prompt: "Write two sentences about your family.", marks: 9 }
+        ] }
+    ]
+  },
+  {
+    grade: 1, subject: "Mathematics", papers: [
+      { id: "g1-math-1", title: "Mathematics Test 1", time: "30 minutes", totalMarks: 20,
+        instructions: "Work out each answer and write the number.",
+        sections: [
+          { heading: "Section A · Counting and Numbers", questions: [
+              { type: "math", q: "How many stars are here?  ★ ★ ★ ★ ★", marks: 2 },
+              { type: "short", q: "Write the numbers from 1 to 5.", marks: 3 } ] },
+          { heading: "Section B · Adding and Taking Away", questions: [
+              { type: "math", q: "3 + 2 = ?", marks: 2 },
+              { type: "math", q: "5 - 1 = ?", marks: 2 },
+              { type: "math", q: "4 + 4 = ?", marks: 2 } ] },
+          { heading: "Section C · Shapes and Words", questions: [
+              { type: "short", q: "How many sides does a triangle have?", marks: 2 },
+              { type: "short", q: "Which is bigger, 7 or 4? Write the bigger number.", marks: 2 },
+              { type: "short", q: "Write the missing number: 2, 3, 4, __, 6", marks: 2 } ] },
+          { heading: "Section D · Story Problem", prompt: "Ali has 2 apples. His friend gives him 1 more apple. How many apples does Ali have now? Show your answer.", marks: 3 }
+        ] }
+    ]
+  },
+  {
+    grade: 1, subject: "Science", papers: [
+      { id: "g1-sci-1", title: "Science Test 1", time: "30 minutes", totalMarks: 20,
+        instructions: "Think about the world around you and write your answers.",
+        sections: [
+          { heading: "Section A · Living Things", questions: [
+              { type: "short", q: "Is a plant living or non-living?", marks: 2 },
+              { type: "short", q: "Name one thing that all living things need to stay alive.", marks: 2 },
+              { type: "short", q: "Name one animal that flies.", marks: 2 } ] },
+          { heading: "Section B · My Body", questions: [
+              { type: "short", q: "Which part of your body do you use to smell?", marks: 2 },
+              { type: "math", q: "How many ears do you have?", marks: 2 } ] },
+          { heading: "Section C · Weather", questions: [
+              { type: "short", q: "What do we use to keep dry when it rains?", marks: 2 },
+              { type: "short", q: "Is the sun hot or cold?", marks: 2 } ] },
+          { heading: "Section D · My Senses", prompt: "Write one sentence about something you can hear.", marks: 6 }
+        ] }
+    ]
+  },
+  {
+    grade: 1, subject: "French", papers: [
+      { id: "g1-fr-1", title: "Français Test 1", time: "30 minutes", totalMarks: 20,
+        instructions: "Écris tes réponses. Write your answers in French where possible.",
+        sections: [
+          { heading: "Section A · Les Salutations (Greetings)", questions: [
+              { type: "short", q: "How do you say hello in French?", marks: 3 },
+              { type: "short", q: "How do you say goodbye in French?", marks: 3 } ] },
+          { heading: "Section B · Les Nombres (Numbers)", questions: [
+              { type: "short", q: "Write the number for un.", marks: 3 },
+              { type: "short", q: "Write the number for trois.", marks: 3 } ] },
+          { heading: "Section C · Les Couleurs (Colours)", questions: [
+              { type: "short", q: "Write the French word for red.", marks: 4 } ] },
+          { heading: "Section D · Composition", prompt: "Write one French word you know and draw what it means in your mind. Then write what it means in English.", marks: 4 }
+        ] }
+    ]
+  },
+
+  {
+    grade: 2, subject: "English", papers: [
+      { id: "g2-en-1", title: "English Test 1", time: "40 minutes", totalMarks: 25,
+        instructions: "Read the passage, then answer the questions in full sentences.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "Amina goes to the market with her mother. They buy yellow bananas and red apples. Amina likes to count the fruit. On the way home, they see a friendly street dog named Bruno.",
+            questions: [
+              { type: "short", q: "Where does Amina go with her mother?", marks: 2 },
+              { type: "short", q: "What fruit do they buy? Name two.", marks: 2 },
+              { type: "short", q: "What is the name of the dog?", marks: 2 },
+              { type: "short", q: "What does Amina like to count?", marks: 2 } ] },
+          { heading: "Section B · Grammar", questions: [
+              { type: "short", q: "Write the past tense of go.", marks: 2 },
+              { type: "short", q: "Add s or es to make plurals: box, apple", marks: 3 },
+              { type: "short", q: "Write a question using the word where.", marks: 3 } ] },
+          { heading: "Section C · Composition", prompt: "Write 4 sentences about your favourite day of the week. Tell what you do and why you like it.", marks: 9 }
+        ] }
+    ]
+  },
+  {
+    grade: 2, subject: "Mathematics", papers: [
+      { id: "g2-math-1", title: "Mathematics Test 1", time: "40 minutes", totalMarks: 25,
+        instructions: "Show your working where needed.",
+        sections: [
+          { heading: "Section A · Number Work", questions: [
+              { type: "math", q: "What number comes after 49?", marks: 2 },
+              { type: "short", q: "Write the number one hundred in digits.", marks: 2 },
+              { type: "math", q: "What is the value of the digit 3 in the number 35?", marks: 2 } ] },
+          { heading: "Section B · Adding and Taking Away", questions: [
+              { type: "math", q: "23 + 14 = ?", marks: 2 },
+              { type: "math", q: "58 - 24 = ?", marks: 2 },
+              { type: "math", q: "7 × 2 = ?", marks: 2 } ] },
+          { heading: "Section C · Tables and Shapes", questions: [
+              { type: "short", q: "How many sides does a square have?", marks: 2 },
+              { type: "short", q: "Name a 3D shape that looks like a ball.", marks: 2 } ] },
+          { heading: "Section D · Story Problem", prompt: "Sita has 12 pencils. She gives 5 to her friend. How many pencils does Sita have left? Show your working.", marks: 4 },
+          { heading: "Section E · Time", questions: [
+              { type: "short", q: "How many minutes are in one hour?", marks: 3 } ] }
+        ] }
+    ]
+  },
+  {
+    grade: 2, subject: "Science", papers: [
+      { id: "g2-sci-1", title: "Science Test 1", time: "40 minutes", totalMarks: 25,
+        instructions: "Answer in your own words.",
+        sections: [
+          { heading: "Section A · Plants", questions: [
+              { type: "short", q: "Name the parts of a plant. List at least three.", marks: 3 },
+              { type: "short", q: "What do plants need to make their food?", marks: 2 } ] },
+          { heading: "Section B · Animals", questions: [
+              { type: "short", q: "Group these animals into mammals and birds: cow, parrot, dog, chicken.", marks: 4 },
+              { type: "short", q: "Why do fish have gills?", marks: 2 } ] },
+          { heading: "Section C · Materials", questions: [
+              { type: "short", q: "Is wood a natural or man-made material?", marks: 2 },
+              { type: "short", q: "Name one object made of metal.", marks: 2 } ] },
+          { heading: "Section D · My Environment", prompt: "Write 3 sentences explaining how to take care of plants so they grow well.", marks: 10 }
+        ] }
+    ]
+  },
+  {
+    grade: 2, subject: "French", papers: [
+      { id: "g2-fr-1", title: "Français Test 1", time: "40 minutes", totalMarks: 25,
+        instructions: "Écris tes réponses en français. Write in French.",
+        sections: [
+          { heading: "Section A · Vocabulaire (Vocabulary)", questions: [
+              { type: "short", q: "Write the French word for the sun.", marks: 3 },
+              { type: "short", q: "Write the French word for water.", marks: 3 },
+              { type: "short", q: "Write the French word for apple.", marks: 3 } ] },
+          { heading: "Section B · Les Nombres (Numbers)", questions: [
+              { type: "short", q: "Write the French word for 10.", marks: 3 },
+              { type: "short", q: "Write the French word for 5.", marks: 3 } ] },
+          { heading: "Section C · La Grammaire", questions: [
+              { type: "short", q: "Translate to French: The cat is small.", marks: 4 } ] },
+          { heading: "Section D · Composition", prompt: "Write 2 sentences in French about your school or your family.", marks: 6 }
+        ] }
+    ]
+  },
+
+  {
+    grade: 3, subject: "English", papers: [
+      { id: "g3-en-1", title: "English Test 1", time: "45 minutes", totalMarks: 30,
+        instructions: "Read all questions before you start. Answer in full sentences.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "Ravi lives near the sea. Every morning he helps his father pull in the fishing boat. They catch silver fish and long, slippery eels. Ravi dreams that one day he will sail to faraway islands on his own boat.",
+            questions: [
+              { type: "short", q: "Where does Ravi live?", marks: 2 },
+              { type: "short", q: "Who helps pull in the fishing boat?", marks: 2 },
+              { type: "short", q: "What do they catch? Name two things.", marks: 2 },
+              { type: "short", q: "What does Ravi dream about?", marks: 3 } ] },
+          { heading: "Section B · Grammar and Punctuation", questions: [
+              { type: "short", q: "Write the past tense of pull.", marks: 2 },
+              { type: "short", q: "Add the correct punctuation: where are you going", marks: 3 },
+              { type: "short", q: "Use the word slippery in a sentence.", marks: 3 } ] },
+          { heading: "Section C · Composition", prompt: "Write a short story (about 5-6 sentences) about a boy or girl who finds a strange shell on the beach. What happens next?", marks: 13 }
+        ] }
+    ]
+  },
+  {
+    grade: 3, subject: "Mathematics", papers: [
+      { id: "g3-math-1", title: "Mathematics Test 1", time: "45 minutes", totalMarks: 30,
+        instructions: "Show all your working clearly.",
+        sections: [
+          { heading: "Section A · Number and Place Value", questions: [
+              { type: "short", q: "Write 456 in words.", marks: 3 },
+              { type: "math", q: "What is 3 hundreds + 4 tens + 5 ones?", marks: 3 },
+              { type: "math", q: "Round 47 to the nearest ten.", marks: 2 } ] },
+          { heading: "Section B · The Four Operations", questions: [
+              { type: "math", q: "256 + 148 = ?", marks: 3 },
+              { type: "math", q: "300 - 176 = ?", marks: 3 },
+              { type: "math", q: "6 × 7 = ?", marks: 2 },
+              { type: "math", q: "35 ÷ 5 = ?", marks: 2 } ] },
+          { heading: "Section C · Fractions", questions: [
+              { type: "short", q: "What fraction of a pizza is one slice if the pizza is cut into 4 equal slices?", marks: 3 } ] },
+          { heading: "Section D · Money and Measurement", questions: [
+              { type: "short", q: "How many cents are there in one Mauritian rupee?", marks: 2 } ] },
+          { heading: "Section E · Word Problem", prompt: "A bus carries 40 children. On the first stop 12 children get off. How many children are still on the bus? Show your working.", marks: 7 }
+        ] }
+    ]
+  },
+  {
+    grade: 3, subject: "Science", papers: [
+      { id: "g3-sci-1", title: "Science Test 1", time: "45 minutes", totalMarks: 30,
+        instructions: "Think carefully and write your answers.",
+        sections: [
+          { heading: "Section A · Living and Non-Living Things", questions: [
+              { type: "short", q: "List three things that all living things can do (for example, grow).", marks: 3 },
+              { type: "short", q: "Name one non-living thing in your classroom.", marks: 2 } ] },
+          { heading: "Section B · Plants and Animals", questions: [
+              { type: "short", q: "What is the job of the roots of a plant?", marks: 3 },
+              { type: "short", q: "Name the young of a cow and the young of a chicken.", marks: 3 } ] },
+          { heading: "Section C · The Human Body", questions: [
+              { type: "short", q: "Which organ pumps blood around your body?", marks: 3 },
+              { type: "short", q: "What do your lungs do?", marks: 3 } ] },
+          { heading: "Section D · Materials and Change", questions: [
+              { type: "short", q: "What happens to ice when you leave it in the sun?", marks: 3 } ] },
+          { heading: "Section E · Experiment", prompt: "Imagine you put a bean seed in a wet paper towel. Write 3 sentences predicting what will happen and why.", marks: 10 }
+        ] }
+    ]
+  },
+  {
+    grade: 3, subject: "French", papers: [
+      { id: "g3-fr-1", title: "Français Test 1", time: "45 minutes", totalMarks: 30,
+        instructions: "Réponds en français. Answer in French.",
+        sections: [
+          { heading: "Section A · Vocabulaire (Vocabulary)", questions: [
+              { type: "short", q: "Write the French word for house.", marks: 3 },
+              { type: "short", q: "Write the French word for school.", marks: 3 },
+              { type: "short", q: "Write the French word for friend (boy).", marks: 3 } ] },
+          { heading: "Section B · La Grammaire", questions: [
+              { type: "short", q: "Write the French word for I eat (je ...).", marks: 3 },
+              { type: "short", q: "Translate to French: I am ten years old.", marks: 4 } ] },
+          { heading: "Section C · Les Nombres et Les Jours", questions: [
+              { type: "short", q: "Write the French word for Sunday.", marks: 3 },
+              { type: "short", q: "Write the French word for 20.", marks: 3 } ] },
+          { heading: "Section D · Composition", prompt: "Write 3 sentences in French to describe yourself (your name, age, and one hobby).", marks: 8 }
+        ] }
+    ]
+  },
+
+  {
+    grade: 4, subject: "English", papers: [
+      { id: "g4-en-1", title: "English Test 1", time: "1 hour", totalMarks: 35,
+        instructions: "Manage your time. Leave time to check your work.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "The little tortoise moved slowly along the dusty path. The clever monkey laughed at him. But when the rain began, the tortoise simply tucked his head inside his shell and stayed safe and dry, while the monkey got soaked. Sometimes, being careful is better than being fast.",
+            questions: [
+              { type: "short", q: "Who laughed at the tortoise?", marks: 2 },
+              { type: "short", q: "What did the tortoise do when the rain began?", marks: 3 },
+              { type: "short", q: "What is the lesson of the story?", marks: 3 },
+              { type: "short", q: "Write one word that means the opposite of slow.", marks: 2 } ] },
+          { heading: "Section B · Grammar", questions: [
+              { type: "short", q: "Write the past tense of soak.", marks: 2 },
+              { type: "short", q: "Rewrite in the present continuous tense: The tortoise moves.", marks: 3 },
+              { type: "short", q: "Make this sentence negative: The monkey is clever.", marks: 3 } ] },
+          { heading: "Section C · Composition", prompt: "Write a story of about 8 sentences that begins with this sentence: The door opened and a strange, glowing box stood in the middle of the room.", marks: 17 }
+        ] }
+    ]
+  },
+  {
+    grade: 4, subject: "Mathematics", papers: [
+      { id: "g4-math-1", title: "Mathematics Test 1", time: "1 hour", totalMarks: 35,
+        instructions: "Show all working. Use the space provided.",
+        sections: [
+          { heading: "Section A · Number and Place Value", questions: [
+              { type: "short", q: "Write the number four thousand and sixty-five in digits.", marks: 3 },
+              { type: "math", q: "What is the place value of the digit 7 in 6 738?", marks: 3 } ] },
+          { heading: "Section B · Operations", questions: [
+              { type: "math", q: "1 247 + 3 586 = ?", marks: 3 },
+              { type: "math", q: "4 000 - 1 273 = ?", marks: 3 },
+              { type: "math", q: "7 × 8 = ?", marks: 2 },
+              { type: "math", q: "72 ÷ 9 = ?", marks: 2 } ] },
+          { heading: "Section C · Fractions and Decimals", questions: [
+              { type: "short", q: "Write 1/2 as a decimal.", marks: 3 },
+              { type: "short", q: "Which is larger: 0.5 or 0.05?", marks: 3 } ] },
+          { heading: "Section D · Geometry and Measurement", questions: [
+              { type: "short", q: "A rectangle has a length of 6 cm and a width of 4 cm. What is its area?", marks: 3 } ] },
+          { heading: "Section E · Word Problem", prompt: "A shop sells mangoes at 15 rupees each. Priya buys 4 mangoes and gives the shopkeeper 100 rupees. How much change does she receive? Show your working.", marks: 10 }
+        ] }
+    ]
+  },
+  {
+    grade: 4, subject: "Science", papers: [
+      { id: "g4-sci-1", title: "Science Test 1", time: "1 hour", totalMarks: 35,
+        instructions: "Write clear, complete answers.",
+        sections: [
+          { heading: "Section A · Living Things and Life Processes", questions: [
+              { type: "short", q: "List the seven life processes (e.g. movement, respiration, ...).", marks: 7 },
+              { type: "short", q: "What is the difference between a herbivore and a carnivore?", marks: 3 } ] },
+          { heading: "Section B · Plants", questions: [
+              { type: "short", q: "What is the process by which plants make their own food called?", marks: 3 },
+              { type: "short", q: "Name the part of the flower that produces pollen.", marks: 3 } ] },
+          { heading: "Section C · Human Body and Health", questions: [
+              { type: "short", q: "Name two organs of the digestive system.", marks: 3 },
+              { type: "short", q: "Why is exercise important for the heart?", marks: 3 } ] },
+          { heading: "Section D · Materials", questions: [
+              { type: "short", q: "What is the difference between a reversible and an irreversible change? Give one example of each.", marks: 5 } ] },
+          { heading: "Section E · Investigation", prompt: "You are asked to find out which type of soil holds the most water. Write a short plan (4 sentences) explaining how you would test this fairly.", marks: 8 }
+        ] }
+    ]
+  },
+  {
+    grade: 4, subject: "French", papers: [
+      { id: "g4-fr-1", title: "Français Test 1", time: "1 hour", totalMarks: 35,
+        instructions: "Réponds en français. Answer in French.",
+        sections: [
+          { heading: "Section A · Compréhension (Comprehension)", passage: "Marie habite à Port Louis. Chaque matin, elle va à l'école à pied avec son amie Leela. Elles passent devant le marché où l'on vend des fruits frais. Marie aime beaucoup les mangues.",
+            questions: [
+              { type: "short", q: "Où habite Marie?", marks: 3 },
+              { type: "short", q: "Comment Marie va-t-elle à l'école?", marks: 3 },
+              { type: "short", q: "Quel fruit Marie aime-t-elle?", marks: 3 } ] },
+          { heading: "Section B · La Grammaire", questions: [
+              { type: "short", q: "Translate to French: I have a cat and a dog.", marks: 4 },
+              { type: "short", q: "Write the French word for we eat (nous ...).", marks: 4 } ] },
+          { heading: "Section C · Vocabulaire", questions: [
+              { type: "short", q: "Write the French word for rain.", marks: 3 },
+              { type: "short", q: "Write the French word for sea.", marks: 3 } ] },
+          { heading: "Section D · Composition", prompt: "Écris un petit texte de 4 phrases pour décrire ta famille. Write 4 sentences in French to describe your family.", marks: 12 }
+        ] }
+    ]
+  },
+
+  {
+    grade: 5, subject: "English", papers: [
+      { id: "g5-en-1", title: "English Test 1", time: "1 hour 15 minutes", totalMarks: 40,
+        instructions: "This paper has reading, grammar and composition. Answer all questions.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "Every year, thousands of sea turtles swim thousands of kilometres back to the same beach where they were born to lay their eggs. Scientists do not fully understand how they find their way, but they believe the turtles use the Earth's magnetic field to guide them. This long journey is full of danger, yet the turtles never give up.",
+            questions: [
+              { type: "short", q: "Where do sea turtles return to lay their eggs?", marks: 3 },
+              { type: "short", q: "What do scientists believe helps turtles find their way?", marks: 3 },
+              { type: "short", q: "What does the word danger mean? Give an example from your life.", marks: 4 },
+              { type: "short", q: "Find a word in the passage that means a very long journey.", marks: 3 } ] },
+          { heading: "Section B · Grammar and Usage", questions: [
+              { type: "short", q: "Rewrite in the simple past tense: The turtle swims across the ocean.", marks: 4 },
+              { type: "short", q: "Change to the passive voice: The fishermen catch many fish.", marks: 4 } ] },
+          { heading: "Section C · Composition", prompt: "Write a composition of about 10-12 sentences on this topic: A Day at the Beach. Describe what you see, hear and do, and how you feel.", marks: 19 }
+        ] }
+    ]
+  },
+  {
+    grade: 5, subject: "Mathematics", papers: [
+      { id: "g5-math-1", title: "Mathematics Test 1", time: "1 hour 15 minutes", totalMarks: 40,
+        instructions: "Answer all questions and show your working.",
+        sections: [
+          { heading: "Section A · Number and Place Value", questions: [
+              { type: "short", q: "Write fifty-six thousand, three hundred and nine in digits.", marks: 4 },
+              { type: "math", q: "Round 8 745 to the nearest hundred.", marks: 3 } ] },
+          { heading: "Section B · Operations", questions: [
+              { type: "math", q: "12 348 + 8 675 = ?", marks: 3 },
+              { type: "math", q: "10 000 - 4 567 = ?", marks: 3 },
+              { type: "math", q: "124 × 6 = ?", marks: 3 },
+              { type: "math", q: "468 ÷ 4 = ?", marks: 3 } ] },
+          { heading: "Section C · Fractions, Decimals and Percentages", questions: [
+              { type: "short", q: "Write 3/5 as a decimal and as a percentage.", marks: 4 },
+              { type: "short", q: "Find 25% of 200.", marks: 3 } ] },
+          { heading: "Section D · Measurement and Geometry", questions: [
+              { type: "short", q: "How many millilitres are there in 2 and a half litres?", marks: 3 },
+              { type: "short", q: "A square has a perimeter of 36 cm. What is the length of one side?", marks: 3 } ] },
+          { heading: "Section E · Word Problem", prompt: "A cinema has 240 seats. On Saturday, 3/4 of the seats were filled. Each ticket cost 100 rupees. How much money did the cinema make on Saturday? Show all your working.", marks: 11 }
+        ] }
+    ]
+  },
+  {
+    grade: 5, subject: "Science", papers: [
+      { id: "g5-sci-1", title: "Science Test 1", time: "1 hour 15 minutes", totalMarks: 40,
+        instructions: "Answer in complete sentences.",
+        sections: [
+          { heading: "Section A · Living Things and the Environment", questions: [
+              { type: "short", q: "What is a food chain? Give one example with at least three organisms.", marks: 5 },
+              { type: "short", q: "What is the role of decomposers in an ecosystem?", marks: 4 } ] },
+          { heading: "Section B · Reproduction in Plants and Animals", questions: [
+              { type: "short", q: "How are seeds dispersed by animals? Give an example.", marks: 4 },
+              { type: "short", q: "What is the difference between a mammal and a bird?", marks: 4 } ] },
+          { heading: "Section C · Human Body Systems", questions: [
+              { type: "short", q: "Name the main parts of the circulatory system.", marks: 4 },
+              { type: "short", q: "What is the function of the kidneys?", marks: 3 } ] },
+          { heading: "Section D · Forces and Energy", questions: [
+              { type: "short", q: "What is friction? Give one example of where friction is helpful.", marks: 4 },
+              { type: "short", q: "Name three sources of energy.", marks: 3 } ] },
+          { heading: "Section E · Scientific Investigation", prompt: "Describe an experiment to find out whether warm water evaporates faster than cold water. Include the variables you will control and how you will measure the result.", marks: 9 }
+        ] }
+    ]
+  },
+  {
+    grade: 5, subject: "French", papers: [
+      { id: "g5-fr-1", title: "Français Test 1", time: "1 hour 15 minutes", totalMarks: 40,
+        instructions: "Réponds en français. Answer in French.",
+        sections: [
+          { heading: "Section A · Compréhension (Comprehension)", passage: "Pendant les grandes vacances, la famille de Kevin part à Flic en Flac. Ils aiment nager dans la lagune calme et construire des châteaux de sable. Le soir, ils regardent le coucher du soleil et mangent des oursins et du poisson grillé.",
+            questions: [
+              { type: "short", q: "Où va la famille de Kevin?", marks: 3 },
+              { type: "short", q: "Qu'aiment-ils faire à la plage? Nomme deux choses.", marks: 4 },
+              { type: "short", q: "Qu'est-ce qu'ils mangent le soir?", marks: 3 } ] },
+          { heading: "Section B · La Grammaire", questions: [
+              { type: "short", q: "Conjugate the verb aller for the pronoun nous.", marks: 4 },
+              { type: "short", q: "Translate to French: Yesterday, I went to the beach.", marks: 5 } ] },
+          { heading: "Section C · Le Vocabulaire", questions: [
+              { type: "short", q: "Write the French word for sand.", marks: 3 },
+              { type: "short", q: "Write the French word for sunset.", marks: 3 } ] },
+          { heading: "Section D · Composition", prompt: "Écris un texte de 5 phrases en français sur tes dernières vacances. Write 5 sentences in French about your last holidays.", marks: 15 }
+        ] }
+    ]
+  },
+
+  {
+    grade: 6, subject: "English", papers: [
+      { id: "g6-en-1", title: "English Test 1", time: "1 hour 30 minutes", totalMarks: 50,
+        instructions: "This paper follows the format of a PSAC-style English paper: comprehension, grammar, vocabulary and composition.",
+        sections: [
+          { heading: "Section A · Reading Comprehension", passage: "The dodo was a flightless bird that lived only on the island of Mauritius. Because it had no natural predators, it did not need to fly and grew large and slow. When sailors and settlers arrived in the 1600s, they hunted the dodo and brought animals such as rats and pigs that ate its eggs. Within about a hundred years, the dodo had vanished forever. Today it is a symbol of how human actions can harm nature.",
+            questions: [
+              { type: "short", q: "Why did the dodo not need to fly?", marks: 3 },
+              { type: "short", q: "Name two reasons the dodo disappeared.", marks: 4 },
+              { type: "short", q: "What does the dodo symbolise today?", marks: 3 },
+              { type: "short", q: "Find a word in the passage meaning animals that hunt other animals.", marks: 3 },
+              { type: "short", q: "How long did it take for the dodo to disappear after humans arrived?", marks: 3 } ] },
+          { heading: "Section B · Grammar and Vocabulary", questions: [
+              { type: "short", q: "Rewrite in the passive voice: Settlers hunted the dodo.", marks: 4 },
+              { type: "short", q: "Add the correct punctuation and capital letters: when did the dodo disappear asked the teacher", marks: 4 },
+              { type: "short", q: "Write a synonym for vanished and use it in a sentence.", marks: 4 } ] },
+          { heading: "Section C · Composition", prompt: "Write a composition of about 12-15 sentences on ONE of the following topics: (a) A day you will never forget, OR (b) Why it is important to protect animals. Remember to write a clear introduction, body and conclusion.", marks: 22 }
+        ] }
+    ]
+  },
+  {
+    grade: 6, subject: "Mathematics", papers: [
+      { id: "g6-math-1", title: "Mathematics Test 1", time: "1 hour 30 minutes", totalMarks: 50,
+        instructions: "PSAC-style paper. Answer all questions and show full working.",
+        sections: [
+          { heading: "Section A · Number, Place Value and Operations", questions: [
+              { type: "short", q: "Write three hundred and four thousand, six hundred and fifty-two in digits.", marks: 4 },
+              { type: "math", q: "Compute: 45 678 + 32 456", marks: 4 },
+              { type: "math", q: "Compute: 100 000 - 67 893", marks: 4 },
+              { type: "math", q: "Compute: 345 × 12", marks: 4 } ] },
+          { heading: "Section B · Fractions, Decimals and Percentages", questions: [
+              { type: "short", q: "Express 7/20 as a decimal and a percentage.", marks: 4 },
+              { type: "short", q: "Find 15% of 400.", marks: 3 },
+              { type: "short", q: "Add: 2.35 + 1.48", marks: 3 } ] },
+          { heading: "Section C · Ratio, Proportion and Averages", questions: [
+              { type: "short", q: "The ratio of boys to girls is 3:2. If there are 30 children, how many are boys?", marks: 4 },
+              { type: "short", q: "Find the mean of these numbers: 4, 8, 9, 15.", marks: 4 } ] },
+          { heading: "Section D · Measurement and Geometry", questions: [
+              { type: "short", q: "Find the area of a triangle with base 10 cm and height 6 cm.", marks: 4 },
+              { type: "short", q: "A bottle holds 1.5 litres of water. How many millilitres is that?", marks: 3 } ] },
+          { heading: "Section E · Problem Solving", prompt: "A school has 5 classes, each with 36 pupils. On sports day, 1/6 of the pupils could not attend. How many pupils attended? Show all your working.", marks: 9 }
+        ] }
+    ]
+  },
+  {
+    grade: 6, subject: "Science", papers: [
+      { id: "g6-sci-1", title: "Science Test 1", time: "1 hour 30 minutes", totalMarks: 50,
+        instructions: "Answer all questions in full sentences.",
+        sections: [
+          { heading: "Section A · Living Things and Life Processes", questions: [
+              { type: "short", q: "Name the seven life processes and give one example of each.", marks: 7 },
+              { type: "short", q: "Explain the difference between photosynthesis and respiration in plants.", marks: 5 } ] },
+          { heading: "Section B · Human Body and Health", questions: [
+              { type: "short", q: "Describe the path of food through the digestive system.", marks: 5 },
+              { type: "short", q: "What is the role of the red blood cells and the white blood cells?", marks: 4 } ] },
+          { heading: "Section C · Force, Energy and Electricity", questions: [
+              { type: "short", q: "What is a force? Name two types of force.", marks: 4 },
+              { type: "short", q: "Draw (describe) a simple electric circuit and name its parts.", marks: 5 } ] },
+          { heading: "Section D · The Environment", questions: [
+              { type: "short", q: "What is global warming and what causes it?", marks: 5 },
+              { type: "short", q: "Suggest two ways to reduce pollution.", marks: 4 } ] },
+          { heading: "Section E · Scientific Investigation", prompt: "Plan a fair test to find out how the amount of water affects the height of a bean plant. State the independent variable, the dependent variable, the control variables, and the steps you would take.", marks: 11 }
+        ] }
+    ]
+  },
+  {
+    grade: 6, subject: "French", papers: [
+      { id: "g6-fr-1", title: "Français Test 1", time: "1 hour 30 minutes", totalMarks: 50,
+        instructions: "Réponds en français. Answer in French.",
+        sections: [
+          { heading: "Section A · Compréhension (Comprehension)", passage: "Le lagon de Maurice est protégé par une barrière de corail. Ce récif abrite une grande variété de poissons colorés et de tortues. Cependant, la pollution et le réchauffement climatique menacent cet écosystème fragile. Pour le protéger, il est important de ne pas jeter de déchets dans la mer et de respecter les récifs.",
+            questions: [
+              { type: "short", q: "Qu'est-ce qui protège le lagon de Maurice?", marks: 3 },
+              { type: "short", q: "Que peut-on trouver dans le récif? Nomme deux choses.", marks: 4 },
+              { type: "short", q: "Quelles sont les deux menaces pour cet écosystème?", marks: 4 },
+              { type: "short", q: "Que faut-il faire pour protéger les récifs? Donne une idée.", marks: 3 } ] },
+          { heading: "Section B · La Grammaire", questions: [
+              { type: "short", q: "Conjugate the verb être for the pronoun vous.", marks: 4 },
+              { type: "short", q: "Translate to French: The turtles live in the warm water of the lagoon.", marks: 5 },
+              { type: "short", q: "Change to the negative: Le lagon est protégé.", marks: 4 } ] },
+          { heading: "Section C · Le Vocabulaire", questions: [
+              { type: "short", q: "Write the French word for pollution.", marks: 3 },
+              { type: "short", q: "Write the French word for turtle.", marks: 3 } ] },
+          { heading: "Section D · Composition", prompt: "Écris un texte de 6 à 8 phrases en français sur l'importance de protéger l'environnement de Maurice. Write 6-8 sentences in French on the importance of protecting Mauritius' environment.", marks: 17 }
+        ] }
+    ]
+  }
+];
+
+// ============================================================
+// TEST PAPERS — LOGIC (render, answer, submit, teacher review)
+// ============================================================
+const TP_SUBJECT_ICONS = { "English": "📖", "Mathematics": "🔢", "Science": "🔬", "French": "🇫🇷" };
+const TP_SUBJECT_COLORS = { "English": "#1cb0f6", "Mathematics": "#ff9600", "Science": "#58cc02", "French": "#ce82ff" };
+
+let tpSelectedGrade = 1;
+let testSubmissions = [];
+let testSubsListener = null;
+let currentTestPaper = null;   // paper object being filled in
+let tpCurrentReviewId = null;  // submission id being reviewed by admin
+
+function getKidGrade() {
+    const p = cachedKidProfiles.find(x => x.id === currentActiveId);
+    return Number(p && p.grade) || 1;
+}
+
+function findTestPaperById(pid) {
+    for (const g of TEST_PAPERS) for (const p of g.papers) if (p.id === pid) return p;
+    return null;
+}
+
+function testPaperMeta(pid) {
+    for (const g of TEST_PAPERS) for (const p of g.papers) if (p.id === pid) return { grade: g.grade, subject: g.subject };
+    return null;
+}
+
+function setTestPaperGrade(g, evt) {
+    tpSelectedGrade = Number(g) || 1;
+    document.querySelectorAll('#testpapersGradeRow .tp-grade-chip').forEach(c => {
+        c.classList.toggle('active', Number(c.dataset.grade) === tpSelectedGrade);
+    });
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+    playSound(460);
+    closeTestPaperView();
+    renderTestPapers();
+}
+window.setTestPaperGrade = setTestPaperGrade;
+
+function buildTestPapers() {
+    if (currentRole === 'kid') tpSelectedGrade = getKidGrade();
+    renderTestPapers();
+}
+window.buildTestPapers = buildTestPapers;
+
+function renderTestPapers() {
+    document.querySelectorAll('#testpapersGradeRow .tp-grade-chip').forEach(c => {
+        c.classList.toggle('active', Number(c.dataset.grade) === tpSelectedGrade);
+    });
+    const hint = document.getElementById('testpapersGradeHint');
+    if (hint) {
+        hint.innerHTML = currentRole === 'admin'
+            ? '👩‍🏫 Admin view — showing <strong>Grade ' + tpSelectedGrade + '</strong>. Use the buttons above to switch grade.'
+            : '🎒 These papers are for <strong>Grade ' + tpSelectedGrade + '</strong>' +
+              (getKidGrade() === tpSelectedGrade ? '.' : ' (your profile grade is ' + getKidGrade() + ').');
+    }
+    closeTestPaperView();
+    renderTestPapersPicker();
+    renderTestPapersMine();
+    renderTestPapersReview();
+}
+
+function renderTestPapersPicker() {
+    const box = document.getElementById('testpapersPicker');
+    if (!box) return;
+    const gradeData = TEST_PAPERS.filter(g => g.grade === tpSelectedGrade);
+    if (!gradeData.length) {
+        box.innerHTML = '<p class="tp-empty">No papers available for this grade yet.</p>';
+        return;
+    }
+    const order = ['English', 'Mathematics', 'Science', 'French'];
+    const subjects = order
+        .map(s => ({ subject: s, papers: gradeData.filter(g => g.subject === s).flatMap(g => g.papers) }))
+        .filter(x => x.papers.length);
+    box.innerHTML = `
+        <div class="tp-head-row">
+            <h2>📚 Papers for Grade ${tpSelectedGrade}</h2>
+            <span class="tp-grade-badge">Grade ${tpSelectedGrade}</span>
+        </div>
+        <div class="tp-subject-grid">
+            ${subjects.map(sub => `
+                <div class="tp-subject-card">
+                    <div class="tp-subject-head">
+                        <span class="tp-subject-icon">${TP_SUBJECT_ICONS[sub.subject] || '📘'}</span>
+                        <h3>${escapeHtml(sub.subject)}</h3>
+                        <span class="tp-subject-count">${sub.papers.length} paper${sub.papers.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="tp-paper-list">
+                        ${sub.papers.map(p => `
+                            <button class="tp-paper-btn" onclick="openTestPaper('${p.id}')">
+                                <div class="tp-paper-title">${escapeHtml(p.title)}</div>
+                                <div class="tp-paper-meta">⏱ ${escapeHtml(p.time)} · 📊 ${p.totalMarks} marks</div>
+                            </button>`).join('')}
+                    </div>
+                </div>`).join('')}
+        </div>`;
+}
+
+function renderTestPapersMine() {
+    const box = document.getElementById('testpapersMine');
+    if (!box) return;
+    if (currentRole !== 'kid') { box.style.display = 'none'; return; }
+    box.style.display = '';
+    const mine = testSubmissions.filter(s => s.kidId === currentActiveId);
+    box.innerHTML = `
+        <div class="tp-head-row"><h2>✅ My Submitted Papers</h2></div>
+        ${mine.length
+            ? `<div class="tp-mine-grid">${mine.slice().sort((a, b) => b.submittedAt - a.submittedAt).map(s => `
+                <button class="tp-mine-card" onclick="openMySubmission('${s.id}')">
+                    <div class="tp-mine-top">${escapeHtml(s.title)}</div>
+                    <div class="tp-mine-sub">${escapeHtml(s.subject)} · Grade ${s.grade}</div>
+                    ${s.status === 'graded'
+                        ? `<span class="tp-tag graded">Graded · ${s.overallAwarded ?? '?'} / ${s.totalMarks}</span>`
+                        : `<span class="tp-tag pending">⏳ Waiting for teacher</span>`}
+                    <div class="tp-mine-time">Submitted ${new Date(s.submittedAt).toLocaleString()}</div>
+                </button>`).join('')}</div>`
+            : `<p class="tp-empty">You have not submitted any test papers yet. Pick a paper above and try your best!</p>`}`;
+}
+
+function renderTestPapersReview() {
+    const box = document.getElementById('testpapersReviewPanel');
+    if (!box) return;
+    if (currentRole !== 'admin') { box.style.display = 'none'; return; }
+    box.style.display = '';
+    const pending = testSubmissions.filter(s => s.status !== 'graded').length;
+    box.innerHTML = `
+        <div class="tp-head-row"><h2>📥 Teacher Inbox</h2><span class="tp-grade-badge">${pending} to mark</span></div>
+        ${!testSubmissions.length
+            ? `<p class="tp-empty">No submissions yet. When a child submits a paper, it will appear here for you to mark.</p>`
+            : `<div class="tp-inbox">
+                ${testSubmissions.slice().sort((a, b) => ((a.status === 'graded') - (b.status === 'graded')) || (b.submittedAt - a.submittedAt)).map(s => `
+                    <button class="tp-inbox-row ${s.status === 'graded' ? 'graded' : ''}" onclick="openTestReview('${s.id}')">
+                        <div class="tp-inbox-main">
+                            <span class="tp-inbox-kid">${escapeHtml(s.kidName)}</span>
+                            <span class="tp-inbox-title">${escapeHtml(s.title)}</span>
+                        </div>
+                        <div class="tp-inbox-meta">${escapeHtml(s.subject)} · Grade ${s.grade}</div>
+                        <span class="tp-tag ${s.status === 'graded' ? 'graded' : 'pending'}">
+                            ${s.status === 'graded' ? 'Graded ' + (s.overallAwarded ?? '?') + '/' + s.totalMarks : 'To mark'}
+                        </span>
+                    </button>`).join('')}
+            </div>`}`;
+}
+
+function openTestPaper(paperId) {
+    const paper = findTestPaperById(paperId);
+    if (!paper) { showToast('Paper not found.', '❌', 2500); return; }
+    if (currentRole === 'kid') {
+        const done = testSubmissions.find(s => s.kidId === currentActiveId && s.paperId === paperId);
+        if (done) { showToast('You already submitted this paper.', 'ℹ️', 3000); openMySubmission(done.id); return; }
+    }
+    currentTestPaper = paper;
+    tpCurrentReviewId = null;
+    const meta = testPaperMeta(paperId);
+    document.getElementById('testpapersPicker').style.display = 'none';
+    document.getElementById('testpapersMine').style.display = 'none';
+    document.getElementById('testpapersReviewPanel').style.display = 'none';
+    const paperBox = document.getElementById('testpapersPaper');
+    paperBox.style.display = '';
+    renderTestPaperView(paper, meta);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.openTestPaper = openTestPaper;
+
+function renderTestPaperView(paper, meta) {
+    const box = document.getElementById('testpapersPaper');
+    let qIndex = 0;
+    const sectionsHtml = paper.sections.map(sec => {
+        const inner = [];
+        if (sec.passage) inner.push(`<div class="tp-passage"><h4>📖 Read this passage</h4><p>${escapeHtml(sec.passage)}</p></div>`);
+        if (sec.questions && sec.questions.length) {
+            sec.questions.forEach(q => {
+                const idx = qIndex++;
+                const inputHtml = q.type === 'essay'
+                    ? `<textarea id="tpq_${idx}" class="tp-input tp-area" rows="4" placeholder="Write your answer here..."></textarea>`
+                    : `<input id="tpq_${idx}" class="tp-input ${q.type === 'math' ? 'tp-num' : ''}" type="text" inputmode="${q.type === 'math' ? 'numeric' : 'text'}" autocomplete="off" placeholder="Write your answer here...">`;
+                inner.push(`
+                    <div class="tp-question">
+                        <div class="tp-q-head"><span class="tp-q-num">Q${idx + 1}</span><span class="tp-q-marks">${q.marks} mark${q.marks > 1 ? 's' : ''}</span></div>
+                        <p class="tp-q-text">${escapeHtml(q.q)}</p>
+                        ${inputHtml}
+                    </div>`);
+            });
+        }
+        if (sec.prompt) {
+            const idx = qIndex++;
+            inner.push(`
+                <div class="tp-question tp-composition">
+                    <div class="tp-q-head"><span class="tp-q-num">✍️</span><span class="tp-q-marks">${sec.marks || 10} mark${(sec.marks || 10) > 1 ? 's' : ''}</span></div>
+                    <p class="tp-q-text">${escapeHtml(sec.prompt)}</p>
+                    <textarea id="tpq_${idx}" class="tp-input tp-area" rows="6" placeholder="Write your composition here..."></textarea>
+                </div>`);
+        }
+        return `<div class="tp-section"><h3 class="tp-sec-head">${escapeHtml(sec.heading)}</h3>${inner.join('')}</div>`;
+    }).join('');
+
+    box.innerHTML = `
+        <div class="tp-paper-sheet">
+            <button class="tp-back-btn" onclick="closeTestPaperView()">← Back to papers</button>
+            <div class="tp-sheet-head">
+                <div>
+                    <h2>${escapeHtml(paper.title)}</h2>
+                    <p class="tp-sheet-meta">Grade ${meta.grade} · ${escapeHtml(meta.subject)} · ⏱ ${escapeHtml(paper.time)} · Total ${paper.totalMarks} marks</p>
+                </div>
+                <span class="tp-grade-badge">${TP_SUBJECT_ICONS[meta.subject] || '📘'}</span>
+            </div>
+            ${paper.instructions ? `<div class="tp-instructions">📝 ${escapeHtml(paper.instructions)}</div>` : ''}
+            ${sectionsHtml}
+            <div class="tp-submit-row">
+                <button class="login-submit-btn tp-submit-btn" onclick="submitTestPaper()">Submit to Teacher 📤</button>
+                <button class="book-btn" onclick="closeTestPaperView()">Cancel</button>
+            </div>
+            <div id="tpSubmitMsg" class="tp-submit-msg" aria-live="polite"></div>
+        </div>`;
+}
+
+async function submitTestPaper() {
+    if (!currentTestPaper) return;
+    if (currentRole !== 'kid') { showToast('Only children can submit test papers.', '⚠️', 3000); return; }
+    const paper = currentTestPaper;
+    const meta = testPaperMeta(paper.id);
+    const kid = cachedKidProfiles.find(x => x.id === currentActiveId) || {};
+    let qIndex = 0;
+    const answers = [];
+    let missing = false;
+    paper.sections.forEach(sec => {
+        if (sec.questions) sec.questions.forEach(q => {
+            const el = document.getElementById('tpq_' + qIndex);
+            const val = el ? el.value.trim() : '';
+            if (!val) missing = true;
+            answers.push({ section: sec.heading, q: q.q, type: q.type, marks: q.marks, answer: val, awarded: null, comment: '' });
+            qIndex++;
+        });
+        if (sec.prompt) {
+            const el = document.getElementById('tpq_' + qIndex);
+            const val = el ? el.value.trim() : '';
+            if (!val) missing = true;
+            answers.push({ section: sec.heading, q: sec.prompt, type: 'essay', marks: sec.marks || 10, answer: val, awarded: null, comment: '' });
+            qIndex++;
+        }
+    });
+    if (missing) { showToast('Please answer every question before submitting.', '⚠️', 3000); return; }
+    if (!confirm('Submit this paper to your teacher? You cannot change it after submitting.')) return;
+    const btn = document.querySelector('.tp-submit-btn');
+    if (btn) { btn.disabled = true; btn.innerText = 'Submitting…'; }
+    const id = 'tps_' + Date.now() + '_' + (currentActiveId || 'x');
+    const data = {
+        id, paperId: paper.id, grade: meta.grade, subject: meta.subject, title: paper.title,
+        totalMarks: paper.totalMarks, time: paper.time, instructions: paper.instructions,
+        kidId: currentActiveId, kidName: kid.name || 'Explorer',
+        answers, status: 'pending', submittedAt: Date.now(), gradedAt: null, overallAwarded: null
+    };
+    try {
+        await setDoc(doc(db, 'testSubmissions', id), data);
+        addStars(Math.max(5, paper.totalMarks));
+        playChime([523, 659, 784, 1046]);
+        launchConfetti(30);
+        currentTestPaper = null;
+        closeTestPaperView();
+        showToast('Submitted to your teacher! Great job!', '📤', 3500);
+    } catch (err) {
+        console.error(err);
+        showToast('Could not submit. Check your connection and try again.', '❌', 4000);
+        if (btn) { btn.disabled = false; btn.innerText = 'Submit to Teacher 📤'; }
+    }
+}
+window.submitTestPaper = submitTestPaper;
+
+function openTestReview(id) {
+    if (currentRole !== 'admin') return;
+    tpCurrentReviewId = id;
+    const sub = testSubmissions.find(s => s.id === id);
+    if (!sub) return;
+    document.getElementById('testpapersPicker').style.display = 'none';
+    document.getElementById('testpapersMine').style.display = 'none';
+    document.getElementById('testpapersReviewPanel').style.display = 'none';
+    const box = document.getElementById('testpapersPaper');
+    box.style.display = '';
+    box.innerHTML = `
+        <div class="tp-paper-sheet tp-review">
+            <button class="tp-back-btn" onclick="closeTestPaperView()">← Back to inbox</button>
+            <div class="tp-sheet-head">
+                <div>
+                    <h2>${escapeHtml(sub.title)}</h2>
+                    <p class="tp-sheet-meta">Submitted by <strong>${escapeHtml(sub.kidName)}</strong> · Grade ${sub.grade} · ${escapeHtml(sub.subject)}</p>
+                    <p class="tp-sheet-meta">${new Date(sub.submittedAt).toLocaleString()} · ${sub.totalMarks} marks</p>
+                </div>
+            </div>
+            ${sub.answers.map((a, i) => `
+                <div class="tp-review-item">
+                    <div class="tp-q-head"><span class="tp-q-num">Q${i + 1}</span><span class="tp-q-marks">${a.marks} mark${a.marks > 1 ? 's' : ''}</span></div>
+                    <p class="tp-q-text">${escapeHtml(a.q)}</p>
+                    <div class="tp-kid-answer">${escapeHtml(a.answer) || '(empty)'}</div>
+                    <div class="tp-mark-row">
+                        <input id="tpmark_${i}" class="tp-input tp-mark-input" type="number" min="0" max="${a.marks}" placeholder="0-${a.marks}" value="${a.awarded ?? ''}">
+                        <input id="tpcmt_${i}" class="tp-input tp-cmt-input" type="text" placeholder="Optional comment" value="${escapeHtml(a.comment || '')}">
+                    </div>
+                </div>`).join('')}
+            <div class="tp-submit-row">
+                <button class="login-submit-btn" onclick="saveTestReview('${sub.id}')">Save Marks 📊</button>
+                <button class="book-btn" onclick="closeTestPaperView()">Back</button>
+            </div>
+        </div>`;
+}
+window.openTestReview = openTestReview;
+
+async function saveTestReview(id) {
+    if (currentRole !== 'admin') return;
+    const sub = testSubmissions.find(s => s.id === id);
+    if (!sub) return;
+    const answers = sub.answers.map((a, i) => {
+        const markEl = document.getElementById('tpmark_' + i);
+        const cmtEl = document.getElementById('tpcmt_' + i);
+        let awarded = null;
+        const raw = markEl ? markEl.value : '';
+        if (raw !== '') awarded = Math.max(0, Math.min(Number(a.marks), parseInt(raw, 10) || 0));
+        return { ...a, awarded, comment: (cmtEl ? cmtEl.value : '') };
+    });
+    const overallAwarded = answers.reduce((s, x) => s + (x.awarded || 0), 0);
+    const btn = document.querySelector('.tp-submit-row .login-submit-btn');
+    if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+    try {
+        await setDoc(doc(db, 'testSubmissions', id), { answers, overallAwarded, status: 'graded', gradedAt: Date.now(), gradedBy: 'Admin' }, { merge: true });
+        showToast('Marks saved!', '📊', 2500);
+        closeTestPaperView();
+    } catch (e) {
+        console.error(e);
+        showToast('Could not save marks.', '❌', 3000);
+        if (btn) { btn.disabled = false; btn.innerText = 'Save Marks 📊'; }
+    }
+}
+window.saveTestReview = saveTestReview;
+
+function openMySubmission(id) {
+    if (currentRole !== 'kid') return;
+    const sub = testSubmissions.find(s => s.id === id);
+    if (!sub) return;
+    document.getElementById('testpapersPicker').style.display = 'none';
+    document.getElementById('testpapersMine').style.display = 'none';
+    document.getElementById('testpapersReviewPanel').style.display = 'none';
+    const box = document.getElementById('testpapersPaper');
+    box.style.display = '';
+    const graded = sub.status === 'graded';
+    box.innerHTML = `
+        <div class="tp-paper-sheet tp-review">
+            <button class="tp-back-btn" onclick="closeTestPaperView()">← Back to papers</button>
+            <div class="tp-sheet-head">
+                <div>
+                    <h2>${escapeHtml(sub.title)}</h2>
+                    <p class="tp-sheet-meta">Grade ${sub.grade} · ${escapeHtml(sub.subject)}</p>
+                    ${graded
+                        ? `<div class="tp-score-banner">Your score: <strong>${sub.overallAwarded ?? 0} / ${sub.totalMarks}</strong></div>`
+                        : `<div class="tp-score-banner pending">⏳ Submitted — waiting for your teacher to mark it.</div>`}
+                </div>
+            </div>
+            ${sub.answers.map((a, i) => `
+                <div class="tp-review-item">
+                    <div class="tp-q-head"><span class="tp-q-num">Q${i + 1}</span><span class="tp-q-marks">${a.marks} mark${a.marks > 1 ? 's' : ''}</span></div>
+                    <p class="tp-q-text">${escapeHtml(a.q)}</p>
+                    <div class="tp-kid-answer">${escapeHtml(a.answer)}</div>
+                    ${graded ? `<div class="tp-result-row"><strong>${a.awarded != null ? a.awarded + '/' + a.marks : 'Not marked'}</strong><span class="tp-cmt">${escapeHtml(a.comment || '')}</span></div>` : ''}
+                </div>`).join('')}
+            <button class="tp-back-btn" onclick="closeTestPaperView()">← Back</button>
+        </div>`;
+}
+window.openMySubmission = openMySubmission;
+
+function closeTestPaperView() {
+    currentTestPaper = null;
+    tpCurrentReviewId = null;
+    const paper = document.getElementById('testpapersPaper');
+    const picker = document.getElementById('testpapersPicker');
+    const mine = document.getElementById('testpapersMine');
+    const review = document.getElementById('testpapersReviewPanel');
+    if (paper) paper.style.display = 'none';
+    if (picker) picker.style.display = '';
+    if (mine) mine.style.display = currentRole === 'kid' ? '' : 'none';
+    if (review) review.style.display = currentRole === 'admin' ? '' : 'none';
+    renderTestPapersReview();
+    renderTestPapersMine();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.closeTestPaperView = closeTestPaperView;
+
+function listenToTestPapers() {
+    testSubsListener = onSnapshot(collection(db, 'testSubmissions'), (snap) => {
+        testSubmissions = [];
+        snap.forEach(d => testSubmissions.push(d.data()));
+        const tab = document.getElementById('testpapers');
+        if (tab && tab.classList.contains('active')) renderTestPapers();
+    }, (error) => console.error('Test submissions sync error:', error));
+}
+window.listenToTestPapers = listenToTestPapers;
+
 const GEO_TYPES = {
     mountain: { icon: '🏔️', label: 'Mountain', color: '#0f766e' },
     river:    { icon: '🌊', label: 'River', color: '#2563eb' },
@@ -10098,6 +11026,7 @@ window.addEventListener('DOMContentLoaded', () => {
     listenToKidProfiles();
     listenToHomework();
     listenToSafeZone();
+    listenToTestPapers();      // 🧪 test paper submissions + teacher marking
     listenToAnnouncements();   // Admin "📣 Send Alert" -> kids' bell + phone alerts
     initPhoneAlerts();         // service worker + push permission/token
     listenToCallRooms();       // 📞 kid calls: rings, group rooms, live state
