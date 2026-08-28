@@ -5062,3 +5062,269 @@ body::after {
 .call-log-outcome.answered { background: #dcfce7; color: #166534; }
 .call-log-outcome.missed { background: #fee2e2; color: #991b1b; }
 .call-log-outcome.declined { background: #ffedd5; color: #9a3412; }
+
+/* ============================================================
+   Game level bars (Spelling / Sentence / Tables)
+   ============================================================ */
+.game-level-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #f0f9ff, #fdf4ff);
+    border: 2px solid #e0e7ff;
+    border-radius: 16px;
+}
+.game-level-btn {
+    border: 2px solid #c7d2fe;
+    border-bottom-width: 4px;
+    background: #fff;
+    color: #4338ca;
+    font-weight: 800;
+    font-size: .78rem;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.game-level-btn:hover { transform: translateY(-1px); }
+.game-level-btn.active {
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    color: #fff;
+    border-color: #5b21b6;
+}
+.game-level-note {
+    margin-left: auto;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #64748b;
+}
+.game-finish-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 12px;
+}
+
+/* ============================================================
+   WhatsApp-style chat read receipts
+   ============================================================ */
+.chat-meta-row {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+}
+.chat-ticks {
+    font-size: .78rem;
+    letter-spacing: -1px;
+    font-weight: 900;
+    opacity: .9;
+    flex-shrink: 0;
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+}
+.chat-ticks.sent { color: rgba(255,255,255,.75); }
+.safe-chat-bubble.friend .chat-ticks.sent { color: #94a3b8; }
+.chat-ticks.delivered { color: rgba(255,255,255,.85); }
+.safe-chat-bubble.friend .chat-ticks.delivered,
+.safe-chat-bubble.group-friend .chat-ticks.delivered { color: #64748b; }
+.chat-ticks.seen { color: #67e8f9; }
+.safe-chat-bubble.friend .chat-ticks.seen,
+.safe-chat-bubble.group-friend .chat-ticks.seen { color: #0ea5e9; }
+.safe-chat-bubble.group-me .chat-ticks.seen { color: #67e8f9; }
+.chat-seen-by {
+    display: block;
+    font-size: .62rem;
+    opacity: .85;
+    font-weight: 700;
+    margin-top: 2px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   Multiplication Times Tables game
+   ============================================================ */
+.tables-question { text-align: center; }
+.tables-focus-chip {
+    display: inline-block;
+    background: #ecfeff;
+    color: #0f766e;
+    border: 2px solid #a5f3fc;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: .75rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.tables-sum {
+    font-size: clamp(1.8rem, 5vw, 2.6rem) !important;
+    letter-spacing: .02em;
+    margin: 8px 0 6px !important;
+}
+.tables-answer-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+.tables-input-label {
+    font-weight: 800;
+    color: #475569;
+    font-size: .85rem;
+}
+.tables-answer-input {
+    width: min(220px, 80%);
+    font-size: 1.6rem;
+    font-weight: 900;
+    text-align: center;
+    padding: 14px 16px;
+    border: 3px solid #c7d2fe;
+    border-radius: 16px;
+    background: #fff;
+    color: #312e81;
+    outline: none;
+}
+.tables-answer-input:focus {
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, .18);
+}
+.tables-submit-btn { min-width: 180px; }
+.tables-live-feedback {
+    min-height: 28px;
+    margin-top: 10px;
+    font-weight: 800;
+    font-size: .92rem;
+}
+.tables-live-feedback.good { color: #15803d; }
+.tables-live-feedback.try { color: #b45309; }
+.tables-teacher-note {
+    background: #fef3c7;
+    border: 2px solid #fcd34d;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-weight: 700;
+    color: #92400e;
+    margin: 12px auto;
+    max-width: 520px;
+}
+.tables-review-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 520px;
+    margin: 12px auto;
+    text-align: left;
+}
+.tables-review-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr auto;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: .82rem;
+    font-weight: 700;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.tables-review-row.ok { background: #ecfdf5; border-color: #a7f3d0; }
+.tables-review-row.bad { background: #fef2f2; border-color: #fecaca; }
+
+/* Teacher review cards inside Reports */
+.tables-teacher-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.tables-teacher-card {
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+.tables-teacher-card header {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.tables-teacher-card header small { color: #64748b; font-weight: 700; }
+.tables-teacher-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow: auto;
+    margin-bottom: 10px;
+}
+.tables-teacher-row {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr auto;
+    gap: 6px;
+    font-size: .78rem;
+    font-weight: 700;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+.tables-teacher-row.ok { background: #ecfdf5; }
+.tables-teacher-row.bad { background: #fef2f2; }
+.tables-teacher-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.tables-teacher-actions label {
+    font-size: .78rem;
+    font-weight: 800;
+    color: #475569;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.tables-teacher-actions select,
+.tables-teacher-actions input {
+    border: 2px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-weight: 700;
+}
+.tables-teacher-actions input { min-width: 180px; flex: 1; }
+.tables-teacher-saved {
+    margin: 8px 0 0;
+    color: #15803d;
+    font-weight: 800;
+    font-size: .82rem;
+}
+.tables-teacher-pending {
+    margin: 8px 0 0;
+    color: #b45309;
+    font-weight: 800;
+    font-size: .82rem;
+}
+.rr-typed {
+    display: block;
+    font-size: .72rem;
+    color: #64748b;
+    margin-top: 2px;
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .game-level-note { width: 100%; margin-left: 0; }
+    .tables-review-row,
+    .tables-teacher-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+}

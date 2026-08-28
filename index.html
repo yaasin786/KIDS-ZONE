@@ -683,6 +683,7 @@
                 <button class="game-tab-btn" onclick="showGame('quiz-game', event)">🧠 500 Trivia Quiz</button>
                 <button class="game-tab-btn" onclick="showGame('spelling-game', event)">🐝 Spelling Bee</button>
                 <button class="game-tab-btn" onclick="showGame('sentence-game', event)">📝 Sentence Builder</button>
+                <button class="game-tab-btn" onclick="showGame('tables-game', event)">✖️ Times Tables</button>
                 <button class="game-tab-btn" onclick="showGame('mauritius-game', event)">🇲🇺 Mauritius History</button>
                 <button class="game-tab-btn" onclick="showGame('pacman-game', event)">🟡 Pac-Man Classic</button>
                 <button class="game-tab-btn" onclick="showGame('memory-match', event)">🧩 Emoji Memory Match</button>
@@ -721,9 +722,16 @@
 
             <!-- Game 3: Spelling Bee Adventure -->
             <div id="spelling-game" class="game-wrapper" style="display:none;">
+                <div class="game-level-bar" id="spellingLevelBar" role="group" aria-label="Spelling Bee level">
+                    <button type="button" class="game-level-btn active" data-level="1" onclick="setSpellingLevel(1, event)">🌱 Easy · L1</button>
+                    <button type="button" class="game-level-btn" data-level="2" onclick="setSpellingLevel(2, event)">⭐ Medium · L2</button>
+                    <button type="button" class="game-level-btn" data-level="3" onclick="setSpellingLevel(3, event)">🔥 Hard · L3</button>
+                    <span class="game-level-note">30 words each level</span>
+                </div>
                 <div class="game-stats">
-                    <span>Word: <strong id="spellingProgress">1 / 5</strong></span>
+                    <span>Word: <strong id="spellingProgress">1 / 30</strong></span>
                     <span>Score: <strong id="spellingScoreDisplay">0</strong></span>
+                    <span>Level: <strong id="spellingLevelLabel">Easy</strong></span>
                     <button class="restart-btn" onclick="initSpellingGame()">🔄 New Round</button>
                 </div>
                 <div class="spelling-container" id="spellingContainer" aria-live="polite"></div>
@@ -731,12 +739,43 @@
 
             <!-- Game 4: Sentence Builder Rocket -->
             <div id="sentence-game" class="game-wrapper" style="display:none;">
+                <div class="game-level-bar" id="sentenceLevelBar" role="group" aria-label="Sentence Builder level">
+                    <button type="button" class="game-level-btn active" data-level="1" onclick="setSentenceLevel(1, event)">🌱 Easy · L1</button>
+                    <button type="button" class="game-level-btn" data-level="2" onclick="setSentenceLevel(2, event)">⭐ Medium · L2</button>
+                    <button type="button" class="game-level-btn" data-level="3" onclick="setSentenceLevel(3, event)">🔥 Hard · L3</button>
+                    <span class="game-level-note">30 sentences each level</span>
+                </div>
                 <div class="game-stats">
-                    <span>Sentence: <strong id="sentenceProgress">1 / 5</strong></span>
+                    <span>Sentence: <strong id="sentenceProgress">1 / 30</strong></span>
                     <span>Score: <strong id="sentenceScoreDisplay">0</strong></span>
+                    <span>Level: <strong id="sentenceLevelLabel">Easy</strong></span>
                     <button class="restart-btn" onclick="initSentenceGame()">🔄 New Round</button>
                 </div>
                 <div class="sentence-builder" id="sentenceContainer" aria-live="polite"></div>
+            </div>
+
+            <!-- Game: Multiplication Times Tables (typed answers, teacher checks) -->
+            <div id="tables-game" class="game-wrapper" style="display:none;">
+                <div class="game-level-bar" id="tablesLevelBar" role="group" aria-label="Times tables practice set">
+                    <button type="button" class="game-level-btn active" data-table="2" onclick="setTablesFocus(2, event)">×2</button>
+                    <button type="button" class="game-level-btn" data-table="3" onclick="setTablesFocus(3, event)">×3</button>
+                    <button type="button" class="game-level-btn" data-table="4" onclick="setTablesFocus(4, event)">×4</button>
+                    <button type="button" class="game-level-btn" data-table="5" onclick="setTablesFocus(5, event)">×5</button>
+                    <button type="button" class="game-level-btn" data-table="6" onclick="setTablesFocus(6, event)">×6</button>
+                    <button type="button" class="game-level-btn" data-table="7" onclick="setTablesFocus(7, event)">×7</button>
+                    <button type="button" class="game-level-btn" data-table="8" onclick="setTablesFocus(8, event)">×8</button>
+                    <button type="button" class="game-level-btn" data-table="9" onclick="setTablesFocus(9, event)">×9</button>
+                    <button type="button" class="game-level-btn" data-table="10" onclick="setTablesFocus(10, event)">×10</button>
+                    <button type="button" class="game-level-btn" data-table="12" onclick="setTablesFocus(12, event)">×12</button>
+                    <button type="button" class="game-level-btn" data-table="mix" onclick="setTablesFocus('mix', event)">🎲 Mix</button>
+                    <span class="game-level-note">Type your answer · teacher checks later</span>
+                </div>
+                <div class="game-stats">
+                    <span>Question: <strong id="tablesProgress">1 / 12</strong></span>
+                    <span>Submitted: <strong id="tablesScoreDisplay">0</strong></span>
+                    <button class="restart-btn" onclick="initTablesGame()">🔄 New Set</button>
+                </div>
+                <div class="tables-container" id="tablesContainer" aria-live="polite"></div>
             </div>
 
             <!-- Game 5: Mauritius History Hub -->
